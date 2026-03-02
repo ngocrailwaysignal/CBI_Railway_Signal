@@ -1,0 +1,2972 @@
+
+
+=== PAGE 1 ===
+Jörn Pachl 
+Railway Signalling 
+Principles 
+E
+dition 3.0 
+
+=== PAGE 2 ===
+2 Railway Signalling Principles 
+ P ublished under a CC BY-NC-ND 4.0 Licence 
+A
+uthor: 
+Prof. Dr.-Ing. Jörn Pachl, FIRSE  
+Professor of railway systems engineering at Technische Universität Braunschweig 
+B
+raunschweig, May 2024 
+Edition 3.0 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 3 ===
+Railway Signalling Principles   3 
+ 
+    
+ 
+PREFACE 
+Railway signalling systems are complex control systems. As a result of the long railway history, 
+there are a lot of specific national solutions based on different technologies. The key to learn 
+how signalling systems work is to understand the fundamental control principles these systems 
+are based on. By definition, the signaling principles are the underlying principles of a signalling-
+based safeworking system that are based on the national standards but are independent of 
+the requirements of a specific railway operating company and of the technology used. 
+This E-book explains the fundamental principles all  railway signalling systems have in com-
+mon. It is done in a generic way that does not focus on specific national solutions. The intention 
+is to provide core knowledge of long-term value that will not be outdated just by the next gen-
+eration of technology. The content of this E-book is based on the long-standing experience of 
+teaching railway operations and signalling at universities and higher vocational training institu-
+tions in different parts of the world. 
+Beside some minor corrections, the 3
+nd edition provides a revision of the section on the ETCS 
+to keep track with the latest developments.  
+Jörn Pachl 
+ 
+  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 4 ===
+4 Railway Signalling Principles 
+ 
+CONTENTS 
+Preface .................................................................................................................................. 3  
+1 Basic Elements and Terms ................................................................................................. 6  
+1.1 Controlled Trackside Elements .................................................................................... 6  
+1.1.1 Movable Track Elements ....................................................................................... 6  
+1.1.2 Lineside Signals .................................................................................................... 8  
+1.1.3 Track Clear Detection ............................................................................................  9 
+1.2 Basic Operating Terms ...............................................................................................13 
+2 Spacing Trains ..................................................................................................................19 
+2.1 Theory of Train Separation .........................................................................................19 
+2.2 Train Control Principles ...............................................................................................21 
+2.2.1 Train Control by Lineside Signals .........................................................................21 
+2.2.2 Train Control by Cab Signalling ............................................................................30 
+2.3 Block Control Principles ..............................................................................................32 
+2.3.1 Block Control by verbal Communication ...............................................................33 
+2.3.2 Block systems for Fixed Block Operation ..............................................................34 
+2.3.3 Block Control in Moving Block Operations ............................................................42 
+3 Interlocking Principles ........................................................................................................43 
+3.1 Safe Routes through a Point Zone ..............................................................................43 
+3.1.1 Route Classes ......................................................................................................43 
+3.1.2 Point locking .........................................................................................................44 
+3.1.3 Locking and releasing Routes ..............................................................................46 
+3.1.4 Conflicting Routes ................................................................................................47 
+3.1.5 Flank Protection ...................................................................................................48 
+3.1.6 Overlaps ...............................................................................................................51 
+3.1.7 Intermediate Points ...............................................................................................53 
+3.1.8 Track Clear detection ...........................................................................................53 
+3.2 Internal Logic of Interlocking Systems .........................................................................54 
+3.2.1 Tabular Interlocking ..............................................................................................54 
+3.2.2 Geographical Interlocking .....................................................................................56 
+3.3 Generations of Interlocking Systems ...........................................................................58 
+3.4 Handling Interlocking Failures .....................................................................................60 
+4 Automatic Train Protection ................................................................................................62 
+4.1 Classification of ATP Systems .............. ......................................................................62 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 5 ===
+Railway Signalling Principles   5 
+ 
+    
+ 
+4.2 European Train Control System (ETCS) .....................................................................63 
+4.2.1 ETCS and ERTMS ...............................................................................................63 
+4.2.2 ETCS Levels ........................................................................................................64 
+4.3 Chinese Train Control System (CTCS) .......................................................................71 
+4.4 Positive Train Control (PTC) .......................................................................................72 
+5 Level Crossings .................................................................................................................74 
+5.1 Level Crossing Protection ...........................................................................................74 
+5.2 Control and Monitoring of Level Crossings ..................................................................75 
+5.3 Calculation of the Initiation Section .............................................................................77 
+References ...........................................................................................................................78 
+Symbols in Diagrams ...........................................................................................................79 
+Glossary ...............................................................................................................................80 
+ 
+ 
+  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 6 ===
+6 Railway Signalling Principles 
+ 
+1 BASIC ELEMENTS AND TERMS 
+The purpose of signalling systems is to ensure safe movements of trains on a railway infra-
+structure by locking movable track elements in a proper position, checking the clearance of 
+track sections, locking out conflicting moves , and control train movements in a way to keep 
+them safely apart. This first chapter describes the trackside elements controlled by signalling 
+systems and explains the basic terms used in the operating procedures for the safe control of 
+movements with railway vehicles on a railway infrastructure.    
+1.1 Controlled Trackside Elements 
+1.1.1 Movable Track Elements  
+Turnouts  
+A turnout is an assembly of rails, movable points, and a frog, which effect the tangential branch-
+ing of tracks and allows trains or vehicles to run over one track or another (Figure 1.1). 
+ 
+ 
+Figure 1.1  Components of a turnout 
+ 
+The movability of the points is provided by using point blades made of flexible steel. In older 
+installations, there are sometimes still turnouts at which the movability of the point blades is 
+effected by bolted joints. The points may be operated manually or by a point machine. Point 
+machines are either electric motor drives or electrically controlled pneumatic cylinder drives. 
+In case of a small angle of divergence, a movable frog (also called ‘swing nose frog’) operated 
+by an additional point machine could be provided. Movements on a turnout where the points 
+face approaching traffic are called ‘facing point movements’ whereas movements in which the 
+frog faces approaching traffic are called ‘trailing point movements’ (Figure 1.2).  
+The angle of divergence is not stated in degrees but either by its tangent written as a fraction, 
+e.g., 1 : 12, or by the so-called turnout or frog number, which is the reciprocal of that fraction. 
+So, a 1 : 12 angle equals a frog number 12. The limit of occupation of the converging tracks is 
+called ‘the fouling point’. Many railways mark this limit with a trackside fouling point indicator.  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 7 ===
+Railway Signalling Principles   7 
+ 
+    
+ 
+ 
+ 
+Figure 1.2  Movements on points 
+ 
+Note: The term turnout is mostly used in civil engineering. In railway operation and signalling, 
+a turnout is usually referred to as a pair of points (points in short), although this term in its 
+original meaning only applies to the part of a turnout where the points are located. This part of 
+a turnout is also known as a switch. In North American railway operation and signalling, turn-
+outs are usually referred to as switches ( Armstrong, 2008; Bisset et. al., 2008; White, 2003 ). 
+Consequently, the point machine is also called a switch machine. 
+In British civil engineering terms, points are also often referred to as switches. There, an entire 
+turnout is called a 'switch and crossing', using the term 'crossing' for the frog part of the turnout. 
+This differs from the terms in railway operation and signalling, where the term points is always 
+used instead of switch. 
+ 
+ 
+ 
+Figure 1.3  Crossings 
+ 
+ 
+ 
+Figure 1.4  Single and double slips 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 8 ===
+8 Railway Signalling Principles 
+ 
+Crossings 
+A crossing is an assembly of rails that effects two tracks to cross at grade. Like points, cross-
+ings are equipped with fouling point indicators. The inner part of a crossing is called a ‘dia-
+mond’. Crossings with a large angle of intersection are designed rigidly. In case of a small 
+angle of intersection (usually less than 1 : 9), fixed diamond frogs are replaced by movable 
+points (‘switch diamond’, Figure 1.3).  
+Small angle crossings may be equipped with additional points providing a slip connection to 
+permit movements from one track to another. A crossing with a slip connection at one side is 
+called a ‘single slip’, and a crossing with slip connections at both sides is called a ‘double slip’ 
+(Figures 1.4 ). In the North American terms, crossings with slip connections are called slip 
+switches.  
+Derailers  
+Derailers (called derails in the North American terms) are trackside devices that are used to 
+protect train movements against unattended movements of vehicles on converging tracks. An 
+unsafe movement will be derailed before it could join the protected route. In the protecting 
+position, a derailing piece is raised over one rail. Like points, derailers  can be hand or power 
+operated. On many railways, derail ers must not be installed outside of sidings  (see Section 
+1.2). Instead of derailers, some railways also use trap points, which have quite the same effect. 
+1.1.2 Lineside Signals  
+While being gradually replaced by advanced radio-based train control systems, in which trains 
+are guided by cab signal indications, lineside signals are still the most common technology for 
+controlling train movements. On railways where train movements are strongly separated from 
+shunting movements (see Section 1.2), which is the case on most railways outside North Amer-
+ica, there are usually also two basic kinds of lineside signals: 
+Main signals  
+Main signals authorise a regular train movement to enter a line section. In this tutorial, the term 
+main signal is used in a generic way for all signals controlling regular train movements, no 
+matter, whether or not an individual railway would separate these signals from shunting sig-
+nals. The movement authority provided by a main signal is limited by the next main signal or a 
+point specified in the operating rules.  
+Apart from lines with a low speed, a signal that authorises a train movement requires an ap-
+proach aspect at the braking distance in approach to the signal because the stopping distance 
+is generally greater than the range of vision. The approach aspect is necessary for a safe 
+braking when approaching a stop signal. On lines where the distance between signals does 
+not significantly exceed the braking distance, the approach aspect is usually provided by the 
+signal in rear. On lines with very long distances between main signals, distant signals are 
+placed at the braking distance in approach to a main signal. A distant signal can only provide 
+an approach aspect for the signal ahead but it cannot show a stop aspect. Another common 
+term for a distant signal used in the rulebooks of some railways is warner signal ( Chandra & 
+Agarwal 2008). 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 9 ===
+Railway Signalling Principles   9 
+ 
+    
+ 
+On North American lines, there is a general lack of distant signals. On signalled tracks, the 
+approach indication is always provided by the block signal in rear, regardless of block length. 
+Distant signals are only used in approach to an interlocking area on a non-signalled track. 
+Shunting signals  
+Shunting signals are used to authorise shunting movements and to protect trains against 
+shunting movements. On most railways, the stop aspect of a main signal also applies for shunt-
+ing movements. On tracks where shunting movements may pass main signals, a shunt aspect 
+is incorporated in the main signal, so that shunting movements may be authorised to pass 
+main signals in stop position. For shunting signals, an approach aspect is not provided because 
+shunting movements run at a very low speed that allows the driver to stop short of any vehicle 
+or obstruction.  
+On some railways, the stop aspect of shunting signals is absolute, i.e., it indicates stop for all 
+kinds of movements. Such shunting signals must also be cleared for train movements author-
+ised by a main signal. Movements running under authority of a main signal may pass cleared 
+shunting signals at the speed authorised by the main signal or the timetable. Some railways 
+use shunting signals with a shunting stop aspect that does not apply to train movements. This 
+is typical for several East European, Russian, and Chinese railways where a blue light is used 
+for this purpose. On those railways, movements running under authority of a main signal may 
+ignore the stop aspects of shunting signals. 
+On railways that do not use the distinction between main and shunting signals, there is a signal 
+aspect that authorises a movement to pass a signal cautiously on sight prepared to stop short 
+of any vehicle or obstruction. That aspect is used both for shunting purposes but also to au-
+thorise train movements to enter a section that may be occupied.  
+Concerning the control principle, there is a distinction between controlled and automatic sig-
+nals. Controlled signals are all signals that protect track sections that contain movable track 
+elements or points where conflicts with movements on conflicting routes may occur. The nor-
+mal position of controlled signals is stop. To clear a controlled signal, a route is set in the 
+control system that will lock all movable track elements in the proper position and lock out all 
+conflicting moves. The route setting may be initiated by a human operator or an automatic 
+route setting system. If route setting is automated, the signals are still referred to as controlled 
+signals.  
+Automatic signals work automatically by the passage of the train through track sections. They 
+are forced to stop position by track clear detection devices if the section beyond the signal is 
+occupied. Automatic signals can only be used to protect track sections that do neither contain 
+any movable track elements nor points where conflicts with movements on conflicting routes 
+may occur. Depending on the type of control system, the normal position of automatic signals 
+may be stop or clear. 
+1.1.3 Track Clear Detection  
+The purpose of track clear detection devices  is to check that all relevant track sections are 
+clear of vehicles before a train may be authorised to pass through a route. There are two types 
+of track clear detection devices: track circuits and axle counters. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 10 ===
+10 Railway Signalling Principles 
+ 
+Track circuits  
+A track circuit is an electrical circuit of which the rails of a section form a part. It usually has a 
+source of current at one end and a detection device at the other. Sections are divided by insu-
+lated rail joints (Figure 1.5). 
+If the section is occupied by a vehicle, the axles produce a short circuit by shunting the two 
+rails. As a result, the detection device does not receive any current and therefore it detects the 
+section as occupied. The detection device is often implemented by a track relay, which is in a 
+picked up position when the section is clear and dropped when the section is occupied. In 
+modern installations, the relay is often replaced by an electronic detector. Since a track circuit 
+is based on the closed circuit principle, any interruption of the current will lead to a safe state 
+by making the section occupied.  
+The maximum working length of a track circuit is limited by the resistance between the two 
+rails. Track circuit sections cannot be made much longer than about 2 km. Also, non-shunting 
+vehicles and situations in which the safe working is limited by rusty or dirty rails require specific 
+operating procedures. 
+ 
+Figure 1.5  Track circuit 
+ 
+Non-shunting vehicles are vehicles that are not safely detected by track circuits, since they do 
+not produce a reliable electrical connection between the rails.  A range of maintenance and 
+inspection vehicles fall into this category. Track circuits occupied by non- shunting vehicles 
+must be protected under staff responsibility by securing protective signals in stop position. If 
+the rails of a track circuit section are heavily rusted, even regular vehicles will no longer safely 
+be detected. That is, why most railways established the rule that there must be a minimum 
+number of movements within a specified period of time to keep the track circuits safe. A typical 
+rule is one movement per day. If there was no movement within that period, the next move to 
+enter that section must be made on sight unless the clearance of the section can be checked 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 11 ===
+Railway Signalling Principles   11 
+ 
+    
+ 
+by other means. The rails of a track circuit section must also be kept clean, since heavy 
+dirt may have the same effect as rust. 
+On electrified lines, the rails are used as a return for the traction current. Therefore, adjacent 
+track circuits must be electrically connected to allow the traction current to pass the insulated 
+rail joints. The simplest solution is providing a common rail by single-rail track circuits. To pro-
+vide better protection against parasitic currents in case of an accidentally shunted insulated 
+rail joint, joints are often provided in both rails using cross bonds to connect the track circuits 
+(Figure 1.6). This way, the return of the traction current changes to the other rail at insulated 
+rail joints.  
+On most railways, single -rail track circuits are only used for shor t track circuits, e.g., within 
+point zones, but not for track clear detection of longer  sections. Track circuits for longer 
+stretches of track require a better protection against parasitic currents. For this purpose, dou-
+ble-rail track circuits are used. The electrical connection for the return of the traction current is 
+achieved by so-called impedance bonds (Figure 1.7).  
+ 
+ 
+Figure 1.6  Single-rail track circuits 
+ 
+ 
+ 
+ 
+Figure 1.7  Impedance bonds 
+ 
+In its most simple form, at both sides of the insulated rail joints, a coil is placed between the 
+two rails of the track. The coils are connected by a centre connector that divides each coil into 
+two halves. The traction current enters the coil from each rail, and leaves the coil through the 
+centre connection, passing through the opposing coil into the rails of the next section. In this 
+way, two opposing magnetic fields are produced, one in each half of each coil, which are bal-
+anced in strength and neutralise each other. By using AC track circuits, the impedance will 
+prevent the coil from shunting the track circuit. In a modified version, transformers are used 
+instead of single coils. Both the source of the traction current and the track relay are no longer 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 12 ===
+12 Railway Signalling Principles 
+ 
+directly connected to the rails but via these transformers. Since, as explained above, the op-
+posing magnetic fields produced by the traction current in the trackside coils equalise each 
+other, they will not cause inductive currents in the coil connected to the track relay. 
+Some railways (e.g., in Switzerland) use digitally coded track circuits in which the track relay 
+is replaced by an electronic device. With this technology, single-rail track circuits with joints in 
+only one rail may be used for sections o f any length. This eliminates the need for impedance 
+bonds.   
+There are also jointless track circuits, also known as audio frequency track circuits. These are 
+specific track circuits that work with an audio frequency AC track current. Due to the inductive 
+and capacitive track characteristics, the working length of such a track circuit would limit itself. 
+For a safe continuous track clear detection, the adjacent track circuits must overlap each other. 
+A controlled overlapping of adjacent track circuits can be achieved by S-shaped rail connectors 
+(Figure 1.8). There are also jointless track circuits that provide a controlled overlapping without 
+such connectors but lead to a longer overlapping zone. 
+ 
+ 
+ 
+Figure 1.8  S-shaped connector to separate jointless track circuits 
+ 
+Axle counters 
+An axle counter is a system consisting of counting points at the boundaries of a section and a 
+counter connected to the counting points (Figure 1.9). The occupancy of a section is detected 
+by comparing the number of axles that ent er the section with the number of axles that leave 
+the section. To give a clear indication, the parity of numbers is necessary. Counting points are 
+usually made up of double contacts to detect the direction of movement. This is necessary for 
+correct detection whether an axle is entering or leaving the section. 
+ 
+ 
+ 
+Figure 1.9  Axle counter 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 13 ===
+Railway Signalling Principles   13 
+ 
+    
+ 
+In contrast to track circuits, the maximum working length is not limited. There are also no prob-
+lems with non-shunting vehicles or rust or dirt on the rails.  
+1.2 Basic Operating Terms 
+Classification of Tracks 
+In railway operations, a track is often also referred to as a line. A route consisting of just one 
+track is called a single line, while a route with double track operation, i.e., two parallel tracks 
+and a specified direction for normal moves on both tracks is called a double line.  For opera-
+tional purposes, tracks are divided into two main classes. While they that are called differently 
+in the rulebooks of individual railways, the basic idea is always the same: 
+• Tracks that may be used for regular train movements 
+• Tracks that must only be used for shunting movements 
+The distinction between train and shunting moves is explained later in this section. The tracks 
+used for regular train movements are called main tracks or running lines. The term main track 
+is mainly used in North America, but was also adopted by some railways outside North Amer-
+ica. It is also used in some international textbooks (Theeg & Vlasenko, 2020) . Many other 
+railways, in particular railways with roots in the British systems, prefer the term running line. 
+The lines between stations and their continuation through stations and interlocking areas be-
+long into this category. It also includes tracks for passing and overtaking trains which are called 
+loops on most railways (Figure 1.10). On signalled lines, tracks used for train movements are 
+equipped with signalling appliances for the safe passage of trains. Along the line a train passes 
+through, points are usually interlocked with signals that provide the movement authority. Sid-
+ings are all tracks that must only be used for shunting movements. The points of sidings are 
+often not interlocked. 
+ 
+ 
+ 
+Figure 1.10  Classification of tracks 
+ 
+Note: In the North American terms, a line is a route that may consist of several parallel tracks. 
+Furthermore, loops are called sidings; tracks other than main tracks are called yard, second-
+ary, or industrial tracks. Single-end tracks connected to a main track are called spur tracks.  
+Block Sections  
+A line with a fixed block system is divided into block sections for the purpose of safe train 
+separation. A train must generally not enter a block section until it has been cleared by the 
+train ahead. On lines with lineside signals, block sections are limited by signals, which govern 
+train movements. A signal that limits a block section outside a station area is called a block 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 14 ===
+14 Railway Signalling Principles 
+ 
+signal. While the basic idea of train separation by fixed sections also applies on station tracks, 
+many railways that separate the station areas from the open line (see following paragraph on 
+interlocking areas) use the term block section only outside of station areas.   
+Interlocking Areas  
+An interlocking area is a track area, where controlled signals are interlocked with points and 
+other signals in a way that a signal can only be cleared when all points are locked in the proper 
+position and all conflicting moves are locked out. Signals that govern routes in an interlocking 
+area are called interlocking signals. The points and signals are controlled either by a local 
+interlocking station or from a remote control centre. Local interlocking stations are called 
+interlocking towers in North America, and signal boxes or signal cabins on most other railways. 
+A locally staffed interlocking station contains both the interlocking system and the user 
+interface for the operator. Modern interlocking systems are usually remote controlled from a 
+control centre.  
+There are two basic signal arrangements in  interlocking areas (Figure 1.11). First, there are 
+interlocking areas without consecutive interlocking signals. An interlocking signal provides 
+authority to run through the entire interlocking area into the next block section. Second, there 
+are interlocking areas with consecutive interlocking signals.  
+ 
+ 
+ 
+Figure 1.11  Types of interlocking areas 
+ 
+Such an interlocking area may contain tracks protected by controlled signals on which trains 
+may originate, terminate, pass, and turn. In this tutorial, these tracks are called station tracks. 
+Consequently, an arrangement of station tracks is called a station area. Also, in this tutorial, 
+the tracks outside the opposing interlocking signals limiting the station area are called the open 
+line. The terms station area and open line are used here in a generic way not referri ng to the 
+practice of an individual railway. Due to the big variety of operating principles used worldwide, 
+terms used in the rulebooks of individual railways may differ.   
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 15 ===
+Railway Signalling Principles   15 
+ 
+    
+ 
+A platform station for scheduled stops of passenger trains is not necessarily associated with a 
+station track in the sense as defined above, which needs not have a platform. There are also 
+platform stations on the open line, which do not necessarily imply any provision of pointwork 
+or the ability to reverse trains within the signalling system.  
+On most railways, the interlocking signals protecting a station area from both sides are called 
+home signals. The interlocking signals that govern train movements to leave a station track 
+into a section of the open line are often called station exit signals or just exit signals. These 
+terms are also used in this tutorial. Other commonly used terms for these signals are section 
+signals, starter signals, or leaving signals. Interlocking signals within the station area that are 
+neither home nor exit  signals are called intermediate interlocking signals (Figure 1.12 ). On 
+some railways, they are also called inner home signals (when passed by arriving trains) and 
+inner starter signals (when passed by departing trains). 
+ 
+ 
+ 
+Figure 1.12  Station area with intermediate interlocking signals 
+ 
+In North America, interlocking areas with consecutive interlocking signals within the same in-
+terlocking limits are not common. The reason is that the distinction between station tracks and 
+tracks of the open line does not  exist in the North American rules ( Bisset et. al., 2008). In 
+Europe and most other railways outside of North America, station areas with consecutive in-
+terlocking signals are very common. In modern British signalling centres, there is also no longer 
+any formal distinction between station tracks and sections of the open line. However, interlock-
+ing areas may contain consecutive interlocking signals. So, in a generic way, the terms used 
+here will also fit to the British system.  
+Movements with Railway Vehicles 
+On most railways, the normal train movements are separated from the so- called shunting 
+movements. In North America, the rules for both kinds of movements do not differ as signifi-
+cantly as in most other countries. That is the reason why in North American operations, as 
+mentioned above, shunting signals are not used.   
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 16 ===
+16 Railway Signalling Principles 
+ 
+Train movements, also known as 'running movements', are movements of locomotives or self-
+propelled vehicles, alone or coupled to one or more vehicles, with authority to occupy a section 
+of line under operating conditions specified in the operating rules. Every train displays rear end 
+markers (tail lights or marker boards) to enable the lineside staff to check the train complete-
+ness. All regular movements running along the line from station to station are train movements. 
+The authorisation of a train movement has two elements: 
+• A valid timetable as the authority to run through the network along a pre-defined route 
+by specified operating conditions (timetable authority) 
+• A movement authority for every single section of track in the path of the train 
+The movement authority to enter a section of track is issued by the operator who is in charge 
+of controlling train movements on that section of track. This way, a train is always under exter-
+nal guidance of a train control operator. The authority for train movements is given by: 
+• A proceed indication of a main signal 
+• A proceed indication of a cab signal display 
+• A call-on signal permitting a train to pass a signal displaying a stop aspect under special 
+conditions 
+• A written or verbal instruction permitting a train to pass a signal displaying a stop aspect 
+under special conditions 
+• A written or verbal authority on non signal-controlled lines 
+Shunting movements are movements for making up trains, moving vehicles from one track to 
+another, and similar purposes. Shunting movements are accomplished without a timetable un-
+der simplified conditions at a very low speed that allows the driver to stop short of any vehicle 
+or obstruction. On main tracks and on sidings controlled by an interlocking station or control 
+centre, a verbal agreement between the shunting crew and the operator is needed before the 
+operator may authorise the shunting move. That verbal agreement performs a similar function 
+as the timetable authority for train movements. Block rules are not in effect. Shunting units may 
+enter occupied tracks. Movements in industrial sidings are also carried out as shunting move-
+ments.   
+The authority of shunting movements is given by: 
+• A proceed indication of a shunting signal, which may be combined with a main signal 
+to authorise a shunting move to pass the main signal in stop position 
+• Verbal permission 
+In the North American terms, the term shunting is not used.  Shunting  movements are called 
+‘switching movements’ or ‘movements of yard engines’. 
+Concerning shunting movements, the railways designated different limits in accordance with 
+their individual operating practice.  
+On European railways, apart from modern British rules, shunting units must not enter line sec-
+tions outside the home signal limits of a station area. The same rule also applies on many 
+railways outside Europe. The area between the home signals that may be used for shunting is 
+usually limited by limit of shunt or shortly LOS boards (Figure 1.13).  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 17 ===
+Railway Signalling Principles   17 
+ 
+    
+ 
+ 
+ 
+ 
+Figure 1.13  Shunting limits of a station area 
+ 
+The distance between the home signal and the LOS board equals the overlap of the home 
+signal. Shunting units may pass the shunting limit boards only with a written permission from 
+the operator. Before issuing  authority to a shunting unit to pass the shunting limit board, the 
+operator has to make sure that there is no train approaching the home signal.  
+While in modern British railway operations, the formal distinction between station areas and 
+the open line doesn’t exist, shunting units must be prevented from entering a section on which 
+they are not protected against opposing movement s. If no main or shunting signal exist s to 
+limit the shunting move, limit of shunt signals are placed at the shunting limit. Thes e LOS 
+signals are inoperative shunting signals permanently displaying a stop aspect.  
+Double Track Operations 
+For double track operation, there is usually a specified direction of traffic for each track. While 
+right-track operation dominates slightly worldwide, there is a significant number of countries 
+where left-track operation is the standard form. On lines not equipped with a bidirectional sig-
+nalling system for two- way working, all regular train movements have to be made with the 
+normal direction of traffic. On such lines, movements against the normal direction (also called 
+‘wrong line moves’ or ‘reverse movements’) have to be authorised by special instructions under 
+staff responsibilty. On lines that are equipped with a signalling system for two- way working, 
+movements against the normal direction can be authorised by clearing a main signal.  
+Many railways do not install intermediate block signals for reverse movements because on 
+most lines, reverse movements are not carried out frequently. For temporary single track work-
+ing is case of a track closure, the direction on the remaining track will change after almost 
+every train. So, intermediate block signals would have no effect on capacity. Intermediate block 
+signals for movements against the normal direction do only make sense on sections, where 
+parallel moves on both lines are carried out on a regular basis.  
+Figure 1.14 shows typical examples of signal arrangements for double track operation. On 
+many railways, a normal direction of traffic is only in effect outside of station areas.  
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 18 ===
+18 Railway Signalling Principles 
+ 
+ 
+ 
+Figure 1.14  Signal arrangements for double track operations 
+ 
+  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 19 ===
+Railway Signalling Principles   19 
+ 
+    
+ 
+2 SPACING TRAINS 
+In a steel wheel on steel rail system, the static friction coefficient is on average eight times less 
+than in road traffic. As a result, the maximum braking force that can be transmitted between 
+wheel and rail for a given weight is also eight times less. That leads to braking distances for 
+railway vehicles that may exceed the viewing range of the driver significantly. Thus, train sep-
+aration cannot simply be based on the viewing range but has to be controlled by trackside 
+technology. 
+2.1 Theory of Train Separation 
+There are three basic theoretical principles of train separation: 
+• R elative braking distance  
+• A bsolute braking distance 
+• F ixed block distance 
+Relative Braking Distance 
+In relative braking distance mode, the distance between two following trains equals the differ-
+ence of the braking distances of the trains plus an additional safety margin. For the headway 
+(‘head-to-head’) distance between two trains following each other, the length of the first train 
+has to be added (Figure 2.1 a). The braking distances of both trains have either to be calculated 
+with braking curves based on the same deceleration rate, or by applying the rule that in case 
+of a better braking performance of the second train, a minimum safety margin must always be 
+kept between the two trains.  
+While relative braking distance leads to a maximum of line capacity, there are two essential 
+problems. When points are to be moved between two trains, the second train cannot follow at 
+relative braking distance but must be kept at full braking distance in approach to the points 
+until the points are safely locked in the new position. As a result, the line capacity is limited by 
+the point zones where successive trains may take different routes. Another problem is that in 
+case of an accident of the first train, the second train has no chance to stop and is going to 
+collide with the first train. For these problems, this principle has not yet applied for train sepa-
+ration but is used by some freight railways for processing the coupling and uncoupling of helper 
+locomotives on the move. 
+Absolute Braking Distance 
+Absolute braking distance leads to a distance between two following trains that equals the 
+braking distance of the second train plus an additional safety margin. For the minimum head-
+way, the length of the first train has to be added (Figure 2.1 b). 
+Train separation by absolute braking distance is often seen as the best suited principle of train 
+separation. The only problem that has so far prevented the introduction of this principle outside 
+of mass transit systems is the lack of a usable technology for on-board checking of train com-
+pleteness (train integrity) of freight trains, which is needed for safe location of the train’s rear 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 20 ===
+20 Railway Signalling Principles 
+ 
+end. However, with the further development of radio-based operating technologies, train sep-
+aration by absolute braking distance may be widely introduced in the near future. The absolute 
+braking distance mode is also generally known as ‘moving block’. 
+ 
+ 
+ 
+Figure 2.1  Principles of train separation  
+ 
+Fixed Block Distance  
+In a fixed block system, the line is divided into consecutive block sections. A block section may 
+be exclusively occupied by only one train at a time. The distance between two following trains 
+equals the braking distance of the second train plus the length of the block section plus an 
+additional safety margin. Thus, the headway distance equals the headway of absolute braking 
+distance plus the length of the block section (Figure 2.1 c). While the minimum headway of a 
+fixed block system exceeds the minimum headway of a moving block  system, the capacity 
+limiting effect of the block sections is often overrated.  
+In train control with lineside signals, the block sections are limited by signals. Nowadays, run-
+ning in fixed block distance is the most common principle of train separation worldwide.  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 21 ===
+Railway Signalling Principles   21 
+ 
+    
+ 
+2.2 Train Control Principles 
+The principle used for safe train separation depends on the following criteria: 
+• How movement authority is transmitted from track to train 
+• How the track is released behind a train 
+If movement authority is only transmitted at discrete points, e. g. at lineside signals, this will 
+necessarily lead to a fixed block system. Each movement authority has to cover the entire 
+section up to the next point at which further authority may be received. On lines where trains 
+are governed continuously by a cab signal system, this restriction does not exist. However, 
+continuous transmission of movement authority is not yet a sufficient criterion to abolish fixed 
+block sections. In addition, the train has to release the track not in fixed intervals but continu-
+ously. This requires a permanent train- borne checking of train completeness. Since for tradi-
+tional railway systems, a sufficient solution for that problem has not yet been found, train sep-
+aration at a fixed block distance is still the standard principle for safe train spacing on most 
+railways worldwide. 
+Before explaining the different principles of train separation, another essential feature has to 
+be mentioned. The braking distance of a train does not mainly depend on the weight of the 
+train but on the percentage of the weight that is used to transmit braking force between wheel 
+and rail. Trains with the same braking ratio have generally the same braking distance. For safe 
+train separation, a train must always have a clear track ahead at least as long as the braking 
+distance. Thus, from the viewpoint of capacity, it makes sense to assemble vehicles into trains. 
+All vehicles that form a train do need just one common braking distance for the entire consist. 
+This will significantly re duce the capacity consumption that is produced by the long braking 
+distances. This is why running whole trains instead of single vehicles is one of the very basic 
+characteristics of a railway system. 
+2.2.1 Train Control by Lineside S ignals 
+Guiding Trains in Fixed Block Operation  
+While, with the introduction of radio-based train control system, railways move more and more 
+toward cab signalling, lineside signals are still the dominating from of train control. They are 
+even used in many new installations. Since lineside signals can only transmit movement au-
+thorities at fixed intervals, train control by lineside signals always leads to a fixed block opera-
+tion. For this, the line is divided into block sections limited by signals. To clear a signal for a 
+train that is to enter a block section, the following conditions must have been fulfilled (Figure 
+2.2): 
+• The train ahead must have cleared the block section 
+• The train ahead must have cleared the overlap beyond the next signal (only on lines 
+where block overlaps are used) 
+• The train ahead must be protected by a stop signal 
+On lines with bidirectional operation, the train must also be protected against opposing move-
+ments. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 22 ===
+22 Railway Signalling Principles 
+ 
+ 
+ 
+Figure 2.2  Control length of signals on a fixed block line 
+ 
+The control length of a signal is the length of track beyond a signal that must be safe and clear 
+to enable that signal to be cleared. When overlaps are used, the control length exceeds the 
+length of the block section and overlaps with the control length of the next signal. The main 
+purpose of the overlap is to provide additional safety in case a train overruns a stop signal by 
+a short distance due to bad brake handling. A signal must not be cleared until the full control 
+length is clear. Thus, the clearing point beyond a signal equals the end of the control length of 
+the signal in rear. Some railways do not use overlaps. In that case, the control length of a 
+signal equals the block length.  
+Lineside Signal Indications  
+Lineside signals provide information both for safe train separation but also for guiding trains 
+through point zones. Concerning the classification of signal aspects, these systems can be 
+divided in two basic principles of signalling: 
+• Speed signalling 
+• Route signalling 
+In a speed signalling system, the signals indicate the speed not to be exceeded by a train. In 
+route signalling, the facing point signals indicate the route over which the train is being sent. 
+In route signalling, the driver must know the speed limit of every route the train may run over. 
+While systems follow the speed signalling principle, route signalling is also still quite common, 
+in particular on railways with roots in the British system.  
+In some systems, the speed or route information is part of the block signal aspect e.g., by using 
+combinations of different lights. Other systems, in particular modern European installations, 
+use supplementary speed or route indicators. In such systems, the block signal itself gives only 
+information about the occupation of the following block sections. So the block signal aspects 
+can be designed in a very simple form. 
+For train separation, most railways use three basic indications, usually displayed by a red, 
+yellow, and green aspect. That’s why, such a system is also known as three-aspect signalling. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 23 ===
+Railway Signalling Principles   23 
+ 
+    
+ 
+Since different names are used for these indications in the rulebooks of individual railways, the 
+generic terms as stated in Table 1 are used here. 
+Table 1  Basic signal indications 
+Stop Train must stop at the signal 
+Expect stop Train may proceed with caution prepared to stop at the signal ahead 
+Clear Train may proceed 
+ 
+Regarding the principle of providing the approach indication there are two kinds of signalling 
+(Figure 2.3): 
+• One-block signalling 
+• Multiple-block signalling 
+In one-block signalling (Figure 2.3 a), the indication of a main signal depends only on the state 
+of the block section beyond the signal. A main signal cannot provide any approach information 
+for the next signal. So, every main signal must have a distant signal whose only purpos e it is 
+to provide the required approach indication. The distant signal is placed at the braking distance 
+in approach to the main signal. On lines with short block sections that do not significantly ex-
+ceed the braking distance, the distant signal is placed at the main signal in rear. In such sys-
+tems, the head of a main signal and the head of the distant signal for the next main signal are 
+often mounted one above the other on the same mast.  
+In multiple-block signalling, the indication of a main signal depends on the state of two or more 
+following block sections. Very common is two-block signalling in which the approach indication 
+is given by the aspect of the rear main signal without need for separate distant signals (Figure 
+2.3 b). Since two-block signalling uses the same three basic signal aspects as one-block sig-
+nalling, both principles fall into the category of ‘three-aspect signalling’.  
+Multiple-block signalling renders a very efficient signalling but requires block sections not much 
+longer than the stopping distance. On lines with very long block sections, multiple- block sig-
+nalling is not useful because approach indication given too early will reduce the capacity of the 
+line by increasing the the signal headway of following trains. Many modern signal systems may 
+be alternatively used with one-block or multiple-block signalling depending on the actual block 
+length. 
+Some railways even use three-block signalling in which a main signal provides information on 
+three block sections ahead by using an advance approach indication (Figure 2.3 c). For this, 
+a forth signal aspect is used telling the driver to be prepared to stop at the second signal ahead. 
+That is, why such a system is called four-aspect signalling. By three-block signalling, the brak-
+ing distance may exceed the block length enabling signals to be placed at shorter intervals to 
+improve capacity. On railways that use speed signalling, the same effect can be achieved by 
+progressive speed signalling (Figure 2.4).  
+In progressive speed signalling, a train approaching a stop signal is progressively slowed down 
+by speed indications. So, the maximum speed at which the train may pass the last signal in 
+approach to a stop signal will ensure a safe braking within the short block section. Although 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 24 ===
+24 Railway Signalling Principles 
+ 
+more than three signal aspects are used (mostly four aspects but in some installations even 
+more), it is only a two-block signalling system because an approach information is only given 
+for the signal ahead.  
+ 
+ 
+ 
+Figure 2.3  Different Principles in the Application of the Approach Indication 
+ 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 25 ===
+Railway Signalling Principles   25 
+ 
+    
+ 
+ 
+ 
+Figure 2.4 Progressive speed signalling 
+ 
+A very common application of short block sections are moving-up signals at platform stations 
+of mass transit railways (also known as staggered or multiple home signals). The purpose of 
+these signals is to save time between the departure of one train and the arrival of the next train 
+at the same platform track. The moving-up signal is placed beyond the station entrance signal 
+directly at the platform. Thus the station entrance signal and the moving-up signal form a very 
+short block section. The control length of the station entrance signal leads up to the clearing 
+point at the end of the overlap of the moving-up signal (Figure 2.5).  
+ 
+ 
+ 
+Figure 2.5  Moving-up signal 
+ 
+During a platform stop, a train is protected by two stop signals, since it occupies the contr ol 
+length of both the station entrance signal and of the moving-up signal. When a departing trains 
+has cleared the control length of the station entrance signal (position 1 in Figure 2.5), a follow-
+ing train may already move up toward the platform while the departing train is still protected by 
+the moving-up signal. The moving-up signal clears after the train has completely left the station 
+section (position 2 in Figure 2.5). At stations with a very high density of traffic, multiple moving-
+up signals may be applied (but hardly more than four). Some railways even place moving -up 
+signals in the middle of the platform.  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 26 ===
+26 Railway Signalling Principles 
+ 
+The Blocking Time Model  
+For the non-delayed passage of trains, a signal must be cleared before an approaching train 
+is forced into a brake appli cation by the aspect of the signal in rear. The minimum headway 
+between two following trains depends on the so-called ‘blocking time’ (Hansen & Pachl 2014, 
+Pachl 2018).  
+ 
+ 
+Figure 2.6  Blocking time of a block section 
+ 
+The blocking time (from the German term ‘Sperrzeit’) is the time interval in which a section of 
+track (usually a block section) is allocated exclusively to a train and therefore blocked to other 
+trains. The blocking time lasts from the latest possible time movement authority to enter the 
+section has to be issued by clearing a signal without delaying the train up to the time at which 
+movement authority to another train to enter the same section can be issued. So, the blocking 
+time describes the time window that has to be kept clear for the non-delayed passage of a train 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 27 ===
+Railway Signalling Principles   27 
+ 
+    
+ 
+through a track section. While it is explained here for a lineside signalling system, the idea 
+behind the blocking time model is universal and can also be applied to cab signalling systems 
+and to automatic train operations. As explained in section 2.2.2, it even works for moving block 
+systems. 
+The blocking time of a track section is usually much longer than the time the train occupies 
+that section. In train control  with lineside signals, for a train without a scheduled stop, the  
+blocking time of a block section consists of the following time intervals (Figure 2.6): 
+• Signal control time, i.e. the control time needed to clear the signal 
+• The signal watching time, i.e. a certain reaction time by which the signal that provides 
+the approach indication must be cleared ahead of  the train to prevent the driver from 
+applying the brakes 
+• The approach time between the signal that provides the approach indication and the 
+signal at the entrance of the block section 
+• The time between the block signals 
+• The clearing time to completely clear the block section and – if required – the overlap  
+• The release time to ‘unlock’ the block section 
+The approach time equals the time the signal has to be cleared ahead of a train to prevent this 
+train from passing an aspect at the signal in rear that will force the train into a brake application. 
+It does not apply if the train has a scheduled stop at the signal at the entrance of the block 
+section. In such a case, the signal watching time applies at that signal. There, it is the reaction 
+time of the driver to get the train into motion after the signal has been cleared. 
+ 
+ 
+ 
+Figure 2.7  Blocking time stairway 
+ 
+Drawing the blocking times of all block sections a train passes into a time -over-distance dia-
+gram leads to the so -called ‘blocking time stairway’ (Figure 2.7). The blocking time stairway 
+represents perfectly the operational use of a line by a train. Computer-generated blocking time 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 28 ===
+28 Railway Signalling Principles 
+ 
+stairways are a typical feature of advanced scheduling systems to establish conflict-free train 
+paths.  
+By means of  the blocking time stairway s, it is possible to determine the minimum headway 
+between two trains. The blocking times directly establish the signal headway as the minimum 
+time interval between two following trains in each block section. The line headway is the mini-
+mum headway between two trains not only considering one block section but the whole block-
+ing time stairways of the line (Figure 2.8). In this case, the blocking time stairways of two 
+following trains touch each other without any tolerance in at least one block section (the ‘critical 
+block section’). 
+ 
+ 
+ 
+Figure 2.8  Signal headway and line headway 
+ 
+On lines with mixed traffic, the minimum line headway depends significantly on the speed dif-
+ferences between trains. On lines where all trains run at quite the same speed (typical on mass 
+transit railways), the critical block sections are usually the block sections in which the blocking 
+time includes the dwell time of platform stops (station sections, Figure 2.9). On such lines, 
+signals should be placed in a way that keeps the blocking time of the station sections as short 
+as possible. 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 29 ===
+Railway Signalling Principles   29 
+ 
+    
+ 
+ 
+ 
+Figure 2.9  Blocking time stairways on a mass transit railway 
+ 
+The Protected Zone Model  
+The protected zone model is an alternative approach to model the effect, the signalling system 
+has on the spacing of trains. The term ‘protected zone model’ was first used in (Pachl, 2018). 
+The basic idea is that behind every train, the signalling system provides a certain zone to 
+protect that train against following trains. The protected zone can be divided into two parts 
+(Figure 2.10 a). First, there is a part of absolute protection, which is marked by red colour. This 
+part consists of all track sections the protected train has exclusive authority to occupy. This is 
+the zone protected by a stop signal. Second, there is a part in which other trains are forced to 
+slow down to prevent them from running into the part of absolute protection. That zone starts 
+at the first restrictive signal encountered by a following train. In the diagram, this part is marked 
+by yellow colour. The protected zone reaches its greatest length when a train is going to clear 
+a block section (Figure 2.10 b). After the train has cleared the block section, the protected zone 
+has its shortest length and starts to grow again (Figure 2.10 c).  
+The change from the situation of Figure 2.10 b to the situation of Figure 2.10 c represents a 
+single ‘step’ in the blocking time stairway. While diagramming the protected zones with addi-
+tional times for operating and watching the signals along the path of a train movements would 
+lead to picture similar to a blocking time stairway, there is one essential shortcoming. 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 30 ===
+30 Railway Signalling Principles 
+ 
+ 
+ 
+Figure 2.10  The protected zone model 
+ 
+Because the approach time is not added at the beginning but at the end of the occupation of 
+the block section, the protected zone model cannot handle cab signalling systems in which the 
+signalled braking distance depends on the actual speed of a train. In such systems, a train can 
+only calculate its own braking distance but not the braking distance for a following train.  
+2.2.2 Train Control by Cab Signalling 
+In cab signalling, the movement authority is directly displayed on the driver’s desk. On most 
+railways that use cab signalling, it is combined with a continuous Automatic Train Protection 
+(ATP) system that provides the control data for the cab signals. While cab signalling allows the 
+infrastructure operator to remove lineside signals completely, cab signalling may also be used 
+as an overlay system on lines equipped with lineside signals, so trains may be controlled either 
+by cab signals or lineside signals. To avoid confusion for the driver, most railways established 
+the rule that on such lines, cab signal indications are always superior to lineside signals.  
+On some railways, there are still older cab signal systems in use that work only as auxiliary 
+systems. On such lines, trains are still governed by lineside signals, but the cab signal indica-
+tions support the driver in watching the lineside aspects. 
+Cab signalling with fixed block sections 
+The main reason for having fixed block sections on lines with cab signalling  is the need for 
+checking of train completeness by track clear detection technology. This is the case on all lines 
+with freight traffic, since a sufficient solution for checking train completeness of freight trains 
+does not yet exist. As an approved technology, it is also used on many lines with exclusive 
+passenger operations. On cab signaling lines without lineside signals, most railways use block 
+marker boards to mark the block limits for degraded mode operations.  
+Sometimes, block sections are also used on cab signal controlled lines with exclusive passen-
+ger operations where train completeness is checked on board without track clear detection 
+technology. That principle is called virtual block, because the block sections exist only virtually 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 31 ===
+Railway Signalling Principles   31 
+ 
+    
+ 
+in the control system without any field installations along the line. The reason for having virtual 
+block sections instead of moving block is to reduce the amount of data transmission by radio. 
+In contrast to a moving block system where the continuous upgrade of the movement authority 
+requires data transmission at very short intervals, the movement authority of a virtual block 
+system is only upgraded after the train ahead has cleared a block section. This significantly 
+reduces the data traffic from track to train. If capacity needs to be improved, the block lengths 
+can easily be reduced in the control system without changing anything in the field. 
+ 
+ 
+ 
+Figure 2.11  Blocking time of a block section on a cab signalling line  
+ 
+The main difference of cab signalling with fixed block sections from a fixed block system with 
+lineside signals is the independence from the approach distance of the lineside signal system, 
+which is the distance between the signal at the entrance of the block section and the signal in 
+rear that provides the approach indication. The approach time is no longer the running time 
+between these two signals but the running time within the real braking distance based on the 
+supervision curves of the cab signal system. Also, due to the absence of lineside signals,  a 
+signal watching time to spot a signal aspect at a specific location is no longer needed. The 
+other elements of the blocking time do not differ from a system with lineside signals (Figure 
+2.11). 
+Cab Signalling with Moving Block 
+Moving block is based on absolute braking distance. Since the fixed block sections are elimi-
+nated, the line is cleared continuously behind the rear end of a moving train. Beside a contin-
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 32 ===
+32 Railway Signalling Principles 
+ 
+uous detection of the train location and train completeness, it also requires a continuous up-
+grade of the movement authority. Figure 2.12 demonstrates the effect on the minimum head-
+way compared with a fixed block cab signaling system.  
+ 
+ 
+ 
+ Figure 2.12  Headway in cab signaling with fixed block and moving block 
+  
+Today, moving block is only used in some transit systems. One reason why the interest of 
+standard railways in moving block is rather limited is that the potential improvement of line 
+capacity by the introduction of moving block is often overrated. On a moving block line, the 
+length of the block sections is reduced to zero. That means that the running time within the 
+block sections will be eliminated in the blocking time diagram. All other components of the 
+blocking time can also be found in moving block. On most lines, the total of these other com-
+ponents is much greater than the part of the blocking time that can be eliminated by moving 
+block. That is why, compared with fixed block operation with short block sections, moving block 
+will just lead to a moderate improvement of capacity. On lines with mixed traffic of trains run-
+ning at different speeds, the possible improvement is almost negligible compared to a system 
+with short block sections. Same is true for single lines with bidirectional operation. That is, why 
+many railways prefer the principle of virtual block in new developments of radio based cab 
+signalling systems. 
+2.3 Block Control Principles 
+To ensure safe train separation, the control procedures must ensure that the movement au-
+thority to enter a section of line must not be issued unless two basic conditions are in effect: 
+• The line is clear up to the desired authority limit and the rear end of the last train ahead 
+is safely protected by that limit. 
+• All opposing moves on the same stretch of line are safely locked out. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 33 ===
+Railway Signalling Principles   33 
+ 
+    
+ 
+While these basic safety requirements are valid both in fixed block and moving block systems, 
+the solutions to meet these requirements differ. 
+2.3.1 Block Control by verbal Communication 
+On branch lines operated at a low speed and a very low traffic density, train movements may 
+be protected just by operating rules under staff responsibility. This is based on verbal commu-
+nication by radio or telephone. For this, two principles exist: 
+• Dispatcher-controlled operation 
+• Train control by local operators 
+Today, most lines of that kind have some kind of dispatcher control. The dispatcher is an op-
+erator responsible for train control on a longer stretch of line. The dispatcher communicates 
+with the train crews by radio. Points are manually operated by the train crews. Train crews 
+report the arrival at stations or specific locations to the dispatcher who keeps track of all move-
+ments either by manually recording these messages on a paper train sheet or by entering them 
+into a computer system. Movement authorities issued by the dispatcher are also transmitted 
+verbally by radio and recorded manually. When a computer workstation is used, train locations 
+and movement authorities are visualized on a computer screen. That control system is just an 
+offline system controlled by the data manually entered by the dispatcher, however. On lines 
+with a higher density of traffic, a simplified signalling system may be used as a safety overlay. 
+In such a system, automatic block signals controlled by track circuits would protect occupied 
+sections of line. Since there are no controlled signals, movements authority has still to be is-
+sued verbally by the dispatcher. This is frequently used in North America where the traffic 
+density on many lines does not justify the effort to install a remote control system.  
+While less frequently used today, train control by verbal communication of local operators is 
+still common on some railways. On such lines, all stations that limit a block section must be 
+locally staffed. The local operators communicate by telephone and exchange control mes-
+sages on trains entering and leaving the block section, and on direction control to protect op-
+posing moves. The exchanged messages and the train movements are manually recorded. 
+Movement authorities are usually issued by lineside signals controlled by the local operators. 
+Under very simplified conditions, station are only equipped with home signals. Then, the au-
+thority to leave the station into the next section of line is given verbally, or by a hand or fl ag 
+signal. 
+In old British systems, block sections are protected by block instruments in conjunction with 
+bell codes. Local operators offer and accept trains and report trains entering and leaving sec-
+tion by bell codes. This is overlaid by block instruments to indicate the state of the block sec-
+tion. There are coacting instruments at the entrance and the exit of section, which can only be 
+operated from the exit side. These instruments are pure communication devices not inter-
+locked with the signals. So, the basic principle is very similar to a systems based on verbal 
+communication. The telephone communication is just replaced by bell codes and block indica-
+tions. So, this is not yet a block system with positive locking of signals in the sense of the next 
+paragraph. That kind of block protection is no longer used in new installations. 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 34 ===
+34 Railway Signalling Principles 
+ 
+2.3.2 Block systems for Fixed Block Operation  
+In mainline operations, the fixed block criteria are enforced by block systems that provide pos-
+itive locking of signals in stop position as long it is not safe for a train to enter the block section 
+these signals protect. Since block systems are only used to enforce fixed block operation on 
+line sections between station areas, they are often referred to as line block systems ( UIC, 
+2012; Theeg & Vlasenko, 2020). On station tracks between successive interlocking signals, 
+fixed block operation is not enforced by a block system but by the interlocking system when 
+setting routes from signal to signal. This will be explained in Chapter 3. That is, why on many 
+railways, station tracks between successive interlocking signals are not referred to as block 
+sections.  
+Block Working Principles 
+To protect a train that has entered a block section against following trains, the signal at the 
+entrance of the section is locked in stop position. The signal can be either a lineside signal or 
+just a section limit (usually marked by block marker board) where a train must not proceed 
+without cab signal indication. If converging lines lead into the same section, the block locking 
+is in effect for all signals leading into that block section. After the train has completely left the 
+block section including the overlap (if overlaps are required) and is protected by a stop signal, 
+the block section is released. Now, a signal at the entrance of the block section can be cleared 
+for a following train (Figure 2.13). 
+ 
+ 
+ 
+Figure 2.13  Block protection of following movements  
+ 
+If the line just consists of one single block section, opposing moves can be easily locked out 
+by locking all opposing signals in stop position before a signal to enter the section can be 
+cleared. On a longer stretch of line that consists of several block sections, opposing moves 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 35 ===
+Railway Signalling Principles   35 
+ 
+    
+ 
+are locked out by direction locking. A signal to enter such a stretch of line can only be cleared 
+after the entire section has been locked for the desired direction . The direction locking holds 
+all opposing signals in stop position as long there is at least one train on the line.  
+ 
+ 
+ 
+ 
+Figure 2.14  Direction locking with non-symmetrical normal position 
+ 
+In some systems, the direction locking releases after the entire section has been completely 
+cleared of trains. In such a system, the direction locking is re- established when the next train 
+of either direction is going to enter the single track section. Thus, no direction is cleared in 
+normal state. This is also known as a block system with symmetrical normal position. In other 
+systems, the direction locking remains in effect even after the last train has left the single track 
+section. Only when a train is going to enter the section from the opposing side, the locking is 
+switched to the other direction. Then, the new direction will be kept locked until another change 
+of direction is required. This is known as a block system with non-symmetrical normal position 
+(Figure 2.14).  
+If direction locking with non-symmetrical normal position is used on a line section that connects 
+the control areas of different operators, two principles exist for controlling the direction change: 
+• Direction change is initiated by the station that is currently holding the direction. 
+• Direction change is initiated by the station that is requesting the direction.   
+If the direction change is initiated by the station that is currently holding the direction, a proce-
+dure for offering and accepting trains must be established between the two operators. Other-
+wise, the operator receiving the train would not be aware of the necessity to initiate a direction 
+change. If the direction change is initiated by the station that is requesting the direction, the 
+operator that is requesting the direction needs an indication on the control interface that the 
+direction change is currently possible and  not blocked by a cleared signal on the opposing 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 36 ===
+36 Railway Signalling Principles 
+ 
+station. Otherwise, in case of a failed direction request, the operator wouldn’t  see the reason. 
+A procedure for offering and accepting trains is not necessarily needed but sometimes used 
+to avoid traffic control conflicts.  
+An alternative principle for protecting opposing movements is traffic locking, which is the stand-
+ard solution in North America ( Aubertin, 2018). There, automatic signals at bidirectional line 
+sections between interlocking areas are cleared in normal state for both directions. When a 
+controlled signal is cleared to leave an interlocking area, all opposing automatic signals up to 
+the next interlocking area are ‘tumbled down’, i.e., restored to stop. The ‘tumble down’ proce-
+dure is triggered from section to section until the entire direction is blocked. Then, it is also no 
+longer possible to clear an opposing controlled signal at the adjacent interlocking area (Figure 
+2.15). 
+ 
+ 
+ 
+Figure 2.15  Principle of traffic locking 
+ 
+Manual Block Systems 
+In a manual block system, the block sections are not yet equipped with continuous track clear 
+detection. The signals protecting the block sections are manually controlled by local operators. 
+The stations are equipped with electric block instruments connected by a block line. After a 
+train has entered a block section, the operator at the entrance of the section would restore the 
+signal and operate a block instrument to lock the signal in stop position. A coacting instrument 
+at the exit side of the section informs the next operator on the approaching train. If the operator 
+at the block entrance failed to operate the block instrument, a rotation lock would lock the 
+signal in stop position until it is properly locked by the block instrument. When the train has left 
+the section, the operator at the exit side would check train completeness by watching the rear 
+end marker, restore the signal to stop, and operate the block instrument to release the block 
+section. This will release the block instrument at the entrance of the section, so that the signal 
+at the entrance is no longer locked in stop position. To prevent the operator from accidently 
+releasing a block section when the train has not yet left the section, an electric lock prevents 
+operation of the block instrument at the exit side until the train has passed through a short 
+track circuit beyond the signal. So, these coacting block instruments work exactly in accord-
+ance with the block cycle as shown in Figure 2.13.  
+On lines with bidirectional operation, direction locking can also be effected by coacting block 
+instruments on both sides of the single track section. At the station that is not holding the 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 37 ===
+Railway Signalling Principles   37 
+ 
+    
+ 
+direction, signals pointing against the locked direction are locked in stop position by a block 
+instrument. To change the direction, the operator at the station currently holding the direction 
+would operate a block instrument that will lock the signals in stop position and release the block 
+instrument at the opposing station. The stretch of line between the two stations may contain 
+several block sections. To change the direction, it is checked that all block instruments at in-
+termediate block sections are in the normal position. This meets the principle shown in Figure 
+2.14.  
+Today, most manual block systems work as so called semi -automatic block systems, which 
+uses relay circuits instead of block instruments. In a semi -automatic block system, the block 
+locking after a train has entered the block section is effected automatically. However, after the 
+train has left the section, it has to be released manually by an operator. In modern control 
+centres, semi-automatic block systems are often used at the interface to lines still equipped 
+with old technology. 
+Manual block systems as described above are also known as tokenless block. Another solution 
+to protect single track sections is token block. It’s still frequently used on railways with roots in 
+the British system. In its most simple form, every single track section has a physical token 
+(e.g., a staff, key or tablet). Only the operator in possession of the token is allowed to authorise 
+trains to enter the line. To change the permitted direction, the token is handed to the train driver 
+to carry it to the opposing station.  
+Further development led to electric token block systems. In such systems, corresponding con-
+trol stations are equipped with token instruments electrically connected to each other. A deter-
+mined number of tokens is assigned to every track section. Every train has to pick up a token 
+to enter the section. As long as the total number of all tokens kept in the connected instruments 
+equals the determined number of tokens for the section, it is possible to release exactly one 
+token from either one of the two instruments. After having removed a token, all other tokens in 
+both instruments are locked. When the operator at the opposing control station has returned 
+the token into the token instrument there, both instruments are released. After that, another 
+token may be removed to authorise a train to enter the section. Since only one token can be 
+released at a time, intermediate block sections are not possible.   
+While being old technology, token block controls are also to be found in modern control centres 
+where a token block line connects to the controlled area. Since there is no longer any local 
+staff available, the token instrument is remotely released from the control centre and operated 
+by the train crew. A new development is Digital Token Block (DiBloc). It works like a traditional 
+token block system but  with the token instruments no longer connected by an electric block 
+line but by internet or digital radio. This is a very cost-efficient solution for branch lines with low 
+traffic.  
+Automatic Block Systems 
+In an automatic block system, block sections are equipped with automatic track clear detection 
+to enable the signals to work automatically. An automatic signal will only clear if the entire 
+control length up to the clearing point beyond the next signal is clear and a train ahead is 
+protected by a stop signal. To release a block section, a train must not only have cleared the 
+section and – if required – the overlap, but must also have restored the next signal. This con-
+dition confirms that the train has safely passed the exit side of the block section. So, the safe 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 38 ===
+38 Railway Signalling Principles 
+ 
+block working does not only depend on the track clear detection but is overlaid by the block 
+cycle of Figure 2.13. 
+This improves the safety of automatic block systems based on track circuits. If the occupation 
+of the block section disappeared due to a malfunction of the track circuit while the train has not 
+yet left the section (e.g., if some dirt has gotten on the rails), the block section will not release. 
+It will also not release if the train has left the section but failed to restore the signal  at the exit 
+side of the section to stop position due to a malfunction of the next track circuit. For automatic 
+block systems working with axle counters, that safety procedure is automatically enforced, 
+since the track occupation could never disappear without having the train passed through the 
+counting point. Passing through the counting point will also safely restore the signal to stop.  
+Concerning the control principle, automatic block systems can be divided into two classes 
+(Figure 2.16): 
+• Decentralised automatic block systems 
+• Centralised automatic block systems 
+ 
+ 
+ 
+Figure 2.16  Decentralised and centralised automatic block systems 
+ 
+In a decentralised automatic block system, the control devices are located in field cabinets 
+directly at the block signals. These block signal cabinets exchange block control information 
+either by an electric block line or through coded track circuits. After a train has left a block 
+section, the signal at the entrance of that section is immediately cleared. So, in normal state,  
+automatic block signals that are not held down by direction locking are cleared no matter 
+whether a train is approaching or not. On bidirectional lines where opposing moves are pro-
+tected by direction locking, all signals pointing against the locked direction are locked in stop 
+position. When a direction change is initiated, all signals are restored to stop. After the new 
+direction has been locked, all signal pointing into this direction will clear. On bidirectional lines 
+where opposing moves are protected by traffic locking, automatic signals of both directions are 
+cleared in normal state and only ‘tumbled down’ to protect an opposing move. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 39 ===
+Railway Signalling Principles   39 
+ 
+    
+ 
+In a centralised automatic block system, the block control is part of the centralised control 
+system that also controls the interlocking areas. Instead of exchanging block control infor-
+mation, centralised block sections are treated similar like routes in an interlocking system (see 
+Chapter 3). However, these ‘block routes’ do not lock any points or movably parts of the infra-
+structure. They are just part of the block control logic. Before a signal can be cleared at the 
+entrance of a centralised block section, the block section has to be locked. After the train has 
+passed the signal, it is restored and kept locked in stop position, until the train has released 
+the block section. By locking the block section from the entrance side and releasing it from the 
+exit side, that control logic also meets the principle of the block cycle shown in Figure 2.13.  
+In normal state, all centralised block sections are released. Consequently, all automatic block 
+signals on a centralised automatic block line are in stop position. By clearing a controlled signal 
+to enter an automatic block line, the first block section will be locked. That block section will 
+trigger the next block section, and so on. So, all automatic block signals will clear ahead of the 
+train. On lines with bidirectional working, opposing moves are protected by direction locking. 
+The direction can only be changed when all intermediate block sections are released.  
+Depending on the rules of individual railways, block overlaps may be provided at automatic 
+block signals. If block overlaps are used on automatic block lines, there are three different 
+principles to provide overlap protection (Figure 2.17): 
+• S ignals placed at the overlap distance before the track clear detection limits 
+• S eparate track clear detection section for the overlap 
+• Using the next block section as an overlap 
+Placing the signals at the overlap distance before the track clear detection limits is the most 
+simple solution. However, in such a system, the overlap beyond a signal is not controlled by 
+that signal but by the signal at the entrance of the block section.  If a train has lost vehicles in 
+the overlap, the lost equipment is protected by the signal at the entrance of the block section, 
+while the signal at the exit side may clear not protecting the occupied overlap. This may be-
+come a safety problem in degraded mode operations when a train is authorised to pass through 
+a block section cautiously on sight. Then, the driver may encounter a cleared signal in front of 
+the occupied overlap. To safely handle such situations, some railways established the rule that 
+a train with authority to proceed on sight through a block section, has to continue in on sight 
+mode after having passed a cleared signal at the end of the section for a specified distance 
+beyond that signal. This is not necessary if the overlap gets a separate track clear detection 
+section. Then, any occupation of the overlap will always restore the signal to stop. On lines 
+with very short block sections, an entire block section could be used as an overlap. This prin-
+ciple is widely used on mass transit railways. 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 40 ===
+40 Railway Signalling Principles 
+ 
+ 
+ 
+Figure 2.17  Overlap solutions for automatic block lines 
+ 
+Handling Block System Failures  
+In case of a malfunction of a manual block system, degraded mode operation is based on 
+verbal communication between local operators. When a train has left a block section, the op-
+erator at the exit side of the section would report the clearance of the section to the operator 
+at the entrance side. Then, the operator at the block entrance may authorise the next train to 
+pass the signal protecting the block section and report the departure to the operator at the exit 
+side. On lines with bidirectional operation, the operators of the limiting stations would have to 
+offer and accept every single train to protect opposing moves. All these messages are manu-
+ally recorded. Before a train may be authorised to enter a line with bidirectional operation, the 
+operator has to check in the train record that the last train ahead has the cleared the first block 
+section and no opposing train has been accepted. 
+On automatic block lines, that procedure is not possible due to the absence of local operators. 
+For degraded mode operations, two different principled are used by individual railways: 
+• Automatic block lines with absolute block working 
+• Automatic block lines with permissive working 
+On automatic block lines with absolute block working, the stop aspect on automatic block sig-
+nals is absolute, i.e., it does not differ from the stop aspect on controlled signals. A train must 
+not pass any signal in stop position without authority from the operator (absolute stop = ‘stop 
+and stay’). In case of a block system failure, so that the operator has either to execute a reset-
+ting command to release the block section or has to authorise the train to pass a signal pro-
+tecting a block section in stop position, the operator has to perform a clearance check for the 
+relevant block section.  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 41 ===
+Railway Signalling Principles   41 
+ 
+    
+ 
+For that clearance check, the operator has to clearly identify the last train that passed through 
+the relevant block section. For that train, the following criteria have to be confirmed: 
+• The train has arrived at a station beyond the relevant block section. 
+• The train must be protected by a stop signal. This includes,  if required, the clearance 
+of the overlap beyond that signal. 
+• The train must be complete. This is to be checked either by local staff or by the train 
+crew. 
+Before authorising a train to pass a stop signal to enter a block section on a line with birectional 
+operation, the operator has also to confirm that there is no opposing train on the entire section 
+between the limiting controlled signals, and the opposing controlled signals protecting the sec-
+tion are secured in stop position.  
+If train completeness of the last train ahead cannot be confirmed, the next train has to be 
+authorised to pass through the relevant section on sight. If, in a case in which train complete-
+ness cannot be confirmed, the operator is going to reset the axle counter of a block section 
+under staff responsibility, the order to proceed on sight must be issued before the resetting 
+command is executed. If the resetting fails, the operator has to secure the signal protecting the 
+relevant section in stop position. Then, the operator is required to perform clearance checks 
+for all following trains until a signal maintainer has reestablished normal working of the block 
+system.  
+If the operator cannot clearly identify the last train ahead, a clearance check is not possible. In 
+such a case, the next train has to be authorised to pass through the relevant section on sight, 
+but the operator must not reset the block section. Without having confirmation of the last train 
+ahead, the operator cannot be sure whether a track occupation shown on the user interface is 
+caused by lost equipment obstructing the track, a track clear detection failure, or by a 'forgotten' 
+train that is still occupying the section. In the last case, resetting the block section may lead to 
+a hazard if the forgotten train unexpectedly proceeds. On passenger lines, following trains with 
+the same number of axles are a frequent occurrence. If a second train has occupied the section 
+on sight after the axle counter has been reset, the unexpectedly moving first train may count 
+out the same number of axles the second train has counted in. Thus, the section would clear 
+while still occupied by the second train. For details see (Theeg & Vlasenko, 2020).  
+The rule to perform a clearance check for each individual train will increase the workload of 
+the operator and significantly decrease the capacity during degraded mode working. That is, 
+why many railways use permissive working on automatic block lines.  
+On automatic block lines with permissive working, only controlled signals have an absolute 
+stop indication while automatic signals are permissive signals (Figure 2.18). A train may cau-
+tiously pass a permissive signal in stop position after the train has stopped in front of the signal 
+and the driver has clearly identified the signal as a permissive signal (permissive stop = ‘stop 
+and proceed’). For that, permissive signals are marked by a special marker plate or by using 
+a special kind of stop aspect. If a train has passed a permissive signal displaying a stop aspect, 
+the train has to pass through the entire block section cautiously on sight.  
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 42 ===
+42 Railway Signalling Principles 
+ 
+ 
+ 
+Figure 2.18  Absolute and permissive signals on automatic block lines 
+ 
+On lines with permissive signalling, it is of great importance to restore a signal to stop with a 
+very high reliability. If a signal fails to protect a train that has passed the signal, the signal at 
+the block entrance would remain locked in stop position by the block system. If a following train 
+passed that stop signal in permissive mode, that train would encounter  a proceed aspect at 
+the next signal leading into an occupied block section. In block systems where the required 
+high reliability in restoring signals cannot be guaranteed, trains must run under the rule that a 
+train running in permissive mode has to ignore a proceed aspect at the next signal and has to 
+go on running permissive in the following block section. Only when the train has passed a 
+proceed aspect at the second signal, the driver may end the permissive mode and proceed at 
+normal speed.  
+2.3.3 Block Control in Moving Block Operations  
+Moving block systems need an accurate on-board train location system that transmits the cur-
+rent location at very short intervals to a radio block centre. With every reported location, the 
+train must also confirm train completeness. By these data, the radio block centre calculates 
+the danger point to protect the rear end of the train.  
+Between that danger point and the authority limit of a following train, there is a supplementary 
+safety distance that is an equivalent to the block overlap in a traditional fixed block system.  It 
+is the minimum safety distance kept between the two trains if the second train stops behind 
+the first train. If points are going to be moved between two trains following each other in moving 
+block, an additional time window for moving the points is needed. That time windows is to be 
+calculated by the radio block centre when upgrading the mov ement authority for the second 
+train.  
+The radio block centre will always safely prevent frontal crashes by locking out overlapping 
+opposing movement authorities. On line sections outside of station areas where trains cannot 
+reverse, an additional direction control is needed that works similar as the direction locking in 
+a fixed block system. A train must not enter such section as long any opposing movement is 
+travelling through that section or has authority to enter that section from the next location where 
+the train sequence may be changed.   
+  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 43 ===
+Railway Signalling Principles   43 
+ 
+    
+ 
+3 INTERLOCKING PRINCIPLES  
+When passing through a point zone, beside safe train separation, movable track elements 
+must be locked in the proper position, and the train must be protected against conflicting moves 
+that would interfere with its path. This is effected by interlocking. The term interlocking comes 
+from the fact that the signals governing train moves are interlocked with movable track ele-
+ments and signals governing conflicting routes. 
+3.1 Safe Routes through a Point Zone 
+Interlocking is based on the principle that before a train can be authorised to pass through a 
+point zone by clearing a lineside signal or issuing cab signal authority, a safe route up to the 
+authority limit is established. That route must meet the following conditions: 
+• All points must be properly set and locked. 
+• Al l points must be kept locked as long a train has authority to move on them. 
+• Conflicting moves must be locked out. 
+• The route must be protected against inadvertent movements on conver ging tracks 
+(flank protection). 
+• All track sections the train has authority to pass through, must be clear. 
+3.1.1 Route Classes  
+In modern interlocking systems, locked routes are also provided for shunting movements. 
+That’s why, there is a distinction between main routes and shunt routes. Main routes are routes 
+for regular train movement governed by a main signal or cab signal indication. Shunt routes 
+are used for shunting movements authorised by a shunt aspect or verbal authority. Some of 
+the requirements for a main route are not in effect for a shunt route. So, a shunt route may 
+govern a shunting movement into an occupied track. Flank protection for shunt routes is usu-
+ally either simplified or not required at all. 
+In North America, where train movements are not as strongly separated from shunting move-
+ments, the same routes may be used both for train and shunting movements. This principle is 
+also used on some railways outside North America, e.g., in The Netherlands.  
+A main route starts always at a controlled signal (the entrance signal of the route). The exit of 
+a route can be: 
+• The next controlled signal (the exit or destination signal of the route) 
+• The end of the interlocking area 
+Routes with an entrance and an exit signal are routes between successive signals within the 
+same interlocking area. On railways where overlaps are required, the points within the overlap 
+beyond the exit  signal are interlocked with the entrance signal (Figure 3.1 a). Because the 
+clearance of the section between the entrance and the exit signal is checked by the interlocking 
+system, this kind of a route also directly ensures a safe train separation.  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 44 ===
+44 Railway Signalling Principles 
+ 
+ 
+ 
+Figure 3.1  Main routes 
+ 
+Routes with the exit at the end of the interlocking area govern train movements to leave that 
+area. Such a route cannot ensure a safe train separation. The route leads into a section of line 
+that is protected by a block system. In North American interlocking systems, the route will 
+always end at a controlled signal facing in the opposing direction that limits the interlocking 
+area (Figure 3.1 b). In the North American terms, this signal is called an ‘exit signal’. That term 
+should not be confused with the use of the term ‘exit signal’ for routes between successive 
+controlled signals of the same direction as explained above. On Continental European rail-
+ways, the exit of such a route is a track section beyond the last points of the route. In contrast 
+to the North American practice, this route exit is not necessarily associated with an opposing 
+controlled signal. On British railways, the exit of a route is always a signal. There, a route to 
+leave an interlocking area and to enter an automatic block line leads up to the first automatic 
+block signal. 
+Figure 3.2 shows a more detailed view of the elements of a route between two successive 
+interlocking signals. The details will be explained in the following sections. 
+3.1.2 Point locking 
+Before a signal can be cleared, all points and derailers must be locked in the proper position. 
+The locking of points has two aspects: 
+• To prevent the operation of the points 
+• To prevent movements of the point blades under a moving train  
+The first condition is guaranteed by the internal logic of the interlocking system. To meet the 
+second condition, all points are equipped with a point lock apparatus that mechanically locks 
+the point blades in a proper position. Some railways use independent point locks, which are 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 45 ===
+Railway Signalling Principles   45 
+ 
+    
+ 
+actuated by a separate control device from that which drives the points. More common are 
+dependent point locks that are actuated by the same control device as that which drives the 
+point blades. 
+ 
+ 
+ 
+Figure 3.2  Elements of a route 
+ 
+ 
+ 
+ 
+Figure 3.3  Design and working diagram of a claw lock mechanism 
+ 
+A typical example is the claw lock which exists in several variations. Figure 3.3 shows a modern 
+type which is very common in Continental Europe. As typical for all point locks of that kind, the 
+point blades are not  permanently connected but can be moved separately . When the points 
+are operated, the open blade moves at first while the closed blade is being unlocked. Then, 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 46 ===
+46 Railway Signalling Principles 
+ 
+both blades move simultaneously, until the formerly open blade has reached the closed posi-
+tion. Now, the new open blade on the opposing side will move farther away from the stock rail, 
+until the new closed blade is safely locked. 
+Large turnouts with long flexible blades may have one or more additional point locks along the 
+blades to hold them safely in place. These intermediate point locks are operated by a back  
+drive that consists of a rodding mechanism driven by the point machine. 
+Beside the point locking principle described above, some railways use a completely different 
+kind of point locks, which are called internal point locks. By this principle, point  locking is not 
+effected directly between point blades and stock rails, but inside the point machine. For this, 
+the point blades are permanently connected, so locking the driving rod in the point machine 
+will hold them in place. To guarantee that the closed blade is firmly pressed against the stock 
+rail, both blades must be kept at a fixed distance, which is enforced by so-called stretcher bars. 
+3.1.3 Locking and releasing Routes  
+After the train has passed the signal, all route sections must be kept locked until the train has 
+cleared them or has come to a safe stop.  
+On many railways, route locking is based on the principle of approach locking. As long no train 
+is approaching, the route is just locked by the cleared signal. When restoring the signal, the 
+route will immediately release. When an approaching train has reached a position at which 
+cancelling the route would change a signal aspect in front of the train, the route will be ap-
+proach locked. Now, after restoring the signal, approach locki ng will hold the route locked. 
+After having passed the signal, the normal route locking comes into effect and will maintain all 
+elements locked under the moving train. Some railways, in particular railways that follow Ger-
+man principles, do not use approach locking but establish full route locking immediately when 
+clearing a signal independently from an approaching train. In Figure 3.4, both route locking 
+principles are compared. 
+The normal release of route locking is usually effected automatically after the train has cleared 
+the points. The automatic route release can be accomplished by complete route release with 
+one single clearing point, or by a sectional route release. For complete route release, the train 
+must have cleared the entire point zone and must have occupied the destination track. Sec-
+tional route release requires track elements that may release separately to have separate sec-
+tions for track clear detection. To prevent separately releasing track sections to be cleared 
+before the train has passed through, they must have a minimum length that exceeds the max-
+imum possible distance between two axles in the train consist. For safety reasons, separately 
+releasing track elements are connected by a so- called sequence locking. This prevents the 
+release of a track element until the previous element has released.  
+Where overlaps are provided, points within the overlap are equipped with time release. They 
+will release automatically with a defined delay after the train has occupied the last track section 
+on the approach of the route exit signal.  
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 47 ===
+Railway Signalling Principles   47 
+ 
+    
+ 
+ 
+ 
+Figure 3.4  Route locking principles 
+ 
+It may happen that a locked route has to be manually released under staff responsibility if the 
+route has either to be cancelled without having a train passed or if the normal route release 
+failed after the passage of the train. For the latter case, most r ailways provide an emergency 
+route release. Route cancellations and the emergency route releases are protected either by 
+time locking or by a specific command procedure with automatic recording.  
+3.1.4 Conflicting Routes  
+Routes that require points to be locked in opposite positions will lock out each other automati-
+cally by the locked points. This is known as ‘conflicting locking’ (Figure 3.5). If there is no 
+difference in the position of the points of two conflicting routes, the interlocking between points 
+and signals will not prevent conflicting movements. In such cases, a special interlocking func-
+tion must be provided to lock out conflicting routes. Examples are opposing routes leading into 
+the same track (also known as ‘opposing locking’) and routes with an intersection at a crossing 
+without movable points.  
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 48 ===
+48 Railway Signalling Principles 
+ 
+ 
+ 
+Figure 3.5  Conflicting routes that do not differ in the position of points 
+ 
+When a train has arrived on a station track and is going to proceed in shunting mode, many 
+railways have the rule that the shunting authority must not be issued before the train has come 
+to a stop. For this, a main route leading into a station track and the following shunt route lock 
+out each other.  
+3.1.5 Flank Protection   
+Flank protection should prevent vehicles on converging tracks from running into a route that is 
+cleared for a train movement. This could be achieved by: 
+• Operating rules 
+• Flank protection devices 
+Flank protection by operating rules means that to protect a main route against inadvertent 
+movements on tracks joining the path of the train, specific station tracks must not be used for 
+shunting or for storing equipment as long the route is set . Since this form of protection is not 
+very efficient, it should only be used when other forms of flank protection are not available.  
+Flank protection devices are controlled trackside elements. Flank protection may be provided 
+by flank points, derailers, or  stop signals. Stop signals are only sufficient for flank protection 
+against movements controlled by a driver. To protect a train against vehicles that could get 
+into motion unintentionally (e.g., on tracks where equipment is stored), or against the flank 
+hazard from tracks with heavy shunting, flank protection must be effected by flank points or 
+derailers. On many railways, derailers must not be installed outside of sidings. For high speed 
+lines, flank protection against shunting moves and parked equipment  is always effected by 
+flank points. 
+Remote Flank Protection 
+If possible, flank protection should be provided by elements that are directly adjacent to the 
+route to be protected. If there is no suitable element available, flank protection could be pro-
+vided by elements that are further away from the point to be protected. This kind of flank pro-
+tection is called remote flank protection (Figure 3.6).  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 49 ===
+Railway Signalling Principles   49 
+ 
+    
+ 
+The points located between the protective elements and the points to be protected are called 
+flank transfer points since they do not protect but transfer the flank protection. At flank transfer 
+points, the protective paths may split, so that one route element is protected by several pro-
+tective elements. 
+The flank area, also known as the flank zone (UIC, 2012), is the track section between a flank 
+protection device and the fouling point of the route to be protected. When having a turnout in 
+the flank area as shown in the example of Figure 3.6, the flank area splits into several branches 
+so that the fouling point of the route to be protected is protected by several protective elements. 
+While the flank area must be kept clear of vehicles, there may be moves crossing through the 
+flank area without harming the protected route (Figure 3.7). 
+ 
+ 
+Figure 3.6  Remote Flank protection 
+ 
+ 
+ 
+Figure 3.7  Crossing move through flank are 
+ 
+Selective Protective Points  
+A specific arrangement of flank protection are selective protective points, which are also known 
+as dual-called flank points  (Figure 3.8). These are flank points  that may receive competing 
+flank calls from the routes of different train moves. To prevent routes from locking out each 
+other by the position of selective protective points, the protective position of these points is 
+usually assigned to one of the two routes. To compensate for the lack of protection for the 
+other route, that route will get remote flank protection. So, for that route, the selective protective 
+points will become flank transfer points. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 50 ===
+50 Railway Signalling Principles 
+ 
+There are three different principles to control selective protective points: 
+• Protective position permanently assigned to one of the two routes 
+• Protective position flexibly assigned by priority control 
+• Protective position flexibly assigned by the ‘First In—First Out’ principle 
+ 
+ 
+ 
+Figure 3.8  Dual called points 
+ 
+When having the protective position permanently assigned to one route, the points will always 
+be locked in the protective position by that route. While this principle is common practice in 
+older interlocking systems, some railways keep using it in modern technology. The protective 
+position of the selective protective points is usually assigned to the route of higher priority. In 
+older interlocking systems controlled by locally staffed interlocking stations, the operator was 
+often required to bring the sele ctive protective points into the protective position also for the 
+inferior route as long that route is set  alone. This was not enforced by the interlocking, how-
+ever.  
+Priority-controlled flank protection provides more flexibility in assi gning flank protect ion. As 
+long only one of the two routes is set , the selective protective points are moved into the pro-
+tective position for that route. If the two routes are set at the same time, the selective protective 
+points will move into the protective position for the route of higher priority. The superior route 
+will even take away flank protection from the inferior route.  Assigning flank protection by the 
+‘First In—First Out’ principle is the best solution if the two routes have the same priority. The 
+selective protective points will always move into the protective position for the route that is set 
+first.  
+On railways that use selective protective points with flexibly assigned flank protection, it's com-
+mon practice to leave these points unlocked as long they receive competing flank calls. Locked 
+points will even release when called for flank protection by another route. This allows the op-
+erator to manually reassign the protective position. This is safe, since in such a case, there is 
+always remote flank protection.  
+As an additional feature, selective protective points with flexibly assigned flank protection could 
+work in a ‘supplementary’ protective mode. After the route for which flank protection was pro-
+vided has released, the selective protective points will automatically move to the protective 
+position for the second route.  
+Points may also get competing flank calls from just one route or from chained routes belonging 
+to the same train movement (Figure 3.9). Dual-called points of that kind are also known as 
+self-selective protective points. In such a case, the protective position is either permanently 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 51 ===
+Railway Signalling Principles   51 
+ 
+    
+ 
+assigned to one of the two points to be protected, or the self-selective protective points remain 
+unlocked. Then, the protection is effected by a common remote flank protection element. 
+ 
+ 
+ 
+Figure 3.9  Self-selective protective points 
+3.1.6 Overlaps  
+If overlaps are applied, the locked route exceeds the authority limit provided by a main signal 
+or by cab signal indication up to a danger point to be protected. Within the overlap, conflicting 
+routes are locked out to prevent a train running into the overlap from crashing into other vehi-
+cles. Beyond home signals, the overlap is usually provided by placing the signal at the full 
+overlap distance before the point zone. Then, it’s sufficient to check that the overlap is clear 
+before the block section on the approach of the home signal is released.  
+Inside station areas, there is usually not sufficient space to place exit signals and intermediate 
+interlocking signals at the full overlap distance before the point zone. Then, points within the 
+overlap are locked as part of any route leading to that signal. Also, conflicting moves passing 
+through points or crossings within the overlap must be locked out.  
+On some railways, home signals may also be placed directly in front of the arrival points with 
+an overlap leading into the point zone.  Then, at the braking distance on the approach of that 
+signal, an ‘outer home signal’ is placed. The section from the outer home signal to the home 
+signal is not part of the block system but controlled by a route of the interlocking system. To 
+clear the outer home signal, a route is set from the outer home to the home signal, which will 
+lock the overlap beyond the home signal (Figure 3.10). 
+ 
+ 
+ 
+Figure 3.10  Example for the use of an outer home signal 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 52 ===
+52 Railway Signalling Principles 
+ 
+This is sometimes done to shorten the distance between the home signal and following signals 
+inside the station area for capacity reasons. It’s a typical signal arrangement on mass transit 
+railway systems. A typical example is the New York Subway, where the outer home signals 
+are called ‘approach signals’ (Dougherty, 2018). Another reason for outer home signals is to 
+get a level crossing near the station area under protection of a controlled signal. Railways that 
+do not use the term ‘outer home signal’ would simply call it a home signal and the signal in 
+front of the arrival points an intermediate interlocking signal. 
+Overlap rules quite differ between railways. Depending on the rules of individual railways, spe-
+cific points in the overlap may remain unlocked to enable special overlap functionalities. Such 
+special overlap principles are: 
+• Selective overlaps 
+• Swinging overlaps 
+• Shared overlaps 
+Where selective overlaps are provided, when setting a route, a choice can be made between 
+different available overlaps. The alternative overlaps could be of different length or could lead 
+into different tracks. Once the signal has been cleared, there is no chance to change the over-
+lap without cancelling the route, however. When the selected overlap is shorter than the regular 
+overlap, the train will be slowed down by the signalling system.  
+Swinging overlaps mean that the overlap can be switched into another track without cancelling 
+the route. As long both overlaps are available, the facing points at the splitting point are un-
+locked (‘able to swing’). Swinging the overlap is no longer possible when the train has overrun 
+the signal. Sometimes, it is already blocked when the arriving train has reached the last track 
+clear detection section on the approach of the signal. This rule is usually applied if there is not 
+a sufficient distance between the signal and the splitting point of the overlaps.  
+As an alternative solution for selective and swinging overlaps, some railway do not require an 
+overlap if the exit signal of the route is already cleared. When an approaching train should 
+proceed at the exit signal on a route that would be locked out by the overlap beyond that signal, 
+the route at the exit signal is set  first. After having cleared the exit signal, the route on the 
+approach of that signal can be set. It’s less flexible than selective or swinging overlaps but 
+sufficient in many cases. 
+ 
+ 
+ 
+Figure 3.11  Shared overlaps 
+ 
+At shared overlaps, the overlaps of different routes may overlap each other without locking out 
+the relevant routes (Figure 3.11). This is considered to be safe since it is not assumed that two 
+trains would ever run into their overlaps at the same time. To enable shared overlaps, trailing 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 53 ===
+Railway Signalling Principles   53 
+ 
+    
+ 
+points at which one overlap is joined by another overlap remain unlocked. These points must 
+have trailable point locks.  
+3.1.7 Intermediate Points 
+Intermediate points are points that are located in a station track in a way that a train that is 
+stopping at its regular stopping position would not clear the points (Figure 3.12). While the 
+signal to leave the station track is located beyond the intermediate points, these points must 
+be locked by a route starting at that signal. So, the route has a section located on the approach 
+of the signal governing the route. When a train has arrived on the station track, intermediate 
+point are either released together with the overlap, or they are kept locked as long they are 
+occupied.  
+ 
+ 
+ 
+Figure 3.12  Intermediate points 
+3.1.8 Track Clear detection  
+For safe track clear detection of a turnout or crossing, the detection limit must exceed the 
+fouling point limit by the maximum possible vehicle overhang ahead of the first axle. For stand-
+ard gauge railways, the track clear detection limit is  planned 6 m beyond the fouling point. If 
+there is not sufficient space between adjacent turnouts or crossings to meet the above condi-
+tion, points must not be moved as long the adjacent element is occupied.  
+ 
+ 
+ 
+Figure 3.13  Combining and separating track sections of separating points 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 54 ===
+54 Railway Signalling Principles 
+ 
+If possible, the track sections of adjacent points and crossings may be combined into common 
+track sections to spare track circuits or axle counters. This can only be done if no conflicts 
+between independent routes are generated. Adjacent trackside elements must always be sep-
+arated in the following cases (Figure 3.13): 
+• If parallel routes are possible on these elements 
+• If a signal is placed between these elements 
+Separate track clear detection of adjacent points is also needed to prevent train moves from 
+being blocked by occupied flank areas or by occupied flank points that cannot be moved to the 
+protective position.  
+3.2 Internal Logic of Interlocking Systems 
+For the design of an interlocking installation, all locally relevant interlocking functionalities re-
+sulting from the principles described in the previous paragraphs must be put into a logical 
+model. That model is used both as a planning document for the interlocking design for the  
+given layout but also as a control logic for the internal control of the interlocking system for that 
+layout. For that model, two principles exist: 
+• Tabular interlocking 
+• Geographical interlocking 
+3.2.1 Tabular Interl ocking 
+In tabular interlocking, also known as route-oriented interlocking, the interlocking is completely 
+based on predefined routes that are described by a route control table (also known as a locking 
+sheet, locking chart, or interlocking table). In that table, the rows represent the routes and the 
+columns represent the interlocking conditions relevant for these routes. Figure 3.14 and Table 
+2 demonstrate the principle for a small junction with a single line diverging from a double line.  
+ 
+ 
+ 
+Figure 3.14  Infrastructure example 
+ 
+In this example, Table 2 just contains route conflicts and point positions. A full route control  
+table may have more columns for track clear detection, route locking and release criteria, and 
+signal aspect sequences. Some railways establish separate tables for these issues, however. 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 55 ===
+Railway Signalling Principles   55 
+ 
+    
+ 
+Table 2  Route control table for the layout of Figure 3.14 
+ROUTE ROUTES LOCKED OUT POINTS 
+NORMAL REVERSE 
+11-B1 11-B2, 11 -C, 21 -B1, 12 -A1, 12 -A2, 22 -A1, 
+32-A1 
+1, 2, 3, 4  
+11-B2 11-B1, 11-C, 21-B1, 21-B2, 21-C, 12-A1, 12-
+A2, 22-A1, 22-A2, 32-A1, 32-A2 
+1, 2, 5 3, 4 
+11-C 11-B1, 11 -B2, 21 -B1, 21 -B2, 21 -C, 12 -A1, 
+12-A2, 22-A1, 22-A2, 32-A1, 32-A2 
+1, 2  3, 4, 5 
+21-B1 11-B1, 11-B2, 11-C, 21-B2, 21-C, 12-A1, 12-
+A2, 22-A1, 22-A2, 32-A1, 32-A2 
+3, 4 1, 2 
+21-B2 11-B2, 11-C, 21-B1, 21-C, 12-A2, 22-A1, 22-
+A2, 32-A1, 32-A2 
+1, 2, 3, 4, 5  
+21-C 11-B2, 11-C, 21-B1, 21 -B2, 12 -A2, 22 -A1, 
+22-A2, 32-A1, 32-A2 
+1, 2, 3, 4 5 
+12-A1 11-A1, 11 -B2, 11 -C, 21 -B1, 12 -A2, 22 -A1, 
+32-A1 
+1, 2, 3, 4  
+12-A2 11-B1, 11-B2, 11-C, 21-B1, 21-B2, 21-C, 12-
+A1, 22-A1, 22-A2, 32-A1, 32-A2 
+3, 4 1, 2 
+22-A1 11-B1, 11-B2, 11-C, 21-B1, 21-B2, 21-C, 12-
+A1, 12-A2, 22-A2, 32-A1, 32-A2 
+1, 2, 5 3, 4 
+22-A2 11-B2, 11-C, 21-B1, 21-B2, 21-C, 12-A2, 22-
+A1, 32-A1, 32-A2 
+1, 2, 3, 4, 5  
+32-A1 11-B1, 11-B2, 11-C, 21-B1, 21-B2, 21-C, 12-
+A1, 12-A2, 22-A1, 22-A2, 32-A2 
+1, 2  3, 4, 5 
+32-A2 11-B2, 11-C, 21-B1, 21-B2, 21-C, 12-A2, 22-
+A1, 22-A2, 32-A1 
+1, 2, 3, 4 5 
+ 
+In mechanical locking frames based on the traditional British system, a different principle is 
+used, which is known as cascade locking. In a cascade interlocking system, a route is estab-
+lished by a locking cascade, which is effected by permanent and conditional locking between 
+different points and between points and signals. To set a route, the operator has to follow a 
+predefined ‘lever sequence’ to get the route properly locked. That principle is no longer relevant 
+for modern interlocking systems, however. For the different notation of the locking sheets, see 
+(Pachl, 2018). 
+The contents of the route control table may be directly transformed into the software of a com-
+puter-based interlocking or into the wiring diagram of a relay interlocking. The internal logic of 
+relay interlockings following this principle is also called ‘free-wired’ logic because every inter-
+locking has its own specific wiring according to the control  table. The shortcoming of tabular 
+locking is that the route control tables may become very complex for larger layouts. In relay 
+interlockings, the manual design of the relay circuitry based on the route control table may also 
+become a very complex task. However, tabular interlocking is still a suitable principle for the 
+design of interlocking systems for layouts of moderate complexity. It is also used in several 
+computer-based interlocking systems. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 56 ===
+56 Railway Signalling Principles 
+ 
+3.2.2 Geographical Interl ocking 
+Geographical interlocking was first developed for relay interlocking systems to reduce the effort 
+for designing complex interlocking layouts in free -wired logic. In geographical relay interlock-
+ings, the track elements are represented by pre-fabricated relay groups, i.e., boxes containing 
+all relays needed to control a particular element including the wiring. The relay groups have 
+sockets by which they can be connected by multi -wire cables in accordance with the track 
+layout. By connecting the relay groups, the correct circuitry for a given layout will automatically 
+appear. For specific functionalities, special plugs could be attached to the relay groups to mod-
+ify the internal wiring. That simplified the design of complex r elay interlockings significantly. 
+The signal planners were no longer required to manually design the electric circuitry. Instead, 
+they established a diagram, in which the relay groups are represented by boxes that are con-
+nected by lines representing the multi- wire cables. For the special plugs to be attached to 
+specific relay groups, the relevant plug IDs are entered into the boxes. 
+ 
+ 
+ 
+Figure 3.15  Geographical interlocking 
+ 
+The same principle was later adopted for computer-based interlocking systems using a similar 
+kind of diagrams. There, the boxes are longer relay groups but logical elements representing 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 57 ===
+Railway Signalling Principles   57 
+ 
+    
+ 
+the track elements. Instead of plug IDs, numbers representing specific use cases are entered 
+into the boxes.  
+When a route is set in a geographical interlocking system, the entrance and exit elements are 
+marked and a search current is started from the entrance element of the route. At facing points, 
+the search current splits into two branches (Figure 3.15). The term ‘search current’ still comes 
+from relay interlocking but is also used figuratively in computer-based interlockings. The result 
+is a tree structure of search currents. When one branch of the search current has found the 
+exit element of the route, a response current is sent back to the entrance element. At facing 
+points, the other branches of the search current are deleted.  
+After this process, a path has been found from the entrance to the exit. Conflicting routes are 
+avoided automatically by the overlapping search currents. When different routes exist from an 
+entrance element to an exit element, additional rules are used which route to select.  
+All points in the route also send a search current for the flank call into the diverging track. Route 
+setting can only be completed if the flank call gets a positive response from a protective ele-
+ment. On tracks where a protective elements does not exist, the search current must be re-
+versed by a special (virtual) flank protection reverse element to generate a positive response 
+(Figure 3.16). In some interlocking systems, the elements of the points can be programmed 
+not to start a flank call, so that flank protection reverse elements are not needed.  
+ 
+  
+ 
+Figure 3.16  Flank protection reverse element 
+ 
+The problem of selective protective points is solved by predefined rules, which determine how 
+points shall react when dual-called for flank protection. The flank points will go into the protec-
+tive position for the superior route while the flank call of the inferior route is forwarded to search 
+for remote flank protection. In the example of Figure 3.17, point 1 is dual called for flank pro-
+tection by points 2 and 3. Since the call from point 2 is superior, the inferior call from point 3 is 
+forwarded. The flank search finally finds shunting signal 21X that will provide remote flank 
+protection. 
+In geographical interlockings, conflicting routes that do not differ in the position of points will 
+automatically lock out each other if the exit elements overlap. Some railways allow opposing 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 58 ===
+58 Railway Signalling Principles 
+ 
+shunt routes leading simultaneously into the same track. Whether this is allowed or not usually 
+depends on the length of the track. To enable such routes, the exit elements must be arranged 
+in a way so they do not overlap (Figure 3.18). If, on shorter tracks, opposing shunt routes must 
+be locked out, the exit elements must be arranged overlapping each other.  
+ 
+ 
+ 
+Figure 3.17  Selective protective points in geographical interlocking 
+ 
+ 
+ 
+Figure 3.18  Locking out opposing routes by overlapping exit elements 
+3.3 Generations of Interlocking Systems 
+While computer-based interlocking is the dominating interlocking technology today and almost 
+exclusively used in all new installations, older generations of interlock ing systems are still in 
+use. In some countries, they have still a significant share. 
+Mechanical and Electro- mechanical Interlocking Systems 
+Mechanical and electro- mechanical interlocking systems are controlled by leverframe ma-
+chines, in which the levers of points and signals are mechanically interlocked. The develop-
+ment of mechanical interlocking systems dates back to the late 19
+th century. In mechanical 
+interlocking, points and signals are operated by the muscle- power of the local operator. The 
+levers are connected to the controlled track elements by mechanical wire or rod transmission. 
+To compensate for the lack of an electrical monitoring of the point positions, facing points are 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 59 ===
+Railway Signalling Principles   59 
+ 
+    
+ 
+often equipped with an independent point lock, which is operated by a separate lever. Since 
+the maximum control distance of points is limited to about 400 m (for signals about 1200 m), 
+large track layouts are often divided into different locally staffed interlocking stations. The first 
+electromechanical interlocking systems were developed at the beginning of the 20 th century. 
+In electromechanical interlocking, points and signals are controlled either by el ectric motor 
+drives or electro-pneumatic drives. The leverframe consists of miniature levers that are actually 
+electrical switches but also still mechanically interlocked. Point positions are electrically moni-
+tored.  
+While developed more than 100 years ago, there are still interlocking systems of that genera-
+tion in use, outside the core network even in some developed countries. They are expected to 
+disappear within the next decade, however. 
+Relay Interlocking Systems  
+In relay interlocking systems, the control logic is realised by relay circuitry without any mechan-
+ical elements. The circuitry may be based either on tabular interlocking with a free-wired logic, 
+or on geographical interlocking. Points and signals are no longer operated by levers but by 
+simple push buttons usually located in an illuminated geographical track diagram. The devel-
+opment of relay interlocking systems already started in the 1920s. They were the dominating 
+interlocking technology in the 2
+nd half of the 20th century. In many countries, they are still used 
+in big numbers. In some countries, they are even still the dominating interlocking technology.  
+Computer -based Interlocking Systems 
+In a computer-based interlocking system, the control logic is represented by software. The first 
+computer-based interlocking systems were developed in the 1980s. In the 1990s, for new in-
+stallations, more and more railways switched from relay interlocking to computer-based inter-
+locking. On many railways, the track elements controlled by computer -based interlockings 
+have already outnumbered the elements controlled by older interlocking generations.   
+Key Interlocking of Hand- throw Points  
+Key interlocking is used to interlock hand-throw points at which a siding is connected to a main 
+track. It is a feature to be found in all generations of interlocking systems. For key interlocking, 
+hand-throw points are equipped with a key point lock for each position the points can be locked 
+in. The key locks are designed in a way that the key can only be removed from the lock when 
+the points are properly locked in the position that corresponds to that key. Some points may 
+be equipped with double key locks designed in a way that by unlocking the points another key 
+will be released to unlock other points.  
+Normally, the key is held in an electric key device controlled by the interlocking system. When 
+a route is set through the points, the key is electrically locked in that device. The electric key 
+device is controlled by the interlocking system like a trackside element. The proper position of 
+the points is checked by the presence of the corresponding key in the device. The locking is 
+effected by locking the key in the device preventing it from being removed to unlock the points.  
+To enable a shunting move to go into the siding, the electric key instrument is released by the 
+control centre (Figure 3.19 a). When having removed the key, a member of the shunting crew 
+would open the lock to move the points of the main track turnout. This lock is often designed 
+as a double key lock releasi ng another key to open a flank point or a derailer protecting the 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 60 ===
+60 Railway Signalling Principles 
+ 
+main track. After having cleared the main track, a member of the shunting crew would move 
+the points to normal position, lock everything, and return the final key into the electric key 
+device (Figure 3.19 b). Now, the control centre could set routes for trains passing on the main 
+track. 
+ 
+ 
+ 
+Figure 3.19  Example for key interlocking 
+3.4 Handling Interlocking Failures 
+If an interlocking signal doesn't clear as expected, there are three possible causes: 
+• The route is rejected by the interlocking system. 
+• The route is not rejected by the interlocking, but route setting has not been completed 
+correctly. 
+• For interlocking signals leading into a block section: The route is not rejected but the 
+interlocking signal is locked by the block system. 
+Before taking any action to bypass safety functions under staff responsibility, the operator has 
+to clearly identify, which of the three situations is relevant. If the route is rejected by the inter-
+locking system, the operator has at first to check whether the route is still blocked by conflicting 
+moves, by trackside elements manually locked on the user interface, or by locked trackside 
+elements that have not correctly released after a train or shunting move has passed. If the 
+route is still blocked by a conflicting move, the operator has to wait until that move has cleared 
+the relevant track elements. If the route is blocked by trackside elements manually locked on 
+the user interface, the operator has to check whether it's safe to remove the lockings or to wait 
+until it will be safe to do so. If trackside elements have not correctly released after the last 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 61 ===
+Railway Signalling Principles   61 
+ 
+    
+ 
+move, the operator has to check that the last move has safely cleared the relevant elements. 
+Then it is safe to execute an emergency route release. The safety procedure to perform an 
+emergency route release very depends on the operating rules and interlocking principles of 
+individual railways. While some railway s enforce emergency route release just by automatic 
+recording, most railways delay the execution of the release command by time locking. 
+If route setting has not completed correctly, the operator has to identify the track elements that 
+prevent the signal from being cleared. Then, a safe route has to be established under staff 
+responsibility. For this, there are three different cases: 
+• Route locking is in effect and displayed on the user interface. 
+• Route locking is not in effect but the position of all movable track elements is correctly 
+indicated on the user interface. 
+• Route locking is not in effect and the position of movable track elements cannot be 
+checked on the user interface. 
+If route locking is in effect and correctly displayed on the user interface, the operator may trust 
+that all movable track elements are locked in the proper position. There is no need to apply 
+manual lockings for trackside elements on the user interface. Before authorising the train to 
+pass the interlocking signal in stop position, the operator just has to check that the track is 
+clear or, if not possible, order the train to proceed through the route on sight. If route locking is 
+not in effect, the operator has to bring all movable track elements manually into the proper 
+position and secure them by applying manual lockings on the user interface. If route locking is 
+not in effect and the position of movable track elements cannot be checked on the user inter-
+face, the relevant elements must be secured on site by applying mechanical key locks. In 
+centralised operations, this is usually done by a maintainer who has to confirm  that the ele-
+ments have been secured in the proper position. The need for applying the lockings on site 
+may lead to severe delays. In all cases in which route locking is not in effect, automatic point 
+setting must be switched off before authorising the train to pass the interlocking signal in stop 
+position to prevent any points in the route to be moved unintentionally. 
+In all cases in which a train is authorised to pass an interlocking signal leading into a block 
+section in stop position, beside the procedures described here, the operator has also to apply 
+the degraded mode procedures for the block system as described in the paragraph on block 
+system failures. 
+Sometimes, a need may arise to cancel a locked route without having a train passed. An ex-
+ample is a situation in which  a signal has been cleared for a train to depart from a platform 
+track but the train cannot depart due to an engine problem. In such a case, the operator has 
+to restore the signal and to cancel the route. Another situation is a wrongly selected route. This 
+may occur by mistake of the operator or by a malfunction of the automatic route setting system. 
+It is always safe to cancel a route as long no train is approaching the signal that governs the 
+route. With a train approaching, before releasing the route under staff responsibility, the oper-
+ator has at first to reset the signal to stop. On railways where route cancellation of a route with 
+a train approaching is not protected by time locking, the oper ator has to make sure that the 
+train has safely come to a stop before releasing the route.  
+ 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 62 ===
+62 Railway Signalling Principles 
+ 
+4 AUTOMATIC TRAIN PROTECTION  
+Automatic Train Protection (ATP) systems transmit information on movement authorities and 
+speed limits from the line to the train to initiate an  automatic brake application if the train vio-
+lates the valid limits. In train control with lineside signals, an ATP system works in addition to 
+the lineside signals and with the main purpose of preventing trains from violating stop signals. 
+On cab signalling lines, the ATP system provides the guiding information for the cab signal  
+indication. 
+4.1 Classification of ATP Systems 
+Concerning the form of data transmission between track and train, there is a general distinction 
+between intermittent and continuous ATP systems. In an intermittent ATP system, the data is 
+transmitted to the train at discrete points along the track. Data transmission points are provided 
+at signals and sometimes at selected intermediate locations between signals. While different 
+solutions can be found in existing systems, the most commonly used solution is to use induc-
+tive transponders for data transmission. Intermittent ATP systems are mainly an add- on to 
+lineside signals with the main purpose to prevent trains from overrunning stop signals. When 
+approaching a stop signal, the train will get a first data transmission at the beginning of the 
+braking distance. That data transmission initiates a braking curve supervision forcing the train 
+to slow down to a speed at which the train can be brought to a stop within the overlap distance. 
+When violating the stop signal at that speed, the train will come to a stop before the danger 
+point. When passing the signal after it has been cleared, the data point at the signal will up-
+grade the supervised speed in the on- board unit. To avoid a negative impact on capacity by 
+forcing trains to approach a cleared signal at a slow speed until the speed limit will be upgraded 
+by the data point at the signal, additional data points may be provided on the approach of the 
+signal. When passing such an infill data point after the signal has been cleared, the speed limit 
+will be upgraded immediately.    
+Continuous ATP systems transmit control data continuously from track to train. This enables 
+the ATP system not only to protect but also to guide the train. The control data transmitted to 
+the train is used for the cab signal indication. Lineside signals are no longer needed but may 
+be provided for degraded mode operations. For data transmission, the following principles are 
+used: 
+• Data transmission by coded track circuits (pulse or frequency code) 
+• Data transmission using a cable loop track antenna 
+• Radio-based data transmission in combination with transponders for the purpose of 
+train location. 
+Note: In the public transport domain, train control based on a continuous ATP system with two-
+way data transmission between track and train and a continuous train detection eliminating the 
+need for track clear detection technology is known as Communication -Based Train Control 
+(CBTC). Since this term is not used outside the public transport domain, it is also not used 
+here. Different from the ATP systems used on standard railways, CBTC systems are usually 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 63 ===
+Railway Signalling Principles   63 
+ 
+    
+ 
+closer integrated with the interlocking system to form a common control system for a public 
+transport line or network. 
+Today, a big number of different national ATP systems exists. Also, there are still railways that 
+do either not yet have any ATP systems or just very simple ones. Today, there are three big 
+international ATP project to replace older systems for better interoperability and to be used in 
+all new installation: 
+• The European Train Control System (ETCS) 
+• The Chinese Train Control System (CTCS) 
+• The North American Positive Train Control System (PTC) 
+Existing installations of older ATP systems are gradually replaced by systems covered by these 
+projects. That is, why the following paragraphs concentrate on the principles behind these 
+three system families. For a description of principles used in older A TP systems, see (Theeg 
+& Vlasenko, 2020). 
+4.2 European Train Control System (ETCS) 
+For the European railway system, one of the big challenges is to improve interoperability. One 
+of the key points to be solved in cross-border operation is the interoperability of ATP systems. 
+While on European mainlines, ATP is a standard feature, the variety of existing ATP systems 
+is enormous (Bailey, 1995). With a very few exceptions, ATP systems change at any national 
+border. Today, the only solution for cross-border operation is either to change locomotives at 
+national borders or to use expensive multi-equipped locomotives. To overcome this situation, 
+the ETCS project was launched. 
+4.2.1 ETCS and ERTMS  
+ETCS stands for European Train Control System and is a layer (i.e., a sub- project) of the 
+European Rail Traffic Management System (ERTMS). Today, the ERTMS just consists of the 
+ETCS and the digital radio system GSM -R. While ETCS represents the train control part of 
+ERTMS, the GSM-R provides the wireless communication system needed for the higher ETCS 
+levels. GSM-R is not only needed for the ETCS but has also replaced the older radio systems 
+for general voice and data communication in railway operations. It is based on the public GSM 
+standard but provides some specific features needed in train control. Since GSM is already an 
+outdated mobile communication standard, it will be replaced in the next years by the FRMCS 
+(Future Rail Mobile Communication System), which is based on 5G radio technology. 
+Originally, the ERTMS also contained a traffic management layer consisting of a train infor-
+mation system (TIS) for tracking trains in international freight corridors and a project to harmo-
+nise interlocking principles (Winter, 2009). Later, the traffic management layer was removed 
+from the ERTMS and transformed into separate projects. While the TIS is already successfully 
+applied on international freight corridors across Europe, the harmonisation of interlocking prin-
+ciples is still at an early stage. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 64 ===
+64 Railway Signalling Principles 
+ 
+The idea of ETCS is to gradually replace the existing ATP systems by an advanced train control 
+system. In that system, train control information can be transmitted by transponders (so-called 
+Eurobalises), short loop antennas (so-called Euroloops), or by digital radio.  
+4.2.2 ETCS Levels  
+Based on the different communication technologies, several levels have been specified for the 
+trackside equipment (Stanley, 2011). By these levels, the ETCS can be adapted to different 
+operating needs. In all these levels, the same on-board equipment is used.  
+ETCS Level 1 
+In Level 1, ETCS works as an advanced intermittent ATP system. Train control information is 
+transmitted by controlled transponders, which get their information from the traditional signal-
+ling system via a lineside electronic unit (Figure 4.1). 
+ 
+ 
+ 
+Figure 4.1  ETCS level 1 
+ 
+When approaching a stop signal, a transponder at the beginning of the braking distance will 
+transmit data to calculate the brake supervision curve in the on-board unit. The train will have 
+to follow this curve until having reached a so -called release speed. At this speed, the signal 
+can be passed. If the driver passes a stop signal at release speed, the train will get an emer-
+gency brake intervention and be brought to a safe stop within the overlap. The system guar-
+anties that the train will never violate the danger point at the end of the overlap (the so- called 
+supervised location). If the signal has been cleared in the meantime, the transponder at the 
+signal will upgrade the on-board unit to the speed permitted in the section beyond the signal.   
+To improve capacity, a train approaching a stop signal may be released from the braking curve 
+supervision after the signal has been cleared by transmitting infill information. As shown in 
+Figure 4.2, infill information may be provided by additional transponders (spot infill), a loop 
+antenna (loop infill), or by digital radio (radio infill).  
+ETCS level 1 can be operated either in full supervision or in limited supervision mode. In full 
+supervision, the train speed is permanently supervised by the ETCS. If loop or radio infill infor-
+mation is provided at all points that may limit a movement authority, trains can be governed by 
+cab signals without need for lineside signals. Without such infill information, lineside signals of 
+some kind are still needed. After a train has stopped at a signal, the authority to proceed cannot 
+be transmitted by the ETCS. After the signal has cleared, the driver may proceed at release 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 65 ===
+Railway Signalling Principles   65 
+ 
+    
+ 
+speed. When having reached the transponder at the signal, the locomotive device will read the 
+electronic movement authority and upgrade the cab display. 
+ 
+ 
+ 
+Figure 4.2  Infill solutions for ETCS level 1 
+ 
+This procedure does not require full- equipped lineside signals. Instead, ETCS stop markers 
+with a single signal light indicating that the transponder contains a valid authority are a suffi-
+cient solution (Figure 4.3). However, full-equipped signals may be provided for degraded mode 
+operations and mixed traffic with non-equipped trains. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Figure 4.3 ETCS stop marker with authority indicator  
+ 
+In limited supervision, the ETCS emulates the functionality of a traditional intermittent ATP 
+system. In this mode, trains are always governed by lineside signals while the ETCS supervi-
+sion works in the background.  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 66 ===
+66 Railway Signalling Principles 
+ 
+ETCS Level 2 
+In Level 2, ETCS works as a  continuous ATP system in which the train control data is trans-
+mitted by digital radio. Non- controlled transponders are used as reference points (‘electronic 
+mileposts’) for the on-board train location system. In specified intervals, trains automatically 
+transmit their location data to a Radio Block Centre (RBC) that issues the movement authori-
+ties to the trains. The RBS is connected to the interlocking system. When route setting for a 
+train movement has been completed, the route data is transmitted to the RBC to generate the 
+movement authority.    
+ 
+ 
+ 
+Figure 4.4  ETCS level 2 without train integrity monitoring 
+ 
+There are two options for track clear detection. On lines without on- board monitoring of train 
+integrity, track clear detection is effected by track circuits or axle counters (Figure 4.4). Lineside 
+signals are not needed but may be provided for degraded mode operations  or mixed traffic 
+with non-equipped trains. Most railways prefer to replace controlled signals by ETCS stop 
+markers that must not be passed without valid authority. Depending on the operating rules of 
+individual railways, intermediate block sections may be limited by ETCS location markers. 
+Since these ETCS location markers do not provide an absolute stop indication, the design 
+differs from the ETCS stop markers (Figure 4.5). 
+ 
+ 
+Figure 4.5  ETCS markers on a Level 2 line without lineside signals 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 67 ===
+Railway Signalling Principles   67 
+ 
+    
+ 
+Today, the rules concerning the application of the ETCS stop and location markers are not yet 
+completely harmonised between individual railways. Due to different rules for shunting move-
+ments, some railways use specific ETCS boards for vehicles running in ETCS shunting mode, 
+while other railways don’t.    
+If ETCS Level 2 is combined with on-board monitoring of train integrity, conventional track clear 
+detection devices are no longer needed (Figure 4.6). Until 2023, that form of ETCS Level 2 
+was officially called Level 3. Later, it was integrated into Level 2 because the principles of how 
+trains are guided do not differ. Together with train location data, trains also confirm train integ-
+rity to the RBC. So, the RBC can calculate the authority limit for a train from the position the 
+rear end of a train ahead has safely cleared. By this, that kind of ETCS Level 2 is not only an 
+ATP and cab signal system but provides a radio-based train separation replacing the traditional 
+block systems. 
+ 
+ 
+ 
+Figure 4.6  ETCS Level 2 with train integrity monitoring 
+ 
+Due to the absence of traditional track clear detection technology, lineside signals for degraded 
+mode operations cannot be used.  Depending on the operational needs, train separation can 
+be effected by virtual or moving block. 
+With virtual block, virtual block sections are established in the control system without having 
+real physical block sections on the line. While these virtual block sections are not equipped 
+with track clear detection technology, the block limits may be marked by ETCS location mark-
+ers for degraded mode operations. The location information received from the trains by radio 
+is transformed into information showing occupied and clear virtual block sections. Movement 
+authority is provided by allocating a number of block sections to a train. The end of movement 
+authority is in any case the limit of a virtual block section (Figure 4.7 a). Different from moving 
+block, the movement authority is not to be upgraded continuously with the movement of the 
+rear end of the train ahead but in accordance with the release of the virtual block sections. This 
+will significantly reduce the radio traffic for the transmission of guiding data from the RBC to 
+the train. Depending on traffic demands, the operational performance may be flexibly adjusted 
+by reconfiguring the virtual blocks in the control system without changing any field installations.  
+In a moving block system, a train clears the track behind its rear end in accordance with the 
+tracking intervals of train location (Figure 4.7 b). Moving block makes only sense on lines with 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 68 ===
+68 Railway Signalling Principles 
+ 
+a very high density of one-directional traffic with harmonized speed profiles. The typical moving 
+block application is a mass transit railway. On standard railways, i n most cases, virtual block 
+will be a more efficient solution. That is why most railways are today rather interested in virtual 
+block than in moving block.  
+ 
+ 
+Figure 4.7  Virtual block and moving block 
+ 
+Figure 4.8 shows the guiding and supervision principle for a train guided by cab signalling in 
+ETCS level 2. The essential curve from which everything is derived is the EBD curve (for 
+'Emergency Brake Deceleration'). This is kind of a worst -case braking curve that can always 
+be safely guaranteed, even if the braking system is not fully available. This curve has a flatter 
+shape than an emergency braking curve when the full braking performance is available. The 
+target point of the EMD curve is the the supervised location (danger point). So, even if parts of 
+the braking system are not working, the EMD curve always guarantees that the train will never 
+violate the supervised location.  
+The starting point of the EMD curve, i.e., the intersection of the EMD curve with the ceiling 
+speed, is preceded by the EMI curve (from 'Emergency Brake Intervention') at which the emer-
+gency brake application is initiated. The distance between EMI and EMD is the reaction time 
+of the braking system. The target point of the EBI curve is also the supervised location. As an 
+option, the EMI curve may be preceded an SBI curve (from 'Service Brake Intervention') at 
+which a normal service brake application is initiated. The target point of the SBI curve is the 
+end of authority. If SBI is not sufficient to slow down the train, the brake application will be 
+upgraded to an emergency brake application at the EMI point. The SBI option is not used on 
+all railways. For not overloading the diagram of Figure 4.8 with too many curves, SBI and EBI 
+are just shown by the relevant points on the ceiling speed for an individual train. 
+If the train violates the permitted speed, i.e., the guiding curve of the cab signalling, a brake 
+application is not immediately initiated. As long the train has not yet reached the SBI or EBI 
+point, the driver will just get a warning as a reminder to comply with the permitted speed. To 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 69 ===
+Railway Signalling Principles   69 
+ 
+    
+ 
+support the driver, the permitted speed is preceded by an indication curve at which the driver 
+is advised to start braking for not violating the permitted speed. 
+ 
+Figure 4.8  Guiding and supervision principle in ETCS Level 2 
+If the overlap is reduced by moving the supervised location closer to the end of authority, the 
+EMD curve and all the preceding points are moved against the direction of travel. Since the 
+target points of the permitted speed curve is still the end of authority, this will result in a longer 
+and flatter guiding curve while the shape of the EMD curve will not change. 
+ETCS Level 2 HD  
+ETCS Level 2 with on-board monitoring of train integrity requires all trains to be equipped with 
+that technology. For passenger trains, this can be achieved by using existing electric lines 
+through the train consist. In conventional freight operations, such an electric communications 
+line through the train consist does not yet exist. Several European railway are currently working 
+on the development of a so -called digital automatic coupler. That new coupler requires the 
+freight wagons to be equipped with an electric data line that is connected when vehicles are 
+coupled.  
+With that development, we may see the first freight trains with on- board checking of train in-
+tegrity in the near future. A complete migration of the new couplers will take decades, however. 
+Thus, for a rather long period of time, we will see mixed traffic of trains with and without on -
+board monitoring of train integrity. To enable an application of ETCS Level 2 with on-board 
+monitoring of train integrity under that condition, a hybrid solution combining the two ETCS 
+Level 2 versions is preferred by several railways. In that hybrid solution ETCS Level 2 with 
+virtual block sections that are overlaid by longer block sections still controlled by track clear 
+detection technology. Trains with on-board monitoring of train integrity would occupy and re-
+lease the line according with the virtual block sections. Non- equipped trains may occupy the 
+line according with the virtual block sections but can only release the line according with the 
+longer block sec tions controlled by track clear detection technology. That ETCS version is 
+called ETCS Level 2 HD (for ‘high density’). 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 70 ===
+70 Railway Signalling Principles 
+ 
+For the minimum line headway between two trains, it is always relevant whether or not the first 
+train is equipped with train integrity monitoring. With an increasing share of trains equipped 
+with train integrity monitoring, the capacity will be improving without changing anything on the 
+infrastructure. Figure 4.9 demonstrates that principle by a blocking time diagram. For the min-
+imum line headway between two trains, it is always relevant whether or not the first train is 
+equipped with train integrity monitoring. With an increasing share of trains equipped with train 
+integrity monitoring, the capacity will be improving without changing anything on the infrastruc-
+ture. 
+ 
+ 
+ 
+Figure 4.9  Blocking time stairways in ETCS Level 2 HD with virtual block 
+ 
+ETCS Level STM /NTC 
+The ETCS Level STM/NTC, was originally not a part of the ETCS specification but was added 
+later. STM stands for Specific Transmission Module. It is a specific on-board device that ena-
+bles an ETCS controlled vehicle to run on lines not yet equipped with ETCS but with an older 
+ATP system. For this, the vehicles must be equipped with antennas needed to read information 
+provided by the old system. In the STM, the data received from the old systems is transformed 
+into the ETCS data format so the control information can be displayed to the driver on the 
+ETCS user interface. However, the degree of control and protection very depends on the ca-
+pabilities of the old system. In new installations, that level is called NTC for National Train 
+Control. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 71 ===
+Railway Signalling Principles   71 
+ 
+    
+ 
+The STM was developed as a temporary solution to support migration from old systems to 
+ETCS. There are contrary arguments on the usefulness of this approach, however. The key 
+objective of ETCS is interoperability without multi -equipped locomotives. The STM approach 
+is still based on locomotives equipped with multiple antenna systems but reduces the need for 
+a fast roll-out of trackside ETCS installations. This might finally not enhance but slow down the 
+ETCS migration process.  
+4.3 Chinese Train Control System (CTCS) 
+For years, the Chinese railway network has been extensively growing. China already has the 
+world’s largest high speed rail network. All new and upgraded lines are equipped with the 
+CTCS – the Chinese Train Control System. The CTCS is based on ETCS technology with 
+some modifications to meet the specific operational requirements of Chinese railways. Differ-
+ent from the ETCS approach, there is no separation between the computer-based interlocking 
+system and the Radio Block Centre. Instead, there is one integrated control system for inter-
+locking and train control. For continuous transmission of train control data, either radio trans-
+mission by GSM -R or coded track circuits are used. For the use of coded track circuits, a 
+separate level was defined that has no equivalent in the ETCS specification (Table 3).  
+In this level, jointless frequency-coded track circuits are used. Location reference is provided 
+by additional transponders of the Eurobalise type. The continuous data transmission by the 
+coded track circuits may be supported by intermittent transmission by controlled transponders. 
+Table 3.3 compares the numbering of ETCS and CTCS levels.   
+Table 3  Comparision of ETCS and CTCS levels 
+Functionality ETCS CTCS 
+Intermittent ATP Level 1 Level 1 
+Continuous ATP with coded track circuits - Level 2 
+Continuous ATP with data transmission 
+by radio Level 2 Level 3 
+Continuous ATP with data transmission 
+by radio and train integrity monitoring Level 2 Level 4 
+ 
+CTCS Level 2 may be used up to a speed of 250 km/h. Lines operated at a speed exceeding 
+250 km/h must be equipped with CTCS Level 3. CTCS level 4, which is an equivalent to ETCS 
+Level 2 with on-board train integrity monitoring, is not yet in operation. However, since Chinese 
+high speed lines are separated from the conventional network, there are some chances to 
+have the first lines equipped with level 4 in the near future. 
+ 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 72 ===
+72 Railway Signalling Principles 
+ 
+4.4 Positive Train Control (PTC) 
+Positive Train Control (PTC) is a concept from North America that is in some aspects similar 
+to the ETCS, while other aspects are quite different. The objective of PTC is not to improve 
+interoperability but to enhance safety. With just a few exceptions, the majority of the North 
+American rail lines was not equipped with ATP. As stated earlier, a significant share of the 
+lines are even ‘dark territories’, i.e., lines operated under simplified operating procedures with-
+out a signal-controlled operation. In 2008, as a consequence of several severe rail accidents, 
+US congress issued the Railroad Safety Improvement Act (often referred to as the ‘PTC man-
+date’), which enforces the introduction of PTC. By the definition of that  act, PTC is a safety 
+system that prevents: 
+• Train-to-train collisions 
+• Overspeed derailments 
+• Incursions into established work zone limits 
+• Train movements through points in the wrong position 
+Installation of PTC is mandatory on main lines with passenger traffic, on lines with a high traffic 
+density, and on lines with regular transport of hazardous materials. 
+On signal-controlled lines, trains are provided clear and safe track sections by the signalling 
+system. The only function to be added by PTC is a continuous ATP system for speed control 
+and enforcement of the authority limits. This is very similar to the philosophy of ETCS Level 2. 
+However, PTC can also provide an integrated protection of following trains based on the mov-
+ing block principle. This is quite s imilar to the approach of ETCS Level 2 with on- board train 
+integrity monitoring. 
+A significant difference from ETCS is the protection of hand-throw points on unsignalled lines. 
+For this, point posi tions are monitored to prevent trains from running through turnouts if the 
+points are not properly set. That function is nonexistent in ETCS, since even the most simplified 
+ETCS applications are always based on interlocked points with centralised control. 
+Different from ETCS, PTC is not a technical specification but a set of safety functions defined 
+independently of the technology. At the beginning, interoperability was not mandatory. The 
+four leading Class I railways (Union Pacific, BNSF, CSX, Norfolk Southern) have agreed on a 
+common standard to ensure an interoperable systems design. Later, that standard became 
+mandatory for all new PTC implementations. Another difference from ETCS is the use of GPS 
+as the primary train location system.  PTC can be used either as a system to govern train 
+movements directly, or as an overlay system to existing train control systems.  
+PTC may be implemented in three different levels: 
+• Non-vital overlay 
+• Vital overlay 
+• Vital stand-alone 
+When PTC is used as a non- vital overlay, trains are still governed by conventional systems 
+(signal indications or verbal authorities). PTC just acts as a safety overlay in the background. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 73 ===
+Railway Signalling Principles   73 
+ 
+    
+ 
+In a vital overlay PTC implementation, trains are governed by PTC while the block and inter-
+locking functions are provided by conventional CTC. As a vital stand- alone system, PTC will 
+replace the conventional CTC systems and integrate all signalling and train control functions 
+into one system. All currently planned PTC project follow either the non- vital or vital overlay 
+approach. Signalling companies are also working on solutions for vital stand-alone PTC sys-
+tems to be used in future projects.  
+By the end of 2020, US railways had completed PTC implementation on all lines that fall under 
+the PTC mandate. That is about one third of the US rail network. While PTC is a North Ameri-
+can development, there are also some project in South America and Africa. 
+  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 74 ===
+74 Railway Signalling Principles 
+ 
+5 LEVEL CROSSINGS 
+At level crossings, rail traffic has absolute priority. While the design differs a little from country 
+to country, a St. Andrew’s cross is used everywhere to mark a level crossing for road users. 
+Depending on the traffic density on the road and the characteristics of the railway line, different 
+protection measures are used.   
+5.1 Level Crossing Protection 
+Concerning the protection measures, there are three types of level crossings: 
+• Level crossings without traffic light protection 
+• Level crossings protected by traffic lights without barriers 
+• Level crossings protected by traffic lights with barriers 
+Level crossings without traffic light protection are just marked by a St. Andrew’s cross. Road 
+users must have a clear view on the railway line to be able to stop safely when a trai n is 
+approaching. For this, an approaching train must be clearly visible from a distance at which a 
+road user approaching the level crossing can make a clear decision whether or not it will be 
+safe to pass the level crossing. That distance includes the braking distance and a sufficient 
+reaction time for the decision making of the driver. The distance from the decision point on the 
+road and the needed approach distance on the railway line form a viewing triangle that must 
+be kept clear of any view-blocking items. That triangle is calculated both for a slow and for a 
+fast road user. The two triangles are put one above the other to get the entire area that must 
+be kept clear (Figure 5.1). Additionally, trains approaching the level crossing would warn road 
+users by repeated whistle signals. This very simple form of protection is only acceptable on 
+secondary railway lines with a low speed and density of traffic.  
+ 
+ 
+ 
+Figure 5.1  Viewing triangles for a fast (1) and a slow (2) road user 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 75 ===
+Railway Signalling Principles   75 
+ 
+    
+ 
+On level crossings protected by traffic lights, stop lights for road users are activated when a 
+train is approaching. Depending on the national road traffic regulations, the stop indication is 
+given either by flashing or steady red lights. In some countries, the traffic light will at first show 
+a yellow light and then switch to red. While in most countries, the traffic lights are just dark as 
+long no train is approaching, in some countries, a clear indication is given (usually a green or 
+white light).  
+The traffic lights must be activated a sufficient time ahead of an approaching train so that road 
+users that have already passed the beginning of the stopping distance can still safely pass the 
+level crossing. This time is called the level crossing approach time (not to be confused with the 
+approach time in blocking time calculations). The level crossing approach time is calculated 
+from the maximum time a road user needs from the beginning of the stopping distance until 
+having cleared the level crossing by full vehicle length plus a safety margin of a few seconds. 
+On level crossings protected by traffic lights with barriers, there is another constraint. When 
+the traffic lights are activated, the barriers must not be closed immediately. After the traffic 
+lights are activated, road users that have already passed the beginning of the stopping dis-
+tance must still be able to pass through the open barriers. The so called pre- signalling time 
+from activating the traffic lights until closing the barriers is calculated from the maximum time 
+a road user needs from the beginning of the stopping distance until having cleared the barriers 
+by full vehicle length. The level crossing approach time is the total of that pre- signalling time, 
+the time for closing the barriers, and a safety margin. On level crossings protected by full bar-
+riers, i.e., barriers blocking all lanes of the road, it must be checked that no road user is acci-
+dently locked between the barriers. This can be done either by operators checking the clear-
+ance of the level crossing visually (either on site of by remote cameras) or automatically by 
+radar scanners. On level crossing protected by half barriers, the clearance of the level crossing 
+is not monitored because the leaving lane is not blocked, so that road users cannot be locked 
+in. 
+5.2 Control and Monitoring of Level Crossings 
+A level crossing protected by traffic lights or by traffic lights with barriers can be controlled in 
+three ways: 
+• manually controlled level crossings 
+• automatic level crossings 
+• level crossings controlled by the interlocking system 
+Pure level crossing operators are almost extinct today. Level crossings controlled by a local 
+operator are still to be found at locally staffed interlocking stations. There, the level crossing is 
+usually interlocked with controlled signals. Level crossings may also be controlled by an oper-
+ator in a control centre who monitors the level crossing by remote cameras. Sometimes, the 
+level crossing protection is manually activated by the operator but automatically deactivated 
+by trackside devices after the passage of the train. 
+At automatic level crossings, traffic lights and barriers are activated by trackside devices (rail 
+contacts, track circuits) placed at the required distance on the approach of the level crossing. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 76 ===
+76 Railway Signalling Principles 
+ 
+After the passage of a train, trackside devices will also check that the train has cleared the 
+level crossing so that it is safe to automatically open the barriers and switch off the traffic lights.  
+Automatic level crossings may be monitored by a remote monitoring device, by a driver’s cross-
+ing indicator, or by a main signal. A remote monitoring device will check the proper working of 
+the level crossing protection for any train passing. Also, the trackside devices for the detection 
+of an approaching train are permanently monitored. If a malfunction is detected, the operator 
+in the control centre will be alerted. Then, all trains must be given an order to pass through 
+that level crossing cautiously until a signal maintainer has restored normal operation.  
+At level crossing monitored by a driver’s crossing indicator, a lineside indicator is placed at the 
+braking distance on the approach of the level crossing. When approaching the level crossing, 
+the train has to check the proper working of the level crossing protection by that indicator. If 
+the traffic lights have been correctly activated by the approaching train, the driver will get an 
+indication that the train may pass the level crossing without restrictions. If the protection was 
+not correctly activated, the driver will get a warning indication to slow down the train and pass 
+the level crossing with caution.  
+At automatic level crossings monitored by a main signal, a main signal protecting the level 
+crossing will only clear when the level crossing protection has been correctly activated by an 
+approaching train. When, in case of a level crossing malfunction, a train has to be authorised 
+by the operator to pass that main signal in stop position, the driver must be ordered to pass 
+the level crossing protected by that signal with caution. On lines with bidirectional operation, a 
+level crossing may be monitored by a main signal in one direction but by a driver’s crossing 
+indicator in the opposing direction. 
+ 
+ 
+ 
+Figure 5.2  Calculation of the initiation section 
+ 
+Level crossings controlled by the interlocking system are part of a locked route and therefore 
+interlocked with the signal governing the route. The level crossing protection is activated by 
+the route setting and deactivated by the passage of the train through the level crossing. In case 
+of malfunction of the level crossing, the signal governing the route will not clear. It shall be 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 77 ===
+Railway Signalling Principles   77 
+ 
+    
+ 
+noted that there may also be automatic level crossings inside of interlocking areas. These level 
+crossings are not part of locked routes but may be monitored by an interlocking signal.  
+5.3 Calculation of the Initiation Section 
+The initiation section is the distance at which an approaching train has to activate the level 
+crossing protection. That distance depends on the monitoring  principle (Figure 5.2). At re-
+motely monitored level crossings, the length of the initiation section is calculated from the line 
+speed and the necessary approach time. At level crossings monitored by a driver’ s crossing 
+indicator, the level crossing protection must be activated a sufficient time on the approach of 
+the crossing indicator to enable the driver to watch the clear indication. The signal watching 
+time is the same time as needed at a lineside signal providing an approach indication for the 
+signal ahead as explained in Chapter 2 in the paragraph on the blocking time model. The 
+initiation section is significantly longer than on a remotely monitored level crossing and will 
+extend the time the level crossing is blocked for road users. At level crossings monitored by a 
+main signal, the initiation section is extended by the distance between the main signal and the 
+level crossing. This will also further extend the time the level crossing is blocked for road users. 
+ 
+ 
+ 
+ 
+ 
+  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 78 ===
+78 Railway Signalling Principles 
+ 
+REFERENCES  
+Armstrong, H.: The railroad, what it is, what it does, 5 th Edition, Simmons-Boardman Books, 
+Omaha 2008 
+Aubertin, F. J.: Your Guide to Railway Signals. Simmons-Boardman Books, Inc.. Omaha 2018 
+Bailey, C. (Editor): European Railway Signalling. Institution of Railway Sig nal Engineers. A & 
+C Black, London 1995 
+Bisset, K.; Rowbotham, T.; Thurston, D.; Burkhardt, R.; Power, J.; Hoelscher, J.: Introduction 
+to North American Railway Signaling. Institution of Railway Signal Engineers. Simmons-Board-
+man Books, Inc.. Omaha 2008 
+Chandra, S.; Agarwal, M.M.: Railway Engineering. Oxford University Press 2008 
+Dougherty, P.: Tracks of the New York City Subway. New York City 2018 
+Hansen, I.; Pachl, J. (editors): Railway Timetabling & Operations – Analysis, Modelling, Opti-
+misation, Simulation, Performance Evaluation. Eurailpress, Hamburg 2014  
+Pachl, J.: Railway operation and control, 4th Edition, VTD Rail Publishing, Mountlake Terrace 
+2018 
+Stanley, P. (editor): ETCS for Engineers. Eurailpress, Hamburg 2011 
+Theeg, G.; Vlasenko, S. (editors): Railway Signalling and Interlocking – International Compen-
+dium. Eurailpress, 3rd Edition, Hamburg 2020 
+UIC: ERTMS Glossary. English – French – German. International Union of Railways (UIC), 1st 
+Edition, Paris 2012 
+White, T.: Elements of Train Dispatching, Vol. 1. VTD Rail Publishing, Mountlake Terrace 2003 
+Winter, P. (editor): Compendium on ERTMS – European Rail Traffic Management System. 
+Eurailpress, Hamburg 2009  
+ 
+ 
+ 
+  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 79 ===
+Railway Signalling Principles   79 
+ 
+    
+ 
+SYMBOLS IN DIAGRAMS 
+The symbols for track and signal diagrams resemble the German standard but are used in a 
+generic way not referring to a particular railway. 
+ 
+ 
+The symbols used in activity diagrams are a subset of the SysML/UML notation. 
+ 
+ 
+ 
+  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 80 ===
+80 Railway Signalling Principles 
+ 
+GLOSSARY 
+Absolute signal - A signal that must not be passed in stop position without permission from 
+the operator. 
+Approach locking - Form of route locking that comes into force after the train has occupied 
+the approach section. 
+Approach time - 1) The running time between a signal that provides an approach indication 
+and the following signal. 2) The time, level crossing protection must be activated ahead of an 
+approaching train. 
+Automatic block system - A block system in which the signals work automatically. Lines with 
+an automatic block system must be equipped with track clear detection. 
+Automatic signal - A signal that works automatically by the passage of the train through track 
+sections. 
+Automatic Train Protection (ATP)  - A system that transmits information about movement 
+authorities and speed limits from the line to the train to cause automatic braking if the train 
+ignores the valid limits. 
+Axle counter - A track clear detection system consisting of counting points at both ends of a 
+section and a counter connected to the counting points. The occupancy of a section is detected 
+by comparing the number of axles that enter the section with the number of axles that leave 
+the section. 
+Block section - A section of track in a fixed block system, which a train may only enter if the 
+section is not occupied by other vehicles. 
+Block signal - A main signal that governs train movements into a block section.  
+Block system - A signalling system that provides a safe spacing of trains. Block systems may 
+be divided into fixed block systems and moving block systems. 
+Blocking time - The minimum time interval that must be kept clear for the non- delayed pas-
+sage of a train through a track section. 
+Cab signaling - A signalling system that displays the movement authorities on the driver's 
+desk. 
+Clearing point - A point a train must have cleared completely before a signal in rear may be 
+cleared or a locked route may be released. 
+Controlled signal - A signal that is controlled by an operator. 
+Control length of a signal - The length of track beyond a signal that must be clear and safe 
+before the signal can be cleared for a train movement. 
+Crossing - An intersection of two tracks at grade. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 81 ===
+Railway Signalling Principles   81 
+ 
+    
+ 
+Derailer - A flank protection device that would derail an unsafe movement before it could join 
+the protected route. 
+Direction locking - A form of opposite locking in which a locked direction is established that 
+holds opposing signals in stop position. Direction locking may be in effect on a block line that 
+consists of several block sections. 
+Distant signal - A signal that provides an approach indication to a signal but that cannot show 
+a stop aspect. A distant signal does not limit a block section. 
+Double slip - A crossing combined with four pairs of points to provide slip connections at both 
+sides of the crossing. 
+Driver’s crossing indicator - A lineside indicator placed at the braking distance on the ap-
+proach of a level crossing, by which the driver can check the proper working of the level cross-
+ing protection. 
+Dual called points - Another term for selective protective points. 
+Dwarf signal - A ground mounted signal. 
+Emergengy route release - A manually initiated release of a route or parts of a route if normal 
+route release fails after the passage of a train. 
+Entrance signal - An interlocking signal at a route entrance.  
+Exit signal - 1) A controlled signal that governs train movements to leave a station track. It is 
+also called a station exit signal. 2) A controlled signal at a route exit. It is also called a destina-
+tion signal. 
+Facing point movement - A movement on a pair of points in which the point blades face 
+approaching traffic. 
+Fixed block system - A block system in which the track behind a train is sectionally cleared 
+in accordance with fixed block sections. 
+Flank area - The section of track between a flank protection device and the fouling point of the 
+route to be protected. 
+Flank points - Points that are locked in a protective position to provide flank protection to a 
+route. 
+Flank protection - A measure to prevent vehicles from running into a route, which is cleared 
+for a train movement. 
+Flank protection device - A trackside element that provides flank protection. 
+Flank transfer points - Points that are located in the flank area between an element that 
+provides remote flank protection and the route to be protected.  
+Fouling point - The limit of occupation of converging tracks at turnouts and crossings. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 82 ===
+82 Railway Signalling Principles 
+ 
+Geographical interlocking - An interlocking system in which the track elements are repre-
+sented by logical objects connected to each other in form of the track layout. 
+Headway - The time or distance interval calculated from ‘head to head’ between two succes-
+sive trains. 
+Home signal - 1) A signal governing entrance to an interlocking area. 2) A signal governing 
+entrance to a station area. 
+Initiation section - The distance at which an approaching train has to activate the level cross-
+ing protection. 
+Insulated rail joint - A rail joint that ensures electrical insulation of adjacent rails to limit a track 
+circuit. 
+Interlocking - An arrangement of points and signals interconnected in a way that each move-
+ment follows the other in a proper and safe sequence. 
+Interlocking signal - A controlled signal that governs a route within an interlocking. 
+Interlocking station – A locally staffed control room from which an interlocking area is con-
+trolled. 
+Intermediate interlocking signal - An interlocking signal that is neither a home signal nor a 
+signal that governs a route to leave the interlocking area.  
+Intermediate points - Points that are located in a station track in a way that a train stopping 
+at its regular stopping position would not clear the points. 
+Intermittend ATP - An ATP system in which the data is transmitted to the train at discrete 
+points along the track. 
+Jointless track circuit - A track circuit that uses an AC audio frequency current, so that the 
+working length is limited by the capacitive and inductive track characteristics without a need 
+for insulated rail joints. 
+Key interlocking - A method to achieve interlocking between signals and hand- throw points 
+by mechanical key locks. 
+Line headway - The headway that results from the blocking time stairways of two successive 
+trains. 
+Main route - An route governed by a main signal. 
+Main signal - A signal that governs regular train movements. This term is used by many rail-
+ways to distinguish these signals from shunting signals. 
+Main track - A track that may be used for regular train movements.  
+Manual block system - A block system in which the signals are controlled manually and the 
+clearing of the block sections is checked by local operators watching the rear end markers. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 83 ===
+Railway Signalling Principles   83 
+ 
+    
+ 
+Moving block system - A block system in which the track behind a train is cleared continu-
+ously. 
+Open line - Main tracks outside of station areas.    
+Operator - An employee who is in charge to authorise train and shunting movements. 
+Outer home signal - A controlled signal in approach to a home signal that does not directly 
+protect points but that may be interlocked with points within the overlap beyond the home 
+signal. 
+Overlap - A certain length of track beyond a signal that must be kept clear as long a train 
+movement is approaching that signal. 
+Permissive signal - A signal that may be cautiously passed in stop position after the train has 
+stopped at the signal. After having passed a permissive signal in stop position, the movement 
+through the next block section must be made cautiously on sight. 
+Point lock - A locking device that mechanically locks the points in a proper position to prevent 
+unintended movements of the point blades and movable frogs as long a train is running through 
+the points. 
+Point machine - A machine that drives points, movable frogs, or derailers. 
+Points - The movable parts of a turnout that are moved to set different routes. 
+Rear end marker - A marker at the rear end of a train. 
+Relay interlocking - An interlocking system in which the interlocking is achieved by relay cir-
+cuits. 
+Remote flank protection - Flank protection that is provided by an element that is not directly 
+adjacent to the route to be protected. 
+Route cancellation - A manually initiated release of a route after having restored the signal.  
+Route control table - A tabular sheet that contains all interlocking conditions for a given layout. 
+Route locking - The locking of all points and flank protection devices as long as a route is set. 
+Route release - The release of locked points after the train has cleared the clearing point of a 
+route. 
+Running movement - Another term for a train movement. 
+Selective protective points - Flank points that may receive competing flank calls from differ-
+ent routes. 
+Self-selective protective points - Protective points that could receive conflicting flank calls 
+from one train movement.  
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 84 ===
+84 Railway Signalling Principles 
+ 
+Semi-automatic block system - A block system in which the block locking after a train has 
+entered the block section is effected automatically, but the section has to be released manu-
+ally. 
+Shared overlaps - A form of overlap protection in which two or more overlaps may share a 
+track section without causing a route conflict.  
+Shunt aspect - A proceed aspect allowing a shunting move to pass a signal. 
+Shunting - All movements other than train movements. 
+Shunting signal - A signal that is used to authorise shunting movements. 
+Shunting limits - An area marked by shunting limit boards or signals, shunting movements 
+must not leave.  
+Shunt route - A route governed by a shunting signal or the shunt aspect of a main signal. 
+Siding - A track that may not be used for regular train movements. 
+Signal aspect - The appearance of a lineside signal, as viewed from the direction of an ap-
+proaching train, or the appearance of a cab signal. 
+Signal headway - The headway that results from the blocking times of two successive trains 
+in a single block section  
+Signal indication - The information that is given by a signal aspect. 
+Single slip - A crossing combined with two pairs of points to provide a slip connection at one 
+side of the crossing. 
+Station area - An arrangement of station tracks limited by opposing home signals. 
+Station exit signal - A controlled signal that governs train movements to leave a station track.  
+Station track -  A main track protected by controlled signals within an interlocking area on 
+which trains may originate, terminate, pass, and turn.  
+Swinging overlap - A form of overlap protection in which the overlap can be switched into 
+another track without cancelling the route. 
+Tabular interlocking - An interlocking system in which the locking between signals and points 
+is achieved in form of a route locking table. 
+Time locking - An application that will hold a route locked for a specified time after the signal 
+has been manually restored. 
+Token block - A block system for single track operation in which the movement authority de-
+pends on the possession of a token which is handed out to the train driver. 
+Track clear detection - A device that detects the occupation and clearance of a track section. 
+https://doi.org/10.24355/dbbs.084-202405240811-0
+
+=== PAGE 85 ===
+Railway Signalling Principles   85 
+ 
+    
+ 
+Track circuit - A track clear detection device consisting of an electrical circuit of which the 
+rails of a section form a part. The clearance of the section is detected by a detection device at 
+one end of the section which receives a current from a source at the other end of the section. 
+Traffic locking - A principle of protecting opposing movements on automatic block lines on 
+which automatic signals of both directions are cleared in normal state but automatically re-
+stored to stop position (‘tumbled down’) by an opposing move. 
+Trailing point movement - A movement on a pair of points where the frog faces approaching 
+traffic. 
+Train movement - A locomotive or self -propelled vehicle, alone or coupled to one or more 
+vehicles, with authority to occupy a main track in accordance to rules specified for train move-
+ments. 
+Turnout - An assembly of rails, movable points and a frog, which effect the tangential branch-
+ing of tracks and allows trains or vehicles to run over one track or another. 
+ 
+https://doi.org/10.24355/dbbs.084-202405240811-0
