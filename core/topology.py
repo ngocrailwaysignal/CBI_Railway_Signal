@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
@@ -12,9 +13,11 @@ from core.elements import (
     ApproachSection,
     Point,
     PointPosition,
+    PointSymbolOrientation,
     RailElement,
     Signal,
     SignalAspect,
+    SignalDirection,
     TrackSection,
 )
 
@@ -25,7 +28,7 @@ class RailwayTopology:
     def __init__(self) -> None:
         self.graph: nx.DiGraph = nx.DiGraph()
         self.signals: Dict[str, Signal] = {}
-        # Includes both Signal->Node protect links and Node->Signal approach links.
+        # Only Node->Signal approach links are persisted in this set.
         self.signal_links: set[tuple[str, str]] = set()
         # Graph edges synthesized from Node->Signal + Signal.protects.
         self._signal_virtual_edges: set[tuple[str, str]] = set()
@@ -67,16 +70,17 @@ class RailwayTopology:
         if isinstance(source, Signal):
             if target_id not in self.graph.nodes:
                 raise ValueError("Signals must protect a track section or point node")
-            if source.protects:
-                self.signal_links.discard((source.id, source.protects))
             source.protects = target_id
-            self.signal_links.add((source.id, target_id))
             self.sync_signal_virtual_routes()
             return
 
         if isinstance(target, Signal):
             self.signal_links.add((source_id, target_id))
-            if isinstance(source, TrackSection) and not target.approach_section:
+            if (
+                isinstance(source, ApproachSection)
+                and not target.approach_section
+                and self.is_signal_back_side_node(target_id, source_id)
+            ):
                 target.approach_section = source_id
             self.sync_signal_virtual_routes()
             return
@@ -95,7 +99,6 @@ class RailwayTopology:
             return
 
         if isinstance(source, Signal):
-            self.signal_links.discard((source_id, target_id))
             if source.protects == target_id:
                 source.protects = ""
             self.sync_signal_virtual_routes()
@@ -159,17 +162,57 @@ class RailwayTopology:
             return []
         return list(self.graph.successors(node_id))
 
+    def routing_graph(self) -> nx.DiGraph:
+        """Return directed routing graph.
+
+        Track/point physical links are treated bidirectionally, while signal
+        virtual links keep their operational direction (approach -> protected).
+        """
+        self.sync_signal_virtual_routes()
+
+        route_graph = nx.DiGraph()
+        route_graph.add_nodes_from(self.graph.nodes)
+
+        for source_id, target_id in self.graph.edges:
+            if (source_id, target_id) in self._signal_virtual_edges:
+                route_graph.add_edge(source_id, target_id)
+            else:
+                route_graph.add_edge(source_id, target_id)
+                route_graph.add_edge(target_id, source_id)
+        return route_graph
+
     def graph_node_ids(self) -> Iterable[str]:
         """Return ids of graph-contained nodes."""
         return self.graph.nodes
 
     def signal_approach_nodes(self, signal_id: str) -> list[str]:
-        """Return graph nodes that connect into the given signal."""
-        return sorted(
+        """Return graph nodes that connect into the given signal from its rear side."""
+        candidates = sorted(
             source_id
             for source_id, target_id in self.signal_links
             if target_id == signal_id and source_id in self.graph.nodes
         )
+        return [node_id for node_id in candidates if self._is_node_on_signal_back_side(signal_id, node_id)]
+
+    def signal_protected_node(self, signal_id: str) -> str | None:
+        """Return protected node only when it is on the signal front side."""
+        signal = self.signals.get(signal_id)
+        if signal is None:
+            return None
+        node_id = signal.protects.strip()
+        if node_id not in self.graph.nodes:
+            return None
+        if not self._is_node_on_signal_front_side(signal_id, node_id):
+            return None
+        return node_id
+
+    def is_signal_front_side_node(self, signal_id: str, node_id: str) -> bool:
+        """Public wrapper for front-side checks."""
+        return self._is_node_on_signal_front_side(signal_id, node_id)
+
+    def is_signal_back_side_node(self, signal_id: str, node_id: str) -> bool:
+        """Public wrapper for rear-side checks."""
+        return self._is_node_on_signal_back_side(signal_id, node_id)
 
     def normalize_point_facing_connections(self) -> None:
         """Normalize point branch mapping from current graph topology."""
@@ -202,8 +245,153 @@ class RailwayTopology:
 
         point.facing_connections = cleaned
 
-    def export_to_json(self, path: str | Path) -> None:
-        """Serialize layout and runtime state to JSON."""
+    def _is_node_on_signal_front_side(self, signal_id: str, node_id: str) -> bool:
+        relative_side = self._signal_relative_side(signal_id, node_id)
+        if relative_side is None:
+            return True
+        signal = self.signals.get(signal_id)
+        if signal is None:
+            return True
+        if signal.direction == SignalDirection.RIGHT:
+            return relative_side == "RIGHT"
+        return relative_side == "LEFT"
+
+    def _is_node_on_signal_back_side(self, signal_id: str, node_id: str) -> bool:
+        relative_side = self._signal_relative_side(signal_id, node_id)
+        if relative_side is None:
+            return True
+        signal = self.signals.get(signal_id)
+        if signal is None:
+            return True
+        if signal.direction == SignalDirection.RIGHT:
+            return relative_side == "LEFT"
+        return relative_side == "RIGHT"
+
+    def _signal_relative_side(self, signal_id: str, node_id: str) -> str | None:
+        signal_pos = self.ui_positions.get(signal_id)
+        node_pos = self.ui_positions.get(node_id)
+        if signal_pos is None or node_pos is None:
+            return None
+        dx = float(node_pos[0]) - float(signal_pos[0])
+        if abs(dx) <= 1e-6:
+            return None
+        return "RIGHT" if dx > 0 else "LEFT"
+
+    def clear_runtime_state(self, keep_occupancy: bool = True) -> None:
+        """Reset transient runtime state while preserving static topology."""
+        for node_id in self.graph.nodes:
+            element = self.graph.nodes[node_id]["element"]
+            if isinstance(element, TrackSection):
+                if not keep_occupancy:
+                    element.occupied = False
+                element.locked_by = None
+            elif isinstance(element, Point):
+                element.locked_by = None
+
+        for signal in self.signals.values():
+            signal.aspect = SignalAspect.STOP
+            signal.route_id = None
+
+    def validate_signal_configuration(self) -> list[str]:
+        """Validate signal direction/protect mappings and conflicting protects."""
+        issues: list[str] = []
+        protected_to_signals: dict[str, list[Signal]] = defaultdict(list)
+
+        for signal in sorted(self.signals.values(), key=lambda item: item.id):
+            protected = signal.protects.strip()
+            if not protected:
+                issues.append(f"Signal {signal.id} has no protected section/point")
+                continue
+            if protected not in self.graph.nodes:
+                issues.append(
+                    f"Signal {signal.id} protects unknown element {protected}"
+                )
+                continue
+            if self.signal_protected_node(signal.id) is None:
+                issues.append(
+                    f"Signal {signal.id} protects {protected} on wrong side for direction {signal.direction.value}"
+                )
+                continue
+            protected_to_signals[protected].append(signal)
+
+        for protected, signals in sorted(protected_to_signals.items()):
+            by_direction: dict[SignalDirection, list[str]] = defaultdict(list)
+            for signal in signals:
+                by_direction[signal.direction].append(signal.id)
+            for direction, signal_ids in sorted(
+                by_direction.items(), key=lambda item: item[0].value
+            ):
+                if len(signal_ids) > 1:
+                    joined = ", ".join(sorted(signal_ids))
+                    issues.append(
+                        f"Protected node {protected} is assigned to multiple {direction.value} signals: {joined}"
+                    )
+        return issues
+
+    def validate_signal_pair(self, entry_signal_id: str, exit_signal_id: str) -> list[str]:
+        """Validate one route request pair before route finding."""
+        issues: list[str] = []
+        entry_signal = self.signals.get(entry_signal_id)
+        exit_signal = self.signals.get(exit_signal_id)
+        if entry_signal is None:
+            return [f"Unknown entry signal {entry_signal_id}"]
+        if exit_signal is None:
+            return [f"Unknown exit signal {exit_signal_id}"]
+        if entry_signal.direction != exit_signal.direction:
+            issues.append(
+                f"Entry {entry_signal_id} and exit {exit_signal_id} have opposite directions "
+                f"({entry_signal.direction.value}/{exit_signal.direction.value})"
+            )
+
+        entry_protected = self.signal_protected_node(entry_signal_id)
+        exit_protected = self.signal_protected_node(exit_signal_id)
+        if entry_protected is None:
+            issues.append(
+                f"Entry signal {entry_signal_id} has invalid protects for direction {entry_signal.direction.value}"
+            )
+        if exit_protected is None:
+            issues.append(
+                f"Exit signal {exit_signal_id} has invalid protects for direction {exit_signal.direction.value}"
+            )
+        if entry_protected and exit_protected and entry_protected == exit_protected:
+            issues.append(
+                f"Entry {entry_signal_id} and exit {exit_signal_id} protect the same node {entry_protected}"
+            )
+
+        exit_approach_nodes = self.signal_approach_nodes(exit_signal_id)
+        if not exit_approach_nodes:
+            issues.append(
+                f"Exit signal {exit_signal_id} has no rear-side approach link (node -> signal)"
+            )
+
+        protected_nodes = {node for node in (entry_protected, exit_protected) if node}
+        for protected in sorted(protected_nodes):
+            signals = [
+                signal
+                for signal in self.signals.values()
+                if signal.protects.strip() == protected
+            ]
+            by_direction: dict[SignalDirection, list[str]] = defaultdict(list)
+            for signal in signals:
+                by_direction[signal.direction].append(signal.id)
+            for direction, signal_ids in sorted(
+                by_direction.items(), key=lambda item: item[0].value
+            ):
+                if len(signal_ids) > 1:
+                    joined = ", ".join(sorted(signal_ids))
+                    issues.append(
+                        f"Protected node {protected} is assigned to multiple {direction.value} signals: {joined}"
+                    )
+        return issues
+
+    def export_to_json(
+        self,
+        path: str | Path,
+        *,
+        include_runtime_state: bool = False,
+        include_occupancy: bool = True,
+    ) -> None:
+        """Serialize layout to JSON with optional runtime state."""
         payload: Dict[str, Any] = {
             "sections": [],
             "points": [],
@@ -220,8 +408,8 @@ class RailwayTopology:
                     {
                         "id": element.id,
                         "kind": "approach" if isinstance(element, ApproachSection) else "track",
-                        "occupied": element.occupied,
-                        "locked_by": element.locked_by,
+                        "occupied": element.occupied if include_occupancy else False,
+                        "locked_by": element.locked_by if include_runtime_state else None,
                         "length": element.length,
                     }
                 )
@@ -230,7 +418,8 @@ class RailwayTopology:
                     {
                         "id": element.id,
                         "position": element.position.value,
-                        "locked_by": element.locked_by,
+                        "symbol_orientation": element.symbol_orientation.value,
+                        "locked_by": element.locked_by if include_runtime_state else None,
                         "facing_connections": {
                             key.value: value for key, value in element.facing_connections.items()
                         },
@@ -241,17 +430,26 @@ class RailwayTopology:
             payload["signals"].append(
                 {
                     "id": signal.id,
-                    "aspect": signal.aspect.value,
+                    "aspect": (
+                        signal.aspect.value
+                        if include_runtime_state
+                        else SignalAspect.STOP.value
+                    ),
+                    "direction": signal.direction.value,
                     "protects": signal.protects,
                     "approach_section": signal.approach_section,
-                    "route_id": signal.route_id,
+                    "route_id": signal.route_id if include_runtime_state else None,
                 }
             )
 
         payload["edges"] = [
             [src, dst] for src, dst in self.graph.edges if (src, dst) not in self._signal_virtual_edges
         ]
-        payload["signal_links"] = [list(link) for link in sorted(self.signal_links)]
+        payload["signal_links"] = [
+            [src, dst]
+            for src, dst in sorted(self.signal_links)
+            if src in self.graph.nodes and dst in self.signals
+        ]
         payload["ui_positions"] = {
             key: [float(value[0]), float(value[1])] for key, value in self.ui_positions.items()
         }
@@ -261,8 +459,14 @@ class RailwayTopology:
         path_obj.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     @classmethod
-    def load_from_json(cls, path: str | Path) -> "RailwayTopology":
-        """Load topology from JSON."""
+    def load_from_json(
+        cls,
+        path: str | Path,
+        *,
+        load_runtime_state: bool = False,
+        load_occupancy: bool = True,
+    ) -> "RailwayTopology":
+        """Load topology from JSON with optional runtime-state restoration."""
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         topology = cls()
 
@@ -273,8 +477,16 @@ class RailwayTopology:
             section_cls = ApproachSection if section_kind == "approach" else TrackSection
             section = section_cls(
                 id=section_data["id"],
-                occupied=bool(section_data.get("occupied", False)),
-                locked_by=section_data.get("locked_by"),
+                occupied=(
+                    bool(section_data.get("occupied", False))
+                    if load_occupancy
+                    else False
+                ),
+                locked_by=(
+                    section_data.get("locked_by")
+                    if load_runtime_state
+                    else None
+                ),
                 length=float(section_data.get("length", 100.0)),
             )
             section_pos = positions.get(section.id)
@@ -285,10 +497,18 @@ class RailwayTopology:
 
         for point_data in data.get("points", []):
             facing = point_data.get("facing_connections", {})
+            raw_orientation = str(
+                point_data.get("symbol_orientation", PointSymbolOrientation.RIGHT.value)
+            ).strip().upper()
+            try:
+                symbol_orientation = PointSymbolOrientation(raw_orientation)
+            except ValueError:
+                symbol_orientation = PointSymbolOrientation.RIGHT
             point = Point(
                 id=point_data["id"],
                 position=PointPosition(point_data.get("position", PointPosition.NORMAL.value)),
-                locked_by=point_data.get("locked_by"),
+                symbol_orientation=symbol_orientation,
+                locked_by=point_data.get("locked_by") if load_runtime_state else None,
                 facing_connections={
                     PointPosition(key): value for key, value in facing.items() if value
                 },
@@ -300,12 +520,28 @@ class RailwayTopology:
             )
 
         for signal_data in data.get("signals", []):
+            raw_direction = str(
+                signal_data.get("direction", SignalDirection.RIGHT.value)
+            ).strip().upper()
+            if raw_direction == "UP":
+                raw_direction = SignalDirection.RIGHT.value
+            elif raw_direction == "DOWN":
+                raw_direction = SignalDirection.LEFT.value
+            try:
+                direction = SignalDirection(raw_direction)
+            except ValueError:
+                direction = SignalDirection.RIGHT
             signal = Signal(
                 id=signal_data["id"],
-                aspect=SignalAspect(signal_data.get("aspect", SignalAspect.STOP.value)),
+                aspect=(
+                    SignalAspect(signal_data.get("aspect", SignalAspect.STOP.value))
+                    if load_runtime_state
+                    else SignalAspect.STOP
+                ),
+                direction=direction,
                 protects=signal_data.get("protects", ""),
                 approach_section=str(signal_data.get("approach_section", "")).strip(),
-                route_id=signal_data.get("route_id"),
+                route_id=signal_data.get("route_id") if load_runtime_state else None,
             )
             signal_pos = positions.get(signal.id)
             topology.add_signal(
@@ -317,6 +553,7 @@ class RailwayTopology:
             if source_id in topology.graph.nodes and target_id in topology.graph.nodes:
                 topology.graph.add_edge(source_id, target_id)
 
+        legacy_signal_to_protected: dict[str, str] = {}
         raw_signal_links = data.get("signal_links", [])
         if isinstance(raw_signal_links, list):
             for link in raw_signal_links:
@@ -325,14 +562,23 @@ class RailwayTopology:
                 source_id, target_id = str(link[0]), str(link[1])
                 if topology.get_element(source_id) is None or topology.get_element(target_id) is None:
                     continue
-                topology.signal_links.add((source_id, target_id))
+                if source_id in topology.graph.nodes and target_id in topology.signals:
+                    topology.signal_links.add((source_id, target_id))
+                elif source_id in topology.signals and target_id in topology.graph.nodes:
+                    legacy_signal_to_protected[source_id] = target_id
 
-        # Backward compatibility for files without signal_links.
+        # Backward compatibility for files that encoded protects via signal_links.
         for signal in topology.signals.values():
-            if signal.protects and signal.protects in topology.graph.nodes:
-                topology.signal_links.add((signal.id, signal.protects))
+            if not signal.protects and signal.id in legacy_signal_to_protected:
+                signal.protects = legacy_signal_to_protected[signal.id]
+            if signal.approach_section:
+                approach_element = topology.get_element(signal.approach_section)
+                if not isinstance(approach_element, ApproachSection):
+                    signal.approach_section = ""
 
         topology.sync_signal_virtual_routes()
+        if not load_runtime_state:
+            topology.clear_runtime_state(keep_occupancy=load_occupancy)
 
         return topology
 

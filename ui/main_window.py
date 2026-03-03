@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.elements import PointPosition, TrackSection
+from core.elements import ApproachSection, PointPosition
 from core.interlocking_table import InterlockingTableGenerator, InterlockingTableRow
 from core.route_engine import Route, RouteEngine
 from core.simulation import Simulation
@@ -71,13 +71,18 @@ class MainWindow(QMainWindow):
         self.simulation: Optional[Simulation] = None
         self.preview_route: Optional[Route] = None
         self.interlocking_rows: list[InterlockingTableRow] = []
+        self.valid_route_pairs: set[tuple[str, str]] = set()
         self._simulation_timer = QTimer(self)
         self._simulation_timer.timeout.connect(self._simulation_tick)
         self._simulation_ticks_remaining = 0
 
         sample_path = Path("data/sample_layout.json")
         if sample_path.exists():
-            self.canvas.load_from_json(sample_path)
+            self.canvas.load_from_json(
+                sample_path,
+                load_runtime_state=False,
+                load_occupancy=True,
+            )
             self.status.showMessage(f"Loaded sample layout: {sample_path}")
         self._on_topology_changed()
 
@@ -98,8 +103,8 @@ class MainWindow(QMainWindow):
         self.connect_mode_action.setCheckable(True)
         self.connect_mode_action.toggled.connect(self._toggle_connect_mode)
 
-        set_route_action = toolbar.addAction("Set Route")
-        set_route_action.triggered.connect(self._set_selected_route)
+        self.set_route_action = toolbar.addAction("Set Route")
+        self.set_route_action.triggered.connect(self._set_selected_route)
 
         self.cancel_route_action = toolbar.addAction("Cancel Active Route")
         self.cancel_route_action.triggered.connect(lambda: self._cancel_active_routes())
@@ -254,7 +259,11 @@ class MainWindow(QMainWindow):
         if not path:
             return
         try:
-            self.canvas.save_to_json(path)
+            self.canvas.save_to_json(
+                path,
+                include_runtime_state=False,
+                include_occupancy=True,
+            )
             self.status.showMessage(f"Saved layout to {path}")
         except Exception as exc:
             QMessageBox.critical(self, "Save failed", str(exc))
@@ -263,8 +272,23 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, "Load Layout", "data", "JSON Files (*.json)")
         if not path:
             return
+        keep_occupancy = (
+            QMessageBox.question(
+                self,
+                "Load occupancy state",
+                "Restore OCCUPIED/FREE states from file?\n"
+                "Route locks and signal route states are always reset on load.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            == QMessageBox.StandardButton.Yes
+        )
         try:
-            self.canvas.load_from_json(path)
+            self.canvas.load_from_json(
+                path,
+                load_runtime_state=False,
+                load_occupancy=keep_occupancy,
+            )
             self.status.showMessage(f"Loaded layout from {path}")
         except Exception as exc:
             QMessageBox.critical(self, "Load failed", str(exc))
@@ -274,7 +298,11 @@ class MainWindow(QMainWindow):
         if not sample_path.exists():
             QMessageBox.warning(self, "Missing sample", f"Sample file not found: {sample_path}")
             return
-        self.canvas.load_from_json(sample_path)
+        self.canvas.load_from_json(
+            sample_path,
+            load_runtime_state=False,
+            load_occupancy=True,
+        )
         self.status.showMessage(f"Loaded sample layout: {sample_path}")
 
     def _load_rsp30(self) -> None:
@@ -282,7 +310,11 @@ class MainWindow(QMainWindow):
         if not rsp_path.exists():
             QMessageBox.warning(self, "Missing layout", f"Layout file not found: {rsp_path}")
             return
-        self.canvas.load_from_json(rsp_path)
+        self.canvas.load_from_json(
+            rsp_path,
+            load_runtime_state=False,
+            load_occupancy=True,
+        )
         self.status.showMessage(f"Loaded RSP30 layout: {rsp_path}")
 
     def _on_topology_changed(self) -> None:
@@ -318,6 +350,7 @@ class MainWindow(QMainWindow):
         signals = sorted(self.canvas.topology.signals.keys())
         if len(signals) < 2:
             self.interlocking_rows = []
+            self.valid_route_pairs = set()
             self.table_widget.setRowCount(0)
             return
 
@@ -331,6 +364,9 @@ class MainWindow(QMainWindow):
         )
         rows.sort(key=lambda item: item.route_name)
         self.interlocking_rows = rows
+        self.valid_route_pairs = {
+            (row.entry_signal, row.exit_signal) for row in rows
+        }
 
         self.table_widget.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
@@ -348,6 +384,19 @@ class MainWindow(QMainWindow):
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.table_widget.setItem(row_index, col_index, item)
 
+        current_pair = (
+            self.entry_combo.currentText().strip(),
+            self.exit_combo.currentText().strip(),
+        )
+        if self.valid_route_pairs and current_pair not in self.valid_route_pairs:
+            first_row = rows[0]
+            self.entry_combo.blockSignals(True)
+            self.exit_combo.blockSignals(True)
+            self.entry_combo.setCurrentText(first_row.entry_signal)
+            self.exit_combo.setCurrentText(first_row.exit_signal)
+            self.entry_combo.blockSignals(False)
+            self.exit_combo.blockSignals(False)
+
     def _preview_selected_route(self) -> None:
         entry_signal_id = self.entry_combo.currentText().strip()
         exit_signal_id = self.exit_combo.currentText().strip()
@@ -356,6 +405,22 @@ class MainWindow(QMainWindow):
             return
         if entry_signal_id == exit_signal_id:
             QMessageBox.warning(self, "Find Route", "Entry and Exit must be different signals.")
+            return
+        if (entry_signal_id, exit_signal_id) not in self.valid_route_pairs:
+            QMessageBox.warning(
+                self,
+                "Find Route",
+                f"No valid route is defined for {entry_signal_id} -> {exit_signal_id} in the current interlocking table.",
+            )
+            self.preview_route = None
+            self.canvas.clear_route_visualization()
+            self.search_log.clear()
+            self._sync_ui_state()
+            return
+        if not self._validate_signal_pair_request(entry_signal_id, exit_signal_id, "Find Route"):
+            self.canvas.clear_route_visualization()
+            self.search_log.clear()
+            self.preview_route = None
             return
 
         route_engine = RouteEngine(self.canvas.topology)
@@ -371,7 +436,9 @@ class MainWindow(QMainWindow):
             )
         except Exception as exc:
             QMessageBox.warning(self, "Route unavailable", str(exc))
+            self.preview_route = None
             self.canvas.clear_route_visualization()
+            self.search_log.clear()
             return
 
         search_order, _ = self._build_search_trace(route.path[0], route.path[-1])
@@ -395,11 +462,27 @@ class MainWindow(QMainWindow):
         if entry_signal_id == exit_signal_id:
             QMessageBox.warning(self, "Set Route", "Entry and Exit must be different signals.")
             return
+        if (entry_signal_id, exit_signal_id) not in self.valid_route_pairs:
+            QMessageBox.warning(
+                self,
+                "Set Route",
+                f"No valid route is defined for {entry_signal_id} -> {exit_signal_id} in the current interlocking table.",
+            )
+            self.preview_route = None
+            self.canvas.clear_route_visualization()
+            self.search_log.clear()
+            self._sync_ui_state()
+            return
+        if not self._validate_signal_pair_request(entry_signal_id, exit_signal_id, "Set Route"):
+            return
 
         try:
             route, created = self._get_or_create_locked_route(entry_signal_id, exit_signal_id)
         except Exception as exc:
             QMessageBox.warning(self, "Set Route failed", str(exc))
+            self.preview_route = None
+            self.canvas.clear_route_visualization()
+            self.search_log.clear()
             return
 
         search_order, _ = self._build_search_trace(route.path[0], route.path[-1])
@@ -452,7 +535,7 @@ class MainWindow(QMainWindow):
         source_node_id: str,
         target_node_id: str,
     ) -> tuple[list[str], list[str]]:
-        graph = self.canvas.topology.graph
+        graph = self.canvas.topology.routing_graph()
         if source_node_id not in graph.nodes or target_node_id not in graph.nodes:
             return [], []
 
@@ -505,6 +588,23 @@ class MainWindow(QMainWindow):
             return "-"
         return ", ".join(f"{point_id}:{position.value}" for point_id, position in sorted(required_points.items()))
 
+    def _validate_signal_pair_request(
+        self,
+        entry_signal_id: str,
+        exit_signal_id: str,
+        title: str,
+    ) -> bool:
+        issues = self.canvas.topology.validate_signal_pair(entry_signal_id, exit_signal_id)
+        if not issues:
+            return True
+        issue_lines = "\n".join(f"- {issue}" for issue in issues)
+        QMessageBox.warning(
+            self,
+            title,
+            "Invalid signal/topology configuration:\n" + issue_lines,
+        )
+        return False
+
     def _start_simulation(self) -> None:
         if self._simulation_timer.isActive():
             self._simulation_timer.stop()
@@ -522,6 +622,8 @@ class MainWindow(QMainWindow):
             return
         if len(self.canvas.topology.signals) < 2:
             QMessageBox.warning(self, "Simulation", "At least two signals are required.")
+            return
+        if not self._validate_signal_pair_request(entry_signal_id, exit_signal_id, "Simulation"):
             return
 
         route = self._get_active_route_for_pair(entry_signal_id, exit_signal_id)
@@ -619,7 +721,7 @@ class MainWindow(QMainWindow):
         approach_section = route.approach_locking_section.strip() if route.approach_locking_section else ""
         if approach_section:
             approach_element = self.canvas.topology.get_element(approach_section)
-            if isinstance(approach_element, TrackSection) and approach_element.occupied:
+            if isinstance(approach_element, ApproachSection) and approach_element.occupied:
                 return approach_section
         return route.path[0]
 
@@ -693,10 +795,13 @@ class MainWindow(QMainWindow):
 
         selected_entry = self.entry_combo.currentText().strip()
         selected_exit = self.exit_combo.currentText().strip()
-        selected_pair_ready = (
+        selected_pair_defined = (
             bool(selected_entry)
             and bool(selected_exit)
-            and selected_entry != selected_exit
+            and (selected_entry, selected_exit) in self.valid_route_pairs
+        )
+        selected_pair_ready = (
+            selected_pair_defined
             and self._get_active_route_for_pair(selected_entry, selected_exit) is not None
         )
 
@@ -706,8 +811,9 @@ class MainWindow(QMainWindow):
         has_active_routes = bool(active_routes)
         simulation_running = self._simulation_timer.isActive()
 
-        self.find_route_button.setEnabled(has_signals)
-        self.set_route_button.setEnabled(has_signals and not simulation_running)
+        self.find_route_button.setEnabled(has_signals and selected_pair_defined)
+        self.set_route_button.setEnabled(has_signals and selected_pair_defined and not simulation_running)
+        self.set_route_action.setEnabled(has_signals and selected_pair_defined and not simulation_running)
         self.refresh_table_button.setEnabled(True)
         self.clear_visual_button.setEnabled(True)
         self.cancel_route_button.setEnabled(has_active_routes)

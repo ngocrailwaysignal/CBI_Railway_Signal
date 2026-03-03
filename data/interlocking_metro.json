@@ -125,6 +125,7 @@
     {
       "id": "A1",
       "aspect": "STOP",
+      "direction": "RIGHT",
       "protects": "S1",
       "approach_section": "AS2",
       "route_id": "R_A1_B1_9e346506"
@@ -132,6 +133,7 @@
     {
       "id": "B2",
       "aspect": "STOP",
+      "direction": "LEFT",
       "protects": "S4",
       "approach_section": "AS1",
       "route_id": null
@@ -139,6 +141,7 @@
     {
       "id": "A2",
       "aspect": "STOP",
+      "direction": "LEFT",
       "protects": "S13",
       "approach_section": "",
       "route_id": null
@@ -146,6 +149,7 @@
     {
       "id": "B1",
       "aspect": "STOP",
+      "direction": "RIGHT",
       "protects": "S11",
       "approach_section": "",
       "route_id": null

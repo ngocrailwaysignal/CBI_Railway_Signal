@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import networkx as nx
 
-from core.elements import Point, PointPosition, TrackSection
+from core.elements import ApproachSection, Point, PointPosition, TrackSection
 from core.flank_protection import FlankProtectionEngine
 from core.safety_rules import SafetyRules
 from core.topology import RailwayTopology
@@ -60,28 +60,47 @@ class RouteEngine:
         active_routes: dict[str, Route] | None = None,
         overlap_length: int = 0,
     ) -> Route:
-        """Find and validate a directed route between two signals."""
+        """Find and validate a route between two signals."""
         entry_signal = self.topology.signals.get(entry_signal_id)
         exit_signal = self.topology.signals.get(exit_signal_id)
         if not entry_signal or not exit_signal:
-            raise ValueError("Entry or exit signal does not exist")
+            missing: list[str] = []
+            if not entry_signal:
+                missing.append(f"entry {entry_signal_id}")
+            if not exit_signal:
+                missing.append(f"exit {exit_signal_id}")
+            available = ", ".join(sorted(self.topology.signals)) or "<none>"
+            raise ValueError(
+                f"Unknown signal id for {', '.join(missing)}. Available signals: {available}"
+            )
+        if entry_signal.direction != exit_signal.direction:
+            raise ValueError(
+                f"Entry {entry_signal_id} and exit {exit_signal_id} must have the same direction "
+                f"({entry_signal.direction.value} != {exit_signal.direction.value})"
+            )
         if entry_signal_id == exit_signal_id:
             raise ValueError("Entry and exit signals must be different")
         if not entry_signal.protects or not exit_signal.protects:
             raise ValueError("Signals must protect valid track/point nodes")
-        if entry_signal.protects not in self.topology.graph.nodes:
-            raise ValueError(f"Entry signal {entry_signal.id} protects unknown node")
-        if exit_signal.protects not in self.topology.graph.nodes:
-            raise ValueError(f"Exit signal {exit_signal.id} protects unknown node")
-        if entry_signal.protects == exit_signal.protects:
+        entry_protected = self.topology.signal_protected_node(entry_signal_id)
+        if entry_protected is None:
             raise ValueError(
-                "Invalid route: entry and exit signals protect the same node. "
-                "Define exit signal protects to the downstream section."
+                f"Entry signal {entry_signal.id} protects an invalid node for direction {entry_signal.direction.value}"
+            )
+        exit_protected = self.topology.signal_protected_node(exit_signal_id)
+        if exit_protected is None:
+            raise ValueError(
+                f"Exit signal {exit_signal.id} protects an invalid node for direction {exit_signal.direction.value}"
+            )
+        if entry_protected == exit_protected:
+            raise ValueError(
+                f"Invalid route: entry {entry_signal_id} and exit {exit_signal_id} "
+                f"protect the same node {entry_protected}. "
+                "Use opposite-direction signal pairing or set exit protects to the downstream node."
             )
 
-        self.topology.sync_signal_virtual_routes()
-        route_graph = self.topology.graph
-        source_node = entry_signal.protects
+        route_graph = self.topology.routing_graph()
+        source_node = entry_protected
         exit_approach_nodes = self.topology.signal_approach_nodes(exit_signal_id)
         if not exit_approach_nodes:
             raise ValueError(
@@ -123,6 +142,7 @@ class RouteEngine:
                         overlap_path = self._compute_overlap(
                             path,
                             overlap_length=overlap_length,
+                            preferred_first_node=exit_protected,
                         )
                         required_points = self.compute_required_point_positions([*path, *overlap_path])
                         flank_points = self.compute_flank_point_positions(
@@ -176,11 +196,17 @@ class RouteEngine:
         """Public helper to resolve point locks for a full movement path."""
         return self._compute_required_point_positions(node_path)
 
-    def compute_overlap_for_path(self, route_path: list[str], overlap_length: int) -> list[str]:
+    def compute_overlap_for_path(
+        self,
+        route_path: list[str],
+        overlap_length: int,
+        preferred_first_node: str | None = None,
+    ) -> list[str]:
         """Public helper for overlap computation from a computed route path."""
         return self._compute_overlap(
             route_path,
             overlap_length=overlap_length,
+            preferred_first_node=preferred_first_node,
         )
 
     def compute_flank_point_positions(
@@ -255,13 +281,18 @@ class RouteEngine:
             )
         return next_position or prev_position
 
-    def _compute_overlap(self, route_path: list[str], overlap_length: int) -> list[str]:
-        """Compute fixed-length overlap beyond route end along directed edges."""
+    def _compute_overlap(
+        self,
+        route_path: list[str],
+        overlap_length: int,
+        preferred_first_node: str | None = None,
+    ) -> list[str]:
+        """Compute fixed-length overlap beyond route end along graph connectivity."""
         if not route_path:
             return []
         overlap: list[str] = []
         route_nodes = set(route_path)
-        route_graph = self.topology.graph
+        route_graph = self.topology.routing_graph()
         previous = route_path[-2] if len(route_path) > 1 else None
         current = route_path[-1]
         counted_sections = 0
@@ -277,6 +308,10 @@ class RouteEngine:
             if not candidates:
                 break
             next_node = candidates[0]
+            if not overlap and preferred_first_node:
+                normalized = preferred_first_node.strip()
+                if normalized in candidates:
+                    next_node = normalized
             overlap.append(next_node)
             next_element = self.topology.get_element(next_node)
             if isinstance(next_element, TrackSection):
@@ -293,11 +328,14 @@ class RouteEngine:
         configured = signal.approach_section.strip()
         if configured:
             element = self.topology.get_element(configured)
-            if isinstance(element, TrackSection):
+            if (
+                isinstance(element, ApproachSection)
+                and self.topology.is_signal_back_side_node(entry_signal_id, configured)
+            ):
                 return configured
 
         for node_id in self.topology.signal_approach_nodes(entry_signal_id):
             element = self.topology.get_element(node_id)
-            if isinstance(element, TrackSection):
+            if isinstance(element, ApproachSection):
                 return node_id
         return None

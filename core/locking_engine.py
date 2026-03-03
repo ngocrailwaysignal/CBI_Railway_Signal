@@ -204,16 +204,12 @@ class LockingEngine:
             route.approach_locking_section = approach_candidates[0]
             for approach_id in approach_candidates:
                 approach = self.topology.get_element(approach_id)
-                if isinstance(approach, TrackSection) and approach.occupied:
+                if isinstance(approach, ApproachSection) and approach.occupied:
                     return True
 
         if not route.path:
             # Fail-safe: unresolved approach mapping + occupied approach section anywhere.
             return self._any_occupied_approach_section()
-
-        first_route_section = self.topology.get_element(route.path[0])
-        if isinstance(first_route_section, TrackSection) and first_route_section.occupied:
-            return True
 
         # Fail-safe: if no route-specific approach could be resolved, do not allow cancellation
         # while any approach section is occupied.
@@ -235,7 +231,7 @@ class LockingEngine:
             if not node or node in seen:
                 return
             element = self.topology.get_element(node)
-            if isinstance(element, TrackSection):
+            if isinstance(element, ApproachSection):
                 candidates.append(node)
                 seen.add(node)
 
@@ -248,6 +244,11 @@ class LockingEngine:
                 add_if_section(entry_signal.approach_section)
             for node_id in self.topology.signal_approach_nodes(route.entry_signal_id):
                 add_if_section(node_id)
+            candidates = [
+                node_id
+                for node_id in candidates
+                if self.topology.is_signal_back_side_node(route.entry_signal_id, node_id)
+            ]
 
         return candidates
 

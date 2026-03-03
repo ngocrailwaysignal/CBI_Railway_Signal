@@ -1,0 +1,178 @@
+{
+  "sections": [
+    {
+      "id": "S9",
+      "kind": "track",
+      "occupied": true,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S10",
+      "kind": "track",
+      "occupied": true,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S11",
+      "kind": "track",
+      "occupied": true,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S14",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "AS1",
+      "kind": "approach",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "AS2",
+      "kind": "approach",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    }
+  ],
+  "points": [],
+  "signals": [
+    {
+      "id": "SIG4",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S10",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "SIG5",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S9",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "SIG7",
+      "aspect": "STOP",
+      "direction": "RIGHT",
+      "protects": "S11",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "SIG8",
+      "aspect": "STOP",
+      "direction": "RIGHT",
+      "protects": "S9",
+      "approach_section": "AS2",
+      "route_id": null
+    },
+    {
+      "id": "SIG9",
+      "aspect": "STOP",
+      "direction": "RIGHT",
+      "protects": "S14",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "SIG10",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S11",
+      "approach_section": "AS1",
+      "route_id": null
+    }
+  ],
+  "edges": [],
+  "signal_links": [
+    [
+      "AS1",
+      "SIG10"
+    ],
+    [
+      "AS2",
+      "SIG8"
+    ],
+    [
+      "S11",
+      "SIG10"
+    ],
+    [
+      "S11",
+      "SIG5"
+    ],
+    [
+      "S11",
+      "SIG9"
+    ],
+    [
+      "S9",
+      "SIG4"
+    ],
+    [
+      "S9",
+      "SIG7"
+    ]
+  ],
+  "ui_positions": {
+    "S9": [
+      -325.0,
+      -275.0
+    ],
+    "S10": [
+      -525.0,
+      -275.0
+    ],
+    "S11": [
+      -125.0,
+      -250.0
+    ],
+    "S14": [
+      100.0,
+      -200.0
+    ],
+    "SIG4": [
+      -425.0,
+      -350.0
+    ],
+    "SIG5": [
+      -225.0,
+      -350.0
+    ],
+    "SIG7": [
+      -225.0,
+      -200.0
+    ],
+    "SIG8": [
+      -425.0,
+      -200.0
+    ],
+    "SIG9": [
+      -25.0,
+      -200.0
+    ],
+    "SIG10": [
+      25.0,
+      -350.0
+    ],
+    "AS1": [
+      175.0,
+      -350.0
+    ],
+    "AS2": [
+      -550.0,
+      -200.0
+    ]
+  }
+}

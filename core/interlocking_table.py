@@ -69,7 +69,7 @@ class InterlockingTableGenerator:
             exit_signal = self.topology.signals[route.exit_signal_id]
             entry_element = entry_signal.protects
             exit_element = exit_signal.protects
-            route_name = f"{entry_element}-{route.exit_signal_id}"
+            route_name = f"{route.entry_signal_id}->{route.exit_signal_id}"
 
             locked_sections = [
                 node_id
@@ -177,26 +177,28 @@ class InterlockingTableGenerator:
         exit_signal = self.topology.signals.get(exit_signal_id)
         if entry_signal is None or exit_signal is None:
             return None
+        if entry_signal.direction != exit_signal.direction:
+            return None
         if not entry_signal.protects or not exit_signal.protects:
             return None
-        if entry_signal.protects not in self.topology.graph.nodes:
+        entry_protected = self.topology.signal_protected_node(entry_signal_id)
+        exit_protected = self.topology.signal_protected_node(exit_signal_id)
+        if entry_protected is None or exit_protected is None:
             return None
-        if exit_signal.protects not in self.topology.graph.nodes:
-            return None
-        if entry_signal.protects == exit_signal.protects:
+        if entry_protected == exit_protected:
             return None
         exit_approach_nodes = self.topology.signal_approach_nodes(exit_signal_id)
         if not exit_approach_nodes:
             return None
 
         try:
-            route_graph = self.topology.graph
+            route_graph = self.topology.routing_graph()
             path_list: list[list[str]] = []
             for target_node in exit_approach_nodes:
                 try:
                     all_paths = nx.all_simple_paths(
                         route_graph,
-                        source=entry_signal.protects,
+                        source=entry_protected,
                         target=target_node,
                         cutoff=max_depth,
                     )
@@ -215,6 +217,7 @@ class InterlockingTableGenerator:
             overlap_path = self.route_engine.compute_overlap_for_path(
                 path,
                 overlap_length=self.overlap_length,
+                preferred_first_node=exit_protected,
             )
             try:
                 required_points = self.route_engine.compute_required_point_positions(

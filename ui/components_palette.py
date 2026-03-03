@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.elements import PointPosition, SignalAspect
+from core.elements import PointPosition, PointSymbolOrientation, SignalAspect, SignalDirection
 
 
 class PaletteListWidget(QListWidget):
@@ -60,15 +60,35 @@ class PaletteListWidget(QListWidget):
             if element_type == "ApproachSection":
                 painter.drawText(2, 17, 40, 10, int(Qt.AlignmentFlag.AlignCenter), "A")
         elif element_type == "Point":
-            painter.drawLine(7, 20, 35, 6)
-            painter.drawText(0, 8, 44, 18, int(Qt.AlignmentFlag.AlignCenter), "P")
+            panel_left, panel_top, panel_w, panel_h = 10, 4, 24, 20
+            panel_mid_y = panel_top + panel_h / 2
+            painter.drawRect(panel_left, panel_top, panel_w, panel_h)
+            painter.drawLine(int(panel_left + 1), int(panel_mid_y), int(panel_left + panel_w - 1), int(panel_mid_y))
+            painter.drawLine(
+                int(panel_left + 1),
+                int(panel_mid_y),
+                int(panel_left + panel_w - 1),
+                int(panel_top + panel_h - 1),
+            )
+            label_y = panel_top + 1
+            painter.drawText(
+                panel_left + 2,
+                label_y,
+                panel_w - 4,
+                int(panel_h / 2) - 2,
+                int(Qt.AlignmentFlag.AlignCenter),
+                "3",
+            )
         else:
+            is_left = element_type in {"SignalRight", "SignalUp"}
+            head_x = 30 if is_left else 10
+            line_start_x = head_x - 4 if is_left else head_x + 4
+            line_end_x = 10 if is_left else 30
+            stop_bar_x = 8 if is_left else 32
             painter.setBrush(Qt.GlobalColor.white)
-            painter.drawEllipse(14, 6, 8, 8)
-            painter.drawLine(23, 10, 35, 10)
-            painter.drawLine(11, 18, 31, 18)
-            painter.drawLine(31, 18, 26, 14)
-            painter.drawLine(31, 18, 26, 22)
+            painter.drawEllipse(head_x - 4, 6, 8, 8)
+            painter.drawLine(line_start_x, 10, line_end_x, 10)
+            painter.drawLine(stop_bar_x, 6, stop_bar_x, 14)
         painter.end()
         return pix
 
@@ -116,6 +136,10 @@ class PropertiesPanel(QWidget):
         layout.addWidget(self.apply_button)
         layout.addStretch(1)
 
+    @staticmethod
+    def _is_signal_type(element_type: str | None) -> bool:
+        return element_type in {"Signal", "SignalLeft", "SignalRight", "SignalUp", "SignalDown"}
+
     def set_element(self, payload: Optional[dict[str, Any]]) -> None:
         """Populate panel from selected node payload."""
         self._clear_form()
@@ -155,29 +179,55 @@ class PropertiesPanel(QWidget):
             position_input = QComboBox()
             position_input.addItems([PointPosition.NORMAL.value, PointPosition.REVERSE.value])
             position_input.setCurrentText(str(properties.get("position", PointPosition.NORMAL.value)))
+            symbol_orientation_input = QComboBox()
+            symbol_orientation_input.addItems(
+                [
+                    PointSymbolOrientation.RIGHT.value,
+                    PointSymbolOrientation.UP.value,
+                    PointSymbolOrientation.LEFT.value,
+                    PointSymbolOrientation.DOWN.value,
+                ]
+            )
+            symbol_orientation_input.setCurrentText(
+                str(properties.get("symbol_orientation", PointSymbolOrientation.RIGHT.value))
+            )
             normal_target = QLineEdit(str(properties.get("normal_target", "")))
             reverse_target = QLineEdit(str(properties.get("reverse_target", "")))
             locked_by_input = QLineEdit(str(properties.get("locked_by") or ""))
             self._inputs["position"] = position_input
+            self._inputs["symbol_orientation"] = symbol_orientation_input
             self._inputs["normal_target"] = normal_target
             self._inputs["reverse_target"] = reverse_target
             self._inputs["locked_by"] = locked_by_input
             self.form_layout.addRow("Position", position_input)
+            self.form_layout.addRow("Symbol", symbol_orientation_input)
             self.form_layout.addRow("Normal ->", normal_target)
             self.form_layout.addRow("Reverse ->", reverse_target)
             self.form_layout.addRow("Locked by", locked_by_input)
 
-        elif self._selected_type == "Signal":
+        elif self._is_signal_type(self._selected_type):
             protects_input = QLineEdit(str(properties.get("protects", "")))
             approach_section_input = QLineEdit(str(properties.get("approach_section", "")))
             aspect_input = QComboBox()
             aspect_input.addItems([SignalAspect.STOP.value, SignalAspect.PROCEED.value])
             aspect_input.setCurrentText(str(properties.get("aspect", SignalAspect.STOP.value)))
+            direction_input = QComboBox()
+            direction_input.addItems([SignalDirection.LEFT.value, SignalDirection.RIGHT.value])
+            default_direction = (
+                SignalDirection.LEFT.value
+                if self._selected_type in {"SignalLeft", "SignalDown"}
+                else SignalDirection.RIGHT.value
+            )
+            direction_input.setCurrentText(
+                str(properties.get("direction", default_direction))
+            )
             self._inputs["protects"] = protects_input
             self._inputs["approach_section"] = approach_section_input
             self._inputs["aspect"] = aspect_input
+            self._inputs["direction"] = direction_input
             self.form_layout.addRow("Protects", protects_input)
             self.form_layout.addRow("Approach section", approach_section_input)
+            self.form_layout.addRow("Direction", direction_input)
             self.form_layout.addRow("Aspect", aspect_input)
 
         self.apply_button.setEnabled(True)
@@ -199,12 +249,14 @@ class PropertiesPanel(QWidget):
             updated["locked_by"] = str(self._inputs["locked_by"].text()).strip()
         elif self._selected_type == "Point":
             updated["position"] = str(self._inputs["position"].currentText())
+            updated["symbol_orientation"] = str(self._inputs["symbol_orientation"].currentText())
             updated["normal_target"] = str(self._inputs["normal_target"].text()).strip()
             updated["reverse_target"] = str(self._inputs["reverse_target"].text()).strip()
             updated["locked_by"] = str(self._inputs["locked_by"].text()).strip()
-        elif self._selected_type == "Signal":
+        elif self._is_signal_type(self._selected_type):
             updated["protects"] = str(self._inputs["protects"].text()).strip()
             updated["approach_section"] = str(self._inputs["approach_section"].text()).strip()
+            updated["direction"] = str(self._inputs["direction"].currentText())
             updated["aspect"] = str(self._inputs["aspect"].currentText())
         updated["id"] = str(self._inputs["id"].text()).strip()
         self.properties_applied.emit(self._selected_id, updated)

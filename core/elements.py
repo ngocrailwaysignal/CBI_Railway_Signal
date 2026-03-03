@@ -14,11 +14,27 @@ class PointPosition(str, Enum):
     REVERSE = "REVERSE"
 
 
+class PointSymbolOrientation(str, Enum):
+    """UI orientation of point symbol."""
+
+    RIGHT = "RIGHT"
+    UP = "UP"
+    LEFT = "LEFT"
+    DOWN = "DOWN"
+
+
 class SignalAspect(str, Enum):
     """Signal aspect state."""
 
     STOP = "STOP"
     PROCEED = "PROCEED"
+
+
+class SignalDirection(str, Enum):
+    """Operational running direction represented by a signal."""
+
+    LEFT = "LEFT"
+    RIGHT = "RIGHT"
 
 
 @dataclass(slots=True)
@@ -42,6 +58,7 @@ class Point:
 
     id: str
     position: PointPosition = PointPosition.NORMAL
+    symbol_orientation: PointSymbolOrientation = PointSymbolOrientation.RIGHT
     locked_by: Optional[str] = None
     facing_connections: Dict[PointPosition, str] = field(default_factory=dict)
 
@@ -52,6 +69,7 @@ class Signal:
 
     id: str
     aspect: SignalAspect = SignalAspect.STOP
+    direction: SignalDirection = SignalDirection.RIGHT
     protects: str = ""
     approach_section: str = ""
     route_id: Optional[str] = None

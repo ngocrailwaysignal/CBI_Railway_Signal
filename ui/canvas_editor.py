@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from math import hypot
 from dataclasses import asdict
 from pathlib import Path
@@ -11,9 +12,9 @@ from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
     QBrush,
+    QKeySequence,
     QPainter,
     QPen,
-    QPolygonF,
 )
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -33,7 +34,16 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 
-from core.elements import ApproachSection, Point, PointPosition, Signal, SignalAspect, TrackSection
+from core.elements import (
+    ApproachSection,
+    Point,
+    PointPosition,
+    PointSymbolOrientation,
+    Signal,
+    SignalAspect,
+    SignalDirection,
+    TrackSection,
+)
 from core.topology import RailwayTopology
 from ui.components_palette import PaletteListWidget
 
@@ -62,10 +72,11 @@ class NodeItem(QGraphicsObject):
     def paint(self, painter: QPainter, _option: Any, _widget: Any = None) -> None:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.boundingRect().adjusted(0.5, 0.5, -0.5, -0.5)
-        border_pen = QPen(QColor("#111111"), 2.0 if self.isSelected() else 1.2)
-        painter.setPen(border_pen)
-        painter.setBrush(QBrush(QColor("#ffffff")))
-        painter.drawRect(rect)
+        if self.element_type != "Point":
+            border_pen = QPen(QColor("#111111"), 2.0 if self.isSelected() else 1.2)
+            painter.setPen(border_pen)
+            painter.setBrush(QBrush(QColor("#ffffff")))
+            painter.drawRect(rect)
 
         if self.element_type in {"TrackSection", "ApproachSection"}:
             self._paint_section(painter, rect)
@@ -79,43 +90,149 @@ class NodeItem(QGraphicsObject):
 
     def _paint_section(self, painter: QPainter, rect: QRectF) -> None:
         if self.element_type == "ApproachSection":
-            painter.setPen(QPen(QColor("#9c6b00"), 1.4, Qt.PenStyle.DashLine))
-            painter.drawRect(rect.adjusted(3.0, 3.0, -3.0, -3.0))
+            painter.setPen(QPen(QColor("#9c6b00"), 1.2, Qt.PenStyle.DashLine))
+            painter.drawRect(rect.adjusted(2.5, 2.5, -2.5, -2.5))
+
         painter.setPen(QPen(QColor("#111111"), 1.1))
-        label = f"{self.element_id}\nAPP" if self.element_type == "ApproachSection" else self.element_id
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
+        split_y = rect.top() + rect.height() * 0.46
+        top_line_y = rect.top() + rect.height() * 0.20
+        left_x = rect.left() + 8.0
+        right_x = rect.right() - 8.0
+        painter.drawLine(QPointF(left_x, top_line_y), QPointF(right_x, top_line_y))
+        tick_height = rect.height() * 0.14
+        tick_offset = rect.width() * 0.12
+        for x in (rect.left() + tick_offset, rect.right() - tick_offset):
+            painter.drawLine(
+                QPointF(x, top_line_y),
+                QPointF(x, top_line_y + tick_height),
+            )
+        painter.drawLine(
+            QPointF(rect.left() + 2.0, split_y),
+            QPointF(rect.right() - 2.0, split_y),
+        )
+        label_rect = QRectF(
+            rect.left() + 4.0,
+            split_y + 2.0,
+            rect.width() - 8.0,
+            rect.bottom() - split_y - 4.0,
+        )
+        painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, self.element_id)
 
     def _paint_point(self, painter: QPainter, rect: QRectF) -> None:
-        painter.setPen(QPen(QColor("#111111"), 2.0))
+        panel_side = max(26.0, min(rect.width(), rect.height()) - 8.0)
+        panel = QRectF(
+            rect.center().x() - panel_side / 2.0,
+            rect.center().y() - panel_side / 2.0,
+            panel_side,
+            panel_side,
+        )
+        painter.setPen(QPen(QColor("#111111"), 2.0 if self.isSelected() else 1.3))
+        painter.setBrush(QBrush(QColor("#f3f3f3")))
+        painter.drawRect(panel)
+
+        mid_y = panel.center().y()
+        painter.drawLine(
+            QPointF(panel.left() + 2.0, mid_y),
+            QPointF(panel.right() - 2.0, mid_y),
+        )
+
         position = str(self.payload.get("position", PointPosition.NORMAL.value))
-        if position == PointPosition.REVERSE.value:
-            start = QPointF(rect.left() + 8.0, rect.top() + 8.0)
-            end = QPointF(rect.right() - 8.0, rect.bottom() - 8.0)
+        symbol_orientation = str(
+            self.payload.get("symbol_orientation", PointSymbolOrientation.RIGHT.value)
+        )
+        if symbol_orientation == PointSymbolOrientation.UP.value:
+            end = QPointF(panel.right() - 2.0, mid_y)
+            if position == PointPosition.REVERSE.value:
+                start = QPointF(panel.center().x(), panel.bottom() - 2.0)
+            else:
+                start = QPointF(panel.center().x(), panel.top() + 2.0)
+            label_in_bottom = position != PointPosition.REVERSE.value
+        elif symbol_orientation == PointSymbolOrientation.LEFT.value:
+            start = QPointF(panel.right() - 2.0, mid_y)
+            if position == PointPosition.REVERSE.value:
+                end = QPointF(panel.left() + 2.0, panel.top() + 2.0)
+            else:
+                end = QPointF(panel.left() + 2.0, panel.bottom() - 2.0)
+            label_in_bottom = position == PointPosition.REVERSE.value
+        elif symbol_orientation == PointSymbolOrientation.DOWN.value:
+            end = QPointF(panel.left() + 2.0, mid_y)
+            if position == PointPosition.REVERSE.value:
+                start = QPointF(panel.center().x(), panel.top() + 2.0)
+            else:
+                start = QPointF(panel.center().x(), panel.bottom() - 2.0)
+            label_in_bottom = position == PointPosition.REVERSE.value
         else:
-            start = QPointF(rect.left() + 8.0, rect.bottom() - 8.0)
-            end = QPointF(rect.right() - 8.0, rect.top() + 8.0)
+            start = QPointF(panel.left() + 2.0, mid_y)
+            if position == PointPosition.REVERSE.value:
+                end = QPointF(panel.right() - 2.0, panel.top() + 2.0)
+            else:
+                end = QPointF(panel.right() - 2.0, panel.bottom() - 2.0)
+            label_in_bottom = position == PointPosition.REVERSE.value
         painter.drawLine(start, end)
-        text_rect = QRectF(rect.left() + 4.0, rect.center().y() + 4.0, rect.width() - 8.0, rect.height() / 2.0)
+
+        label = self.element_id
+        if label_in_bottom:
+            text_rect = QRectF(
+                panel.left() + 3.0,
+                panel.bottom() - panel.height() / 2.0 + 1.0,
+                panel.width() - 6.0,
+                panel.height() / 2.0 - 3.0,
+            )
+        else:
+            text_rect = QRectF(
+                panel.left() + 3.0,
+                panel.top() + 1.0,
+                panel.width() - 6.0,
+                panel.height() / 2.0 - 3.0,
+            )
         painter.setPen(QPen(QColor("#111111"), 1.1))
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, self.element_id)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, label)
 
     def _paint_signal(self, painter: QPainter, rect: QRectF) -> None:
         painter.setPen(QPen(QColor("#111111"), 1.1))
-        top_rect = QRectF(rect.left() + 4.0, rect.top() + 4.0, rect.width() - 8.0, 18.0)
-        painter.drawText(top_rect, Qt.AlignmentFlag.AlignCenter, self.element_id)
+        split_y = rect.top() + rect.height() * 0.5
+        painter.drawLine(
+            QPointF(rect.left() + 2.0, split_y),
+            QPointF(rect.right() - 2.0, split_y),
+        )
+
+        direction = str(self.payload.get("direction", SignalDirection.RIGHT.value))
+        # UI viewpoint: invert visual facing so LEFT/RIGHT matches operator perspective.
+        is_left = direction == SignalDirection.RIGHT.value
         aspect = self.payload.get("aspect", SignalAspect.STOP.value)
         lamp_color = QColor("#1f8f48") if aspect == SignalAspect.PROCEED.value else QColor("#c62828")
-        lamp_diameter = min(rect.width(), rect.height()) * 0.36
-        lamp_rect = QRectF(
-            rect.center().x() - lamp_diameter / 2.0,
-            rect.center().y() - lamp_diameter / 2.0 + 8.0,
-            lamp_diameter,
-            lamp_diameter,
-        )
+
+        top_center_y = rect.top() + rect.height() * 0.25
+        head_center_x = rect.right() - 18.0 if is_left else rect.left() + 18.0
+        head_radius = 4.0
+        line_start_x = head_center_x - head_radius if is_left else head_center_x + head_radius
+        line_end_x = rect.left() + 11.0 if is_left else rect.right() - 11.0
+        stop_x = rect.left() + 9.0 if is_left else rect.right() - 9.0
+
         painter.save()
         painter.setPen(QPen(QColor("#111111"), 1.4))
         painter.setBrush(QBrush(lamp_color))
-        painter.drawEllipse(lamp_rect)
+        painter.drawEllipse(
+            QRectF(
+                head_center_x - head_radius,
+                top_center_y - head_radius,
+                head_radius * 2.0,
+                head_radius * 2.0,
+            )
+        )
+        painter.drawLine(
+            QPointF(line_start_x, top_center_y),
+            QPointF(line_end_x, top_center_y),
+        )
+        painter.drawLine(
+            QPointF(stop_x, top_center_y - 4.0),
+            QPointF(stop_x, top_center_y + 4.0),
+        )
+
+        label = self.element_id
+        bottom_rect = QRectF(rect.left() + 4.0, split_y + 2.0, rect.width() - 8.0, rect.height() * 0.45)
+        painter.setPen(QPen(QColor("#111111"), 1.1))
+        painter.drawText(bottom_rect, Qt.AlignmentFlag.AlignCenter, label)
         painter.restore()
 
     def _paint_state_marker(self, painter: QPainter, rect: QRectF) -> None:
@@ -216,29 +333,7 @@ class EdgeItem(QGraphicsLineItem):
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(QPen(color, width))
-        painter.setBrush(QBrush(color))
         painter.drawLine(line)
-
-        dx = line.dx()
-        dy = line.dy()
-        length = hypot(dx, dy)
-        if length > 0.0:
-            ux = dx / length
-            uy = dy / length
-            arrow_length = min(14.0, max(8.0, length * 0.18))
-            arrow_width = max(5.0, arrow_length * 0.58)
-
-            tip = line.p2()
-            base = QPointF(tip.x() - ux * arrow_length, tip.y() - uy * arrow_length)
-            left = QPointF(
-                base.x() - uy * (arrow_width / 2.0),
-                base.y() + ux * (arrow_width / 2.0),
-            )
-            right = QPointF(
-                base.x() + uy * (arrow_width / 2.0),
-                base.y() - ux * (arrow_width / 2.0),
-            )
-            painter.drawPolygon(QPolygonF([tip, left, right]))
         painter.restore()
 
 
@@ -278,6 +373,9 @@ class CanvasEditor(QGraphicsView):
         self._search_index = 0
         self._search_timer = QTimer(self)
         self._search_timer.timeout.connect(self._advance_search_animation)
+        self._undo_stack: list[RailwayTopology] = []
+        self._redo_stack: list[RailwayTopology] = []
+        self._max_undo_depth = 50
 
     def dragEnterEvent(self, event: Any) -> None:
         if event.mimeData().hasFormat(PaletteListWidget.COMPONENT_MIME):
@@ -422,10 +520,10 @@ class CanvasEditor(QGraphicsView):
         if len(selected_nodes) != 2:
             raise ValueError("Select exactly 2 modules to connect")
         first, second = selected_nodes
-        if first.element_type == "Signal" and second.element_type != "Signal":
+        if self._is_signal_type_name(first.element_type) and not self._is_signal_type_name(second.element_type):
             self.create_connection(first.element_id, second.element_id)
             return
-        if second.element_type == "Signal" and first.element_type != "Signal":
+        if self._is_signal_type_name(second.element_type) and not self._is_signal_type_name(first.element_type):
             self.create_connection(second.element_id, first.element_id)
             return
         self.create_connection(first.element_id, second.element_id)
@@ -485,6 +583,13 @@ class CanvasEditor(QGraphicsView):
         super().contextMenuEvent(event)
 
     def keyPressEvent(self, event: Any) -> None:
+        if event.matches(QKeySequence.StandardKey.Undo):
+            if self.undo():
+                self.editor_message.emit("Undo completed")
+            else:
+                self.editor_message.emit("Nothing to undo")
+            event.accept()
+            return
         if event.key() == Qt.Key.Key_Escape:
             if self._connect_source is not None:
                 self._connect_source = None
@@ -520,32 +625,72 @@ class CanvasEditor(QGraphicsView):
     def is_connect_mode(self) -> bool:
         return self._connect_mode
 
+    def _snapshot_topology(self) -> RailwayTopology:
+        """Capture a deep-copy snapshot for undo/redo."""
+        return deepcopy(self.topology)
+
+    def _push_undo_state(self) -> None:
+        """Push current state to undo stack and clear redo stack."""
+        self._undo_stack.append(self._snapshot_topology())
+        if len(self._undo_stack) > self._max_undo_depth:
+            self._undo_stack.pop(0)
+        self._redo_stack.clear()
+
+    def undo(self) -> bool:
+        """Restore previous topology snapshot."""
+        if not self._undo_stack:
+            return False
+        previous = self._undo_stack.pop()
+        self._redo_stack.append(self._snapshot_topology())
+        self._rebuild_from_topology(previous)
+        return True
+
     def add_component(
         self, element_type: str, scene_pos: QPointF, element_id: str | None = None
     ) -> NodeItem:
         """Create topology element and visual node."""
+        self._push_undo_state()
         aliases = {
             "Section": "TrackSection",
             "TrackSection": "TrackSection",
             "Approach": "ApproachSection",
             "ApproachSection": "ApproachSection",
             "Point": "Point",
+            "PointUp": "Point",
             "Signal": "Signal",
+            "SignalRight": "SignalRight",
+            "SignalLeft": "SignalLeft",
+            # Backward-compatibility aliases from previous version.
+            "SignalUp": "SignalRight",
+            "SignalDown": "SignalLeft",
         }
         element_type = aliases.get(element_type, element_type)
-        if element_type not in {"TrackSection", "ApproachSection", "Point", "Signal"}:
+        if element_type not in {
+            "TrackSection",
+            "ApproachSection",
+            "Point",
+            "Signal",
+            "SignalLeft",
+            "SignalRight",
+        }:
             raise ValueError(f"Unsupported element type: {element_type}")
         scene_pos = self.snap_to_grid(scene_pos)
 
+        if self._is_signal_type_name(element_type):
+            counter_key = "Signal"
+        elif element_type == "Point":
+            counter_key = "Point"
+        else:
+            counter_key = element_type
         if element_id is None:
-            self._counter[element_type] += 1
+            self._counter[counter_key] += 1
             prefix = {
                 "TrackSection": "S",
                 "ApproachSection": "AS",
                 "Point": "P",
                 "Signal": "SIG",
-            }[element_type]
-            element_id = f"{prefix}{self._counter[element_type]}"
+            }[counter_key]
+            element_id = f"{prefix}{self._counter[counter_key]}"
 
         if element_id in self.nodes or self.topology.get_element(element_id):
             raise ValueError(f"Element id already exists: {element_id}")
@@ -557,13 +702,24 @@ class CanvasEditor(QGraphicsView):
             element = ApproachSection(id=element_id)
             self.topology.add_approach_section(element, position=(scene_pos.x(), scene_pos.y()))
         elif element_type == "Point":
-            element = Point(id=element_id)
+            element = Point(id=element_id, symbol_orientation=PointSymbolOrientation.RIGHT)
             self.topology.add_point(element, position=(scene_pos.x(), scene_pos.y()))
         else:
-            element = Signal(id=element_id)
+            direction = (
+                SignalDirection.LEFT if element_type == "SignalLeft" else SignalDirection.RIGHT
+            )
+            element = Signal(id=element_id, direction=direction)
             self.topology.add_signal(element, position=(scene_pos.x(), scene_pos.y()))
 
-        node = NodeItem(element_id, element_type, self._element_payload(element_id))
+        if isinstance(element, Signal):
+            node_type = (
+                "SignalLeft" if element.direction == SignalDirection.LEFT else "SignalRight"
+            )
+        elif isinstance(element, Point):
+            node_type = "Point"
+        else:
+            node_type = element_type
+        node = NodeItem(element_id, node_type, self._element_payload(element_id))
         node.setPos(scene_pos)
         self.scene_ref.addItem(node)
         node.editor = self
@@ -580,19 +736,22 @@ class CanvasEditor(QGraphicsView):
         if source_id == target_id:
             raise ValueError("Cannot self-connect")
 
-        if source.element_type == "Signal":
+        if self._is_signal_type_name(source.element_type):
+            signal = self.topology.signals.get(source_id)
+            if signal is not None and signal.protects == target_id:
+                return
+        elif self._is_signal_type_name(target.element_type):
             if (source_id, target_id) in self.signal_links:
                 return
-        elif target.element_type == "Signal":
-            if (source_id, target_id) in self.signal_links:
-                return
-        elif (source_id, target_id) in self.topology.graph.edges:
+        elif (
+            (source_id, target_id) in self.topology.graph.edges
+            or (target_id, source_id) in self.topology.graph.edges
+        ):
             return
 
+        self._push_undo_state()
         self.topology.connect(source_id, target_id)
-        edge = EdgeItem(source, target)
-        self.scene_ref.addItem(edge)
-        self.edges.append(edge)
+        self._rebuild_edge_items()
         self.topology_changed.emit()
 
     def rename_selected_node_dialog(self) -> None:
@@ -625,6 +784,7 @@ class CanvasEditor(QGraphicsView):
             raise KeyError(f"Unknown element {old_id}")
         if new_id in self.nodes or self.topology.get_element(new_id):
             raise ValueError(f"Element id already exists: {new_id}")
+        self._push_undo_state()
 
         node = self.nodes[old_id]
         element = self.topology.get_element(old_id)
@@ -669,6 +829,7 @@ class CanvasEditor(QGraphicsView):
         self.signal_links.clear()
         self.signal_links.update(updated_links)
         self.topology.sync_signal_virtual_routes()
+        self._rebuild_edge_items()
 
         self.nodes[new_id] = self.nodes.pop(old_id)
         node.element_id = new_id
@@ -680,23 +841,34 @@ class CanvasEditor(QGraphicsView):
         edges = [item for item in selected if isinstance(item, EdgeItem)]
         nodes = [item for item in selected if isinstance(item, NodeItem)]
 
+        if not edges and not nodes:
+            return
+        self._push_undo_state()
+
         changed = False
         for edge in edges:
-            self.delete_edge(edge, emit_change=False)
+            self.delete_edge(edge, emit_change=False, record_undo=False)
             changed = True
 
         for node in nodes:
-            self.delete_node(node, emit_change=False)
+            self.delete_node(node, emit_change=False, record_undo=False)
             changed = True
 
         if changed:
             self.refresh_visual_state()
             self.topology_changed.emit()
 
-    def delete_node(self, node: NodeItem, emit_change: bool = True) -> None:
+    def delete_node(
+        self,
+        node: NodeItem,
+        emit_change: bool = True,
+        record_undo: bool = True,
+    ) -> None:
         node_id = node.element_id
         if node_id not in self.nodes:
             return
+        if record_undo:
+            self._push_undo_state()
 
         if self._connect_source is node:
             self._connect_source = None
@@ -707,7 +879,7 @@ class CanvasEditor(QGraphicsView):
             if edge.source.element_id == node_id or edge.target.element_id == node_id
         ]
         for edge in connected_edges:
-            self.delete_edge(edge, emit_change=False)
+            self.delete_edge(edge, emit_change=False, record_undo=False)
 
         self.scene_ref.removeItem(node)
         self.nodes.pop(node_id, None)
@@ -738,21 +910,25 @@ class CanvasEditor(QGraphicsView):
         self.signal_links.clear()
         self.signal_links.update(filtered_links)
         self.topology.sync_signal_virtual_routes()
+        self._rebuild_edge_items()
 
         if emit_change:
             self.refresh_visual_state()
             self.topology_changed.emit()
 
-    def delete_edge(self, edge: EdgeItem, emit_change: bool = True) -> None:
-        if edge not in self.edges:
-            return
+    def delete_edge(
+        self,
+        edge: EdgeItem,
+        emit_change: bool = True,
+        record_undo: bool = True,
+    ) -> None:
+        if record_undo:
+            self._push_undo_state()
         source_id = edge.source.element_id
         target_id = edge.target.element_id
 
         self.topology.disconnect(source_id, target_id)
-
-        self.scene_ref.removeItem(edge)
-        self.edges.remove(edge)
+        self._rebuild_edge_items()
 
         if emit_change:
             self.refresh_visual_state()
@@ -785,28 +961,47 @@ class CanvasEditor(QGraphicsView):
             position = QComboBox(dialog)
             position.addItems([PointPosition.NORMAL.value, PointPosition.REVERSE.value])
             position.setCurrentText(str(node.payload.get("position", PointPosition.NORMAL.value)))
+            symbol_orientation = QComboBox(dialog)
+            symbol_orientation.addItems(
+                [
+                    PointSymbolOrientation.RIGHT.value,
+                    PointSymbolOrientation.UP.value,
+                    PointSymbolOrientation.LEFT.value,
+                    PointSymbolOrientation.DOWN.value,
+                ]
+            )
+            symbol_orientation.setCurrentText(
+                str(node.payload.get("symbol_orientation", PointSymbolOrientation.RIGHT.value))
+            )
             normal = QLineEdit(str(node.payload.get("normal_target", "")), dialog)
             reverse = QLineEdit(str(node.payload.get("reverse_target", "")), dialog)
             locked_by = QLineEdit(str(node.payload.get("locked_by") or ""), dialog)
             controls["position"] = position
+            controls["symbol_orientation"] = symbol_orientation
             controls["normal_target"] = normal
             controls["reverse_target"] = reverse
             controls["locked_by"] = locked_by
             form.addRow("Position", position)
+            form.addRow("Symbol", symbol_orientation)
             form.addRow("Normal ->", normal)
             form.addRow("Reverse ->", reverse)
             form.addRow("Locked by", locked_by)
         else:
             protects = QLineEdit(str(node.payload.get("protects", "")), dialog)
             approach_section = QLineEdit(str(node.payload.get("approach_section", "")), dialog)
+            direction = QComboBox(dialog)
+            direction.addItems([SignalDirection.LEFT.value, SignalDirection.RIGHT.value])
+            direction.setCurrentText(str(node.payload.get("direction", SignalDirection.RIGHT.value)))
             aspect = QComboBox(dialog)
             aspect.addItems([SignalAspect.STOP.value, SignalAspect.PROCEED.value])
             aspect.setCurrentText(str(node.payload.get("aspect", SignalAspect.STOP.value)))
             controls["protects"] = protects
             controls["approach_section"] = approach_section
+            controls["direction"] = direction
             controls["aspect"] = aspect
             form.addRow("Protects", protects)
             form.addRow("Approach section", approach_section)
+            form.addRow("Direction", direction)
             form.addRow("Aspect", aspect)
 
         buttons = QDialogButtonBox(
@@ -841,6 +1036,8 @@ class CanvasEditor(QGraphicsView):
         element = self.topology.get_element(element_id)
         if element is None:
             raise KeyError(f"Unknown element {element_id}")
+        if updates:
+            self._push_undo_state()
         emit_topology_change = False
 
         if isinstance(element, TrackSection):
@@ -868,6 +1065,10 @@ class CanvasEditor(QGraphicsView):
                         f"Point {element.id} is locked by {target_locked_by}. Unlock before moving."
                     )
                 element.position = requested_position
+            if "symbol_orientation" in updates:
+                element.symbol_orientation = PointSymbolOrientation(
+                    str(updates["symbol_orientation"])
+                )
             normal_target = str(updates.get("normal_target", "")).strip()
             reverse_target = str(updates.get("reverse_target", "")).strip()
             if normal_target:
@@ -887,24 +1088,35 @@ class CanvasEditor(QGraphicsView):
 
         elif isinstance(element, Signal):
             if "protects" in updates:
-                old_protects = element.protects
                 new_protects = str(updates["protects"]).strip()
-                if old_protects:
-                    self.signal_links.discard((element.id, old_protects))
+                if new_protects and new_protects not in self.topology.graph.nodes:
+                    raise ValueError(
+                        "Protects must reference an existing track section or point node"
+                    )
                 element.protects = new_protects
-                if new_protects:
-                    self.signal_links.add((element.id, new_protects))
                 self.topology.sync_signal_virtual_routes()
+                self._rebuild_edge_items()
                 emit_topology_change = True
             if "approach_section" in updates:
                 approach_section = str(updates["approach_section"]).strip()
                 if approach_section:
                     approach_element = self.topology.get_element(approach_section)
-                    if not isinstance(approach_element, TrackSection):
+                    if not isinstance(approach_element, ApproachSection):
                         raise ValueError(
-                            "Approach section must reference an existing section/approach section node"
+                            "Approach section must reference an existing ApproachSection node"
+                        )
+                    if not self.topology.is_signal_back_side_node(element_id, approach_section):
+                        raise ValueError(
+                            "Approach section must be on the rear side of the signal direction"
                         )
                 element.approach_section = approach_section
+            if "direction" in updates:
+                element.direction = SignalDirection(str(updates["direction"]))
+                node = self.nodes.get(element_id)
+                if node is not None:
+                    node.element_type = (
+                        "SignalLeft" if element.direction == SignalDirection.LEFT else "SignalRight"
+                    )
             if "aspect" in updates:
                 element.aspect = SignalAspect(str(updates["aspect"]))
 
@@ -951,12 +1163,14 @@ class CanvasEditor(QGraphicsView):
         if isinstance(element, Point):
             payload = asdict(element)
             payload["position"] = element.position.value
+            payload["symbol_orientation"] = element.symbol_orientation.value
             payload["normal_target"] = element.facing_connections.get(PointPosition.NORMAL, "")
             payload["reverse_target"] = element.facing_connections.get(PointPosition.REVERSE, "")
             return payload
         if isinstance(element, Signal):
             payload = asdict(element)
             payload["aspect"] = element.aspect.value
+            payload["direction"] = element.direction.value
             return payload
         return {}
 
@@ -968,17 +1182,76 @@ class CanvasEditor(QGraphicsView):
         for edge in self.edges:
             edge.update_geometry()
 
-    def save_to_json(self, file_path: str | Path) -> None:
-        """Save layout to JSON file."""
-        self.topology.export_to_json(file_path)
+    def _connection_pairs(self) -> list[tuple[str, str]]:
+        """Return visualized connections in deterministic order."""
+        pairs: list[tuple[str, str]] = []
+        for source_id, target_id in sorted(self.topology.graph.edges):
+            if (source_id, target_id) in self.topology._signal_virtual_edges:
+                continue
+            pairs.append((source_id, target_id))
 
-    def load_from_json(self, file_path: str | Path) -> None:
+        for signal in sorted(self.topology.signals.values(), key=lambda item: item.id):
+            protected = signal.protects.strip()
+            if protected and protected in self.nodes:
+                pairs.append((signal.id, protected))
+
+        for source_id, target_id in sorted(self.signal_links):
+            if source_id in self.nodes and target_id in self.nodes:
+                pairs.append((source_id, target_id))
+        return pairs
+
+    def _rebuild_edge_items(self) -> None:
+        """Recreate all edge graphics from current topology links."""
+        for edge in list(self.edges):
+            self.scene_ref.removeItem(edge)
+        self.edges.clear()
+
+        seen: set[tuple[str, str]] = set()
+        for source_id, target_id in self._connection_pairs():
+            if (source_id, target_id) in seen:
+                continue
+            source_node = self.nodes.get(source_id)
+            target_node = self.nodes.get(target_id)
+            if source_node is None or target_node is None:
+                continue
+            edge = EdgeItem(source_node, target_node)
+            self.scene_ref.addItem(edge)
+            self.edges.append(edge)
+            seen.add((source_id, target_id))
+
+    def save_to_json(
+        self,
+        file_path: str | Path,
+        *,
+        include_runtime_state: bool = False,
+        include_occupancy: bool = True,
+    ) -> None:
+        """Save layout to JSON file."""
+        self.topology.export_to_json(
+            file_path,
+            include_runtime_state=include_runtime_state,
+            include_occupancy=include_occupancy,
+        )
+
+    def load_from_json(
+        self,
+        file_path: str | Path,
+        *,
+        load_runtime_state: bool = False,
+        load_occupancy: bool = True,
+    ) -> None:
         """Load layout from JSON file and rebuild scene."""
-        topology = RailwayTopology.load_from_json(file_path)
+        topology = RailwayTopology.load_from_json(
+            file_path,
+            load_runtime_state=load_runtime_state,
+            load_occupancy=load_occupancy,
+        )
         self._rebuild_from_topology(topology)
 
     def clear_layout(self) -> None:
         """Clear current scene and reset to an empty topology."""
+        if self.nodes or self.edges:
+            self._push_undo_state()
         self._rebuild_from_topology(RailwayTopology())
 
     def _rebuild_from_topology(self, topology: RailwayTopology) -> None:
@@ -1015,27 +1288,15 @@ class CanvasEditor(QGraphicsView):
         for signal_id in topology.signals:
             self._counter["Signal"] = max(self._counter["Signal"], self._extract_suffix(signal_id))
             position = topology.ui_positions.get(signal_id, (0.0, 0.0))
-            node = NodeItem(signal_id, "Signal", self._element_payload(signal_id))
+            signal = topology.signals[signal_id]
+            signal_type = "SignalLeft" if signal.direction == SignalDirection.LEFT else "SignalRight"
+            node = NodeItem(signal_id, signal_type, self._element_payload(signal_id))
             node.setPos(QPointF(position[0], position[1]))
             self.scene_ref.addItem(node)
             node.editor = self
             self.nodes[signal_id] = node
 
-        for source_id, target_id in topology.graph.edges:
-            source_node = self.nodes.get(source_id)
-            target_node = self.nodes.get(target_id)
-            if source_node and target_node:
-                edge = EdgeItem(source_node, target_node)
-                self.scene_ref.addItem(edge)
-                self.edges.append(edge)
-
-        for source_id, target_id in sorted(self.signal_links):
-            source_node = self.nodes.get(source_id)
-            target_node = self.nodes.get(target_id)
-            if source_node and target_node:
-                edge = EdgeItem(source_node, target_node)
-                self.scene_ref.addItem(edge)
-                self.edges.append(edge)
+        self._rebuild_edge_items()
 
         self.refresh_visual_state()
         self.topology_changed.emit()
@@ -1044,6 +1305,10 @@ class CanvasEditor(QGraphicsView):
     def _extract_suffix(element_id: str) -> int:
         digits = "".join(ch for ch in element_id if ch.isdigit())
         return int(digits) if digits else 0
+
+    @staticmethod
+    def _is_signal_type_name(element_type: str) -> bool:
+        return element_type in {"Signal", "SignalLeft", "SignalRight", "SignalUp", "SignalDown"}
 
     def animate_route_search(
         self,
