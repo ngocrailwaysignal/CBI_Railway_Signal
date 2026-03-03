@@ -46,6 +46,13 @@ from core.elements import (
 from core.topology import RailwayTopology
 from ui.components_palette import PaletteListWidget
 
+POINT_SYMBOL_CHOICES: tuple[tuple[str, PointSymbolOrientation], ...] = (
+    ("1", PointSymbolOrientation.RIGHT),
+    ("2", PointSymbolOrientation.DOWN),
+    ("3", PointSymbolOrientation.LEFT),
+    ("4", PointSymbolOrientation.UP),
+)
+
 
 class NodeItem(QGraphicsObject):
     """Visual node for a track section, point, or signal."""
@@ -132,61 +139,57 @@ class NodeItem(QGraphicsObject):
         painter.setBrush(QBrush(QColor("#f3f3f3")))
         painter.drawRect(panel)
 
-        mid_y = panel.center().y()
-        painter.drawLine(
-            QPointF(panel.left() + 2.0, mid_y),
-            QPointF(panel.right() - 2.0, mid_y),
-        )
-
         position = str(self.payload.get("position", PointPosition.NORMAL.value))
         symbol_orientation = str(
             self.payload.get("symbol_orientation", PointSymbolOrientation.RIGHT.value)
         )
-        if symbol_orientation == PointSymbolOrientation.UP.value:
-            end = QPointF(panel.right() - 2.0, mid_y)
-            if position == PointPosition.REVERSE.value:
-                start = QPointF(panel.center().x(), panel.bottom() - 2.0)
-            else:
-                start = QPointF(panel.center().x(), panel.top() + 2.0)
-            label_in_bottom = position != PointPosition.REVERSE.value
-        elif symbol_orientation == PointSymbolOrientation.LEFT.value:
-            start = QPointF(panel.right() - 2.0, mid_y)
-            if position == PointPosition.REVERSE.value:
-                end = QPointF(panel.left() + 2.0, panel.top() + 2.0)
-            else:
-                end = QPointF(panel.left() + 2.0, panel.bottom() - 2.0)
-            label_in_bottom = position == PointPosition.REVERSE.value
+        branch_offset = max(6.0, panel.height() * 0.30)
+        rail_half = panel.width() / 2.0 - 2.0
+
+        # 4 UI orientations are rendered as horizontal point symbols:
+        # RIGHT  -> toe left, branch to upper-right (NORMAL) / lower-right (REVERSE)
+        # DOWN   -> toe left, branch to lower-right (NORMAL) / upper-right (REVERSE)
+        # LEFT   -> toe right, branch to lower-left (NORMAL) / upper-left (REVERSE)
+        # UP     -> toe right, branch to upper-left (NORMAL) / lower-left (REVERSE)
+        if symbol_orientation == PointSymbolOrientation.LEFT.value:
+            toe_x, toe_y = rail_half, 0.0
+            straight_x, straight_y = -rail_half, 0.0
+            branch_x = -rail_half
+            branch_y = branch_offset if position == PointPosition.NORMAL.value else -branch_offset
+        elif symbol_orientation == PointSymbolOrientation.UP.value:
+            toe_x, toe_y = rail_half, 0.0
+            straight_x, straight_y = -rail_half, 0.0
+            branch_x = -rail_half
+            branch_y = -branch_offset if position == PointPosition.NORMAL.value else branch_offset
         elif symbol_orientation == PointSymbolOrientation.DOWN.value:
-            end = QPointF(panel.left() + 2.0, mid_y)
-            if position == PointPosition.REVERSE.value:
-                start = QPointF(panel.center().x(), panel.top() + 2.0)
-            else:
-                start = QPointF(panel.center().x(), panel.bottom() - 2.0)
-            label_in_bottom = position == PointPosition.REVERSE.value
+            toe_x, toe_y = -rail_half, 0.0
+            straight_x, straight_y = rail_half, 0.0
+            branch_x = rail_half
+            branch_y = branch_offset if position == PointPosition.NORMAL.value else -branch_offset
         else:
-            start = QPointF(panel.left() + 2.0, mid_y)
-            if position == PointPosition.REVERSE.value:
-                end = QPointF(panel.right() - 2.0, panel.top() + 2.0)
-            else:
-                end = QPointF(panel.right() - 2.0, panel.bottom() - 2.0)
-            label_in_bottom = position == PointPosition.REVERSE.value
-        painter.drawLine(start, end)
+            toe_x, toe_y = -rail_half, 0.0
+            straight_x, straight_y = rail_half, 0.0
+            branch_x = rail_half
+            branch_y = -branch_offset if position == PointPosition.NORMAL.value else branch_offset
+
+        def _to_scene(x: float, y: float) -> QPointF:
+            return QPointF(panel.center().x() + x, panel.center().y() + y)
+
+        toe = _to_scene(toe_x, toe_y)
+        straight = _to_scene(straight_x, straight_y)
+        branch = _to_scene(branch_x, branch_y)
+        painter.drawLine(toe, straight)
+        painter.drawLine(toe, branch)
 
         label = self.element_id
-        if label_in_bottom:
-            text_rect = QRectF(
-                panel.left() + 3.0,
-                panel.bottom() - panel.height() / 2.0 + 1.0,
-                panel.width() - 6.0,
-                panel.height() / 2.0 - 3.0,
-            )
-        else:
-            text_rect = QRectF(
-                panel.left() + 3.0,
-                panel.top() + 1.0,
-                panel.width() - 6.0,
-                panel.height() / 2.0 - 3.0,
-            )
+        text_left = panel.left() + 1.0 if branch_x > 0 else panel.center().x() + 1.0
+        text_top = panel.center().y() + 1.0 if branch_y < 0 else panel.top() + 1.0
+        text_rect = QRectF(
+            text_left,
+            text_top,
+            panel.width() / 2.0 - 3.0,
+            panel.height() / 2.0 - 3.0,
+        )
         painter.setPen(QPen(QColor("#111111"), 1.1))
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, label)
 
@@ -211,8 +214,8 @@ class NodeItem(QGraphicsObject):
         painter.drawLine(QPointF(mast_x, mast_top), QPointF(mast_x, mast_bottom))
 
         direction = str(self.payload.get("direction", SignalDirection.RIGHT.value))
-        # Keep current operator viewpoint mapping for LEFT/RIGHT display.
-        face_left = direction == SignalDirection.RIGHT.value
+        # Render LEFT/RIGHT directly by direction value.
+        face_left = direction == SignalDirection.LEFT.value
         aspect = self.payload.get("aspect", SignalAspect.STOP.value)
         lamp_color = QColor("#1f8f48") if aspect == SignalAspect.PROCEED.value else QColor("#c62828")
 
@@ -994,17 +997,13 @@ class CanvasEditor(QGraphicsView):
             position.addItems([PointPosition.NORMAL.value, PointPosition.REVERSE.value])
             position.setCurrentText(str(node.payload.get("position", PointPosition.NORMAL.value)))
             symbol_orientation = QComboBox(dialog)
-            symbol_orientation.addItems(
-                [
-                    PointSymbolOrientation.RIGHT.value,
-                    PointSymbolOrientation.UP.value,
-                    PointSymbolOrientation.LEFT.value,
-                    PointSymbolOrientation.DOWN.value,
-                ]
+            for label, orientation in POINT_SYMBOL_CHOICES:
+                symbol_orientation.addItem(label, orientation.value)
+            current_orientation = str(
+                node.payload.get("symbol_orientation", PointSymbolOrientation.RIGHT.value)
             )
-            symbol_orientation.setCurrentText(
-                str(node.payload.get("symbol_orientation", PointSymbolOrientation.RIGHT.value))
-            )
+            symbol_index = symbol_orientation.findData(current_orientation)
+            symbol_orientation.setCurrentIndex(symbol_index if symbol_index >= 0 else 0)
             normal = QLineEdit(str(node.payload.get("normal_target", "")), dialog)
             reverse = QLineEdit(str(node.payload.get("reverse_target", "")), dialog)
             locked_by = QLineEdit(str(node.payload.get("locked_by") or ""), dialog)
@@ -1055,7 +1054,11 @@ class CanvasEditor(QGraphicsView):
                     if isinstance(widget, QDoubleSpinBox):
                         updates[key] = float(widget.value())
                     elif isinstance(widget, QComboBox):
-                        updates[key] = str(widget.currentText())
+                        if key == "symbol_orientation":
+                            symbol_orientation = widget.currentData()
+                            updates[key] = str(symbol_orientation or widget.currentText())
+                        else:
+                            updates[key] = str(widget.currentText())
                     elif isinstance(widget, QLineEdit):
                         updates[key] = str(widget.text()).strip()
                 if updates:

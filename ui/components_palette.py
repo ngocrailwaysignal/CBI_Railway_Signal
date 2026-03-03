@@ -23,6 +23,13 @@ from PyQt6.QtWidgets import (
 
 from core.elements import PointPosition, PointSymbolOrientation, SignalAspect, SignalDirection
 
+POINT_SYMBOL_CHOICES: tuple[tuple[str, PointSymbolOrientation], ...] = (
+    ("1", PointSymbolOrientation.RIGHT),
+    ("2", PointSymbolOrientation.DOWN),
+    ("3", PointSymbolOrientation.LEFT),
+    ("4", PointSymbolOrientation.UP),
+)
+
 
 class PaletteListWidget(QListWidget):
     """List widget that starts drag operations for component types."""
@@ -80,7 +87,7 @@ class PaletteListWidget(QListWidget):
                 "3",
             )
         else:
-            is_left = element_type in {"SignalRight", "SignalUp"}
+            is_left = element_type in {"SignalLeft", "SignalDown"}
             head_x = 30 if is_left else 10
             line_start_x = head_x - 4 if is_left else head_x + 4
             line_end_x = 10 if is_left else 30
@@ -180,17 +187,13 @@ class PropertiesPanel(QWidget):
             position_input.addItems([PointPosition.NORMAL.value, PointPosition.REVERSE.value])
             position_input.setCurrentText(str(properties.get("position", PointPosition.NORMAL.value)))
             symbol_orientation_input = QComboBox()
-            symbol_orientation_input.addItems(
-                [
-                    PointSymbolOrientation.RIGHT.value,
-                    PointSymbolOrientation.UP.value,
-                    PointSymbolOrientation.LEFT.value,
-                    PointSymbolOrientation.DOWN.value,
-                ]
+            for label, orientation in POINT_SYMBOL_CHOICES:
+                symbol_orientation_input.addItem(label, orientation.value)
+            current_orientation = str(
+                properties.get("symbol_orientation", PointSymbolOrientation.RIGHT.value)
             )
-            symbol_orientation_input.setCurrentText(
-                str(properties.get("symbol_orientation", PointSymbolOrientation.RIGHT.value))
-            )
+            symbol_index = symbol_orientation_input.findData(current_orientation)
+            symbol_orientation_input.setCurrentIndex(symbol_index if symbol_index >= 0 else 0)
             normal_target = QLineEdit(str(properties.get("normal_target", "")))
             reverse_target = QLineEdit(str(properties.get("reverse_target", "")))
             locked_by_input = QLineEdit(str(properties.get("locked_by") or ""))
@@ -249,7 +252,10 @@ class PropertiesPanel(QWidget):
             updated["locked_by"] = str(self._inputs["locked_by"].text()).strip()
         elif self._selected_type == "Point":
             updated["position"] = str(self._inputs["position"].currentText())
-            updated["symbol_orientation"] = str(self._inputs["symbol_orientation"].currentText())
+            symbol_orientation = self._inputs["symbol_orientation"].currentData()
+            updated["symbol_orientation"] = str(
+                symbol_orientation or self._inputs["symbol_orientation"].currentText()
+            )
             updated["normal_target"] = str(self._inputs["normal_target"].text()).strip()
             updated["reverse_target"] = str(self._inputs["reverse_target"].text()).strip()
             updated["locked_by"] = str(self._inputs["locked_by"].text()).strip()

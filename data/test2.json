@@ -22,7 +22,7 @@
       "length": 100.0
     },
     {
-      "id": "S5",
+      "id": "2",
       "kind": "track",
       "occupied": false,
       "locked_by": null,
@@ -43,6 +43,20 @@
       "length": 100.0
     },
     {
+      "id": "S9",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "1",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
       "id": "S10",
       "kind": "track",
       "occupied": false,
@@ -50,14 +64,7 @@
       "length": 100.0
     },
     {
-      "id": "S11",
-      "kind": "track",
-      "occupied": false,
-      "locked_by": null,
-      "length": 100.0
-    },
-    {
-      "id": "S13",
+      "id": "S12",
       "kind": "track",
       "occupied": false,
       "locked_by": null,
@@ -69,88 +76,94 @@
       "occupied": false,
       "locked_by": null,
       "length": 100.0
-    },
-    {
-      "id": "AS1",
-      "kind": "approach",
-      "occupied": false,
-      "locked_by": null,
-      "length": 100.0
-    },
-    {
-      "id": "AS2",
-      "kind": "approach",
-      "occupied": false,
-      "locked_by": null,
-      "length": 100.0
     }
   ],
   "points": [
     {
-      "id": "P1",
-      "position": "NORMAL",
-      "locked_by": null,
-      "facing_connections": {
-        "NORMAL": "S2",
-        "REVERSE": "S7"
-      }
-    },
-    {
       "id": "P2",
       "position": "NORMAL",
+      "symbol_orientation": "LEFT",
       "locked_by": null,
       "facing_connections": {
-        "NORMAL": "S10"
+        "NORMAL": "S14",
+        "REVERSE": "S2"
       }
     },
     {
-      "id": "P4",
+      "id": "P1",
       "position": "NORMAL",
+      "symbol_orientation": "RIGHT",
       "locked_by": null,
       "facing_connections": {
-        "NORMAL": "S5",
-        "REVERSE": "S8"
+        "NORMAL": "S10",
+        "REVERSE": "S2"
       }
     },
     {
-      "id": "P6",
+      "id": "P3",
       "position": "NORMAL",
+      "symbol_orientation": "UP",
       "locked_by": null,
       "facing_connections": {
-        "NORMAL": "S14"
+        "NORMAL": "S8",
+        "REVERSE": "S7"
       }
     }
   ],
   "signals": [
     {
-      "id": "A1",
+      "id": "A",
       "aspect": "STOP",
       "direction": "RIGHT",
       "protects": "S1",
-      "approach_section": "AS2",
-      "route_id": "R_A1_B1_9e346506"
-    },
-    {
-      "id": "B2",
-      "aspect": "STOP",
-      "direction": "LEFT",
-      "protects": "S4",
-      "approach_section": "AS1",
-      "route_id": null
-    },
-    {
-      "id": "A2",
-      "aspect": "STOP",
-      "direction": "LEFT",
-      "protects": "S13",
       "approach_section": "",
       "route_id": null
     },
     {
-      "id": "B1",
+      "id": "F",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S9",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "N2",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S4",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "G2",
       "aspect": "STOP",
       "direction": "RIGHT",
-      "protects": "S11",
+      "protects": "S7",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "G1",
+      "aspect": "STOP",
+      "direction": "RIGHT",
+      "protects": "S8",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "N1",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S10",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "Y",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S12",
       "approach_section": "",
       "route_id": null
     }
@@ -165,20 +178,20 @@
       "P2"
     ],
     [
-      "S4",
-      "P4"
-    ],
-    [
-      "S5",
-      "P6"
-    ],
-    [
       "S7",
-      "P6"
+      "P3"
     ],
     [
       "S8",
-      "P2"
+      "P3"
+    ],
+    [
+      "P2",
+      "S4"
+    ],
+    [
+      "P2",
+      "S14"
     ],
     [
       "P1",
@@ -186,139 +199,123 @@
     ],
     [
       "P1",
-      "S7"
-    ],
-    [
-      "P2",
       "S10"
     ],
     [
-      "P4",
-      "S5"
-    ],
-    [
-      "P4",
-      "S8"
-    ],
-    [
-      "P6",
-      "S14"
+      "P3",
+      "S9"
     ]
   ],
   "signal_links": [
     [
-      "A1",
-      "S1"
+      "1",
+      "G1"
     ],
     [
-      "A2",
-      "S13"
+      "1",
+      "N1"
     ],
     [
-      "AS1",
-      "B2"
+      "2",
+      "G2"
     ],
     [
-      "AS2",
-      "A1"
-    ],
-    [
-      "B1",
-      "S11"
-    ],
-    [
-      "B2",
-      "S4"
+      "2",
+      "N2"
     ],
     [
       "S10",
-      "B1"
+      "N1"
     ],
     [
       "S14",
-      "A2"
+      "Y"
     ]
   ],
   "ui_positions": {
     "S1": [
-      -175.0,
-      -250.0
-    ],
-    "S2": [
-      75.0,
-      -250.0
-    ],
-    "S4": [
-      325.0,
-      -100.0
-    ],
-    "S5": [
-      75.0,
-      -100.0
-    ],
-    "S7": [
-      -50.0,
+      -250.0,
       -175.0
     ],
+    "S2": [
+      -125.0,
+      -300.0
+    ],
+    "S4": [
+      50.0,
+      -400.0
+    ],
+    "2": [
+      300.0,
+      -400.0
+    ],
+    "S7": [
+      575.0,
+      -400.0
+    ],
     "S8": [
-      200.0,
+      600.0,
+      -175.0
+    ],
+    "S9": [
+      875.0,
+      -175.0
+    ],
+    "1": [
+      300.0,
       -175.0
     ],
     "S10": [
-      350.0,
-      -250.0
+      25.0,
+      -175.0
     ],
-    "S11": [
-      650.0,
-      -250.0
-    ],
-    "S13": [
-      -425.0,
-      -100.0
-    ],
-    "S14": [
-      -175.0,
-      -100.0
-    ],
-    "P1": [
-      -50.0,
-      -250.0
+    "S12": [
+      -575.0,
+      -400.0
     ],
     "P2": [
-      200.0,
-      -250.0
+      -125.0,
+      -400.0
     ],
-    "P4": [
-      200.0,
-      -100.0
+    "P1": [
+      -125.0,
+      -175.0
     ],
-    "P6": [
-      -50.0,
-      -100.0
+    "P3": [
+      725.0,
+      -175.0
     ],
-    "A1": [
-      -300.0,
-      -250.0
+    "A": [
+      -375.0,
+      -125.0
     ],
-    "B2": [
+    "F": [
+      975.0,
+      -275.0
+    ],
+    "N2": [
+      175.0,
+      -525.0
+    ],
+    "G2": [
       450.0,
-      -100.0
+      -275.0
     ],
-    "A2": [
-      -300.0,
-      -100.0
+    "G1": [
+      450.0,
+      -125.0
     ],
-    "B1": [
-      500.0,
+    "N1": [
+      150.0,
       -250.0
     ],
-    "AS1": [
-      575.0,
-      -100.0
+    "S14": [
+      -250.0,
+      -400.0
     ],
-    "AS2": [
-      -450.0,
-      -250.0
+    "Y": [
+      -400.0,
+      -400.0
     ]
   }
 }

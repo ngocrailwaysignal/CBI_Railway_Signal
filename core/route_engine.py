@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import networkx as nx
 
-from core.elements import ApproachSection, Point, PointPosition, TrackSection
+from core.elements import ApproachSection, Point, PointPosition, SignalDirection, TrackSection
 from core.flank_protection import FlankProtectionEngine
 from core.safety_rules import SafetyRules
 from core.topology import RailwayTopology
@@ -99,7 +99,7 @@ class RouteEngine:
                 "Use opposite-direction signal pairing or set exit protects to the downstream node."
             )
 
-        route_graph = self.topology.routing_graph()
+        route_graph = self.routing_graph_for_direction(entry_signal.direction)
         source_node = entry_protected
         exit_approach_nodes = self.topology.signal_approach_nodes(exit_signal_id)
         if not exit_approach_nodes:
@@ -191,6 +191,30 @@ class RouteEngine:
         raise ValueError(
             f"No valid route from {source_node} to signal {exit_signal.id}: {last_reason}"
         )
+
+    def routing_graph_for_direction(self, route_direction: SignalDirection) -> nx.DiGraph:
+        """Build route-search graph constrained by requested running direction.
+
+        Physical track/point links are always bidirectional via topology.routing_graph().
+        For signal virtual links, direction handling is:
+        - same-direction signal: keep approach -> protected only
+        - opposite-direction signal: also allow protected -> approach
+        """
+        graph = self.topology.routing_graph().copy()
+        for approach_node, signal_id in sorted(self.topology.signal_links):
+            signal = self.topology.signals.get(signal_id)
+            if signal is None:
+                continue
+            protected_node = signal.protects.strip()
+            if (
+                approach_node not in graph.nodes
+                or protected_node not in graph.nodes
+                or approach_node == protected_node
+            ):
+                continue
+            if signal.direction != route_direction:
+                graph.add_edge(protected_node, approach_node)
+        return graph
 
     def compute_required_point_positions(self, node_path: list[str]) -> dict[str, PointPosition]:
         """Public helper to resolve point locks for a full movement path."""

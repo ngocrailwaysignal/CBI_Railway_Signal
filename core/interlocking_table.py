@@ -192,7 +192,7 @@ class InterlockingTableGenerator:
             return None
 
         try:
-            route_graph = self.topology.routing_graph()
+            route_graph = self.route_engine.routing_graph_for_direction(entry_signal.direction)
             path_list: list[list[str]] = []
             for target_node in exit_approach_nodes:
                 try:
