@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from time import monotonic
 from typing import Dict
 
 from core.approach_locking import ApproachLockState, ApproachLockingStateMachine
@@ -14,10 +15,29 @@ from core.topology import RailwayTopology
 class LockingEngine:
     """Applies and releases interlocking locks for active routes."""
 
-    def __init__(self, topology: RailwayTopology, time_lock_seconds: float = 30.0) -> None:
+    def __init__(
+        self,
+        topology: RailwayTopology,
+        time_lock_seconds: float = 30.0,
+        overlap_release_seconds: float = 0.0,
+    ) -> None:
         self.topology = topology
         self.active_routes: Dict[str, Route] = {}
         self.approach_locking = ApproachLockingStateMachine(time_lock_seconds=time_lock_seconds)
+        self.overlap_release_seconds = max(0.0, float(overlap_release_seconds))
+        self._pending_overlap_releases: dict[str, float] = {}
+
+    def configure_release_timing(
+        self,
+        *,
+        approach_time_lock_seconds: float | None = None,
+        overlap_release_seconds: float | None = None,
+    ) -> None:
+        """Update runtime timing values used by locking release logic."""
+        if approach_time_lock_seconds is not None:
+            self.approach_locking.time_lock_seconds = max(0.0, float(approach_time_lock_seconds))
+        if overlap_release_seconds is not None:
+            self.overlap_release_seconds = max(0.0, float(overlap_release_seconds))
 
     def lock_route(self, route: Route) -> None:
         """Lock sections, points, and clear entry signal only when fully secured."""
@@ -66,6 +86,7 @@ class LockingEngine:
             entry_signal_id=route.entry_signal_id,
             approach_section_id=route.approach_locking_section,
         )
+        self._pending_overlap_releases.pop(route.id, None)
 
     def set_point_position(self, point_id: str, new_position: PointPosition) -> None:
         """Move a point only if not locked."""
@@ -119,13 +140,26 @@ class LockingEngine:
 
     def update_time_locking(self) -> None:
         """Release routes whose time locking has elapsed."""
-        for route_id in self.approach_locking.releasable_routes():
+        current_time = monotonic()
+        for route_id in self.approach_locking.releasable_routes(now=current_time):
             route = self.active_routes.get(route_id)
             if route is None:
                 continue
             if self._is_approach_occupied(route):
                 continue
             self._unlock_route(route_id)
+
+        for route_id, due_time in list(self._pending_overlap_releases.items()):
+            if current_time < due_time:
+                continue
+            route = self.active_routes.get(route_id)
+            if route is None:
+                self._pending_overlap_releases.pop(route_id, None)
+                continue
+            self._unlock_route(
+                route_id,
+                force_unlock_sections=self._destination_force_unlock_sections(route),
+            )
 
     def approach_lock_state(self, route_id: str) -> ApproachLockState | None:
         """Expose current approach-lock state for UI/logging."""
@@ -163,7 +197,11 @@ class LockingEngine:
                 return
 
         force_unlock = {destination_section} if destination_occupied else None
-        self._unlock_route(route_id, force_unlock_sections=force_unlock)
+        if self.overlap_release_seconds <= 0.0:
+            self._unlock_route(route_id, force_unlock_sections=force_unlock)
+            return
+        if route_id not in self._pending_overlap_releases:
+            self._pending_overlap_releases[route_id] = monotonic() + self.overlap_release_seconds
 
     def _unlock_route(
         self,
@@ -194,8 +232,24 @@ class LockingEngine:
                 signal.aspect = SignalAspect.STOP
                 signal.route_id = None
 
+        self._pending_overlap_releases.pop(route_id, None)
         self.approach_locking.clear(route_id)
         self.active_routes.pop(route_id, None)
+
+    def _destination_force_unlock_sections(self, route: Route) -> set[str] | None:
+        """Return destination section to force-unlock if still occupied."""
+        track_sections = [
+            node_id
+            for node_id in route.full_path
+            if isinstance(self.topology.get_element(node_id), TrackSection)
+        ]
+        if not track_sections:
+            return None
+        destination_section = track_sections[-1]
+        destination = self.topology.get_element(destination_section)
+        if isinstance(destination, TrackSection) and destination.occupied:
+            return {destination_section}
+        return None
 
     def _is_approach_occupied(self, route: Route) -> bool:
         approach_candidates = self._approach_candidates(route)

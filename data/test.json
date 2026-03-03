@@ -3,21 +3,21 @@
     {
       "id": "S9",
       "kind": "track",
-      "occupied": true,
+      "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
     {
       "id": "S10",
       "kind": "track",
-      "occupied": true,
+      "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
     {
       "id": "S11",
       "kind": "track",
-      "occupied": true,
+      "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
@@ -142,6 +142,14 @@
       100.0,
       -200.0
     ],
+    "AS1": [
+      175.0,
+      -350.0
+    ],
+    "AS2": [
+      -550.0,
+      -200.0
+    ],
     "SIG4": [
       -425.0,
       -350.0
@@ -165,14 +173,6 @@
     "SIG10": [
       25.0,
       -350.0
-    ],
-    "AS1": [
-      175.0,
-      -350.0
-    ],
-    "AS2": [
-      -550.0,
-      -200.0
     ]
   }
 }

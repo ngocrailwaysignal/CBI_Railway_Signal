@@ -5,7 +5,6 @@ from __future__ import annotations
 from copy import deepcopy
 from math import hypot
 from dataclasses import asdict
-from pathlib import Path
 from typing import Any, Optional
 
 from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer, pyqtSignal
@@ -53,6 +52,8 @@ class NodeItem(QGraphicsObject):
 
     WIDTH = 96.0
     HEIGHT = 56.0
+    SIGNAL_WIDTH = 110.0
+    SIGNAL_HEIGHT = 90.0
 
     def __init__(self, element_id: str, element_type: str, payload: dict[str, Any]) -> None:
         super().__init__()
@@ -67,7 +68,8 @@ class NodeItem(QGraphicsObject):
         )
 
     def boundingRect(self) -> QRectF:
-        return QRectF(0.0, 0.0, self.WIDTH, self.HEIGHT)
+        width, height = self._dimensions_for_type(self.element_type)
+        return QRectF(0.0, 0.0, width, height)
 
     def paint(self, painter: QPainter, _option: Any, _widget: Any = None) -> None:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -189,58 +191,70 @@ class NodeItem(QGraphicsObject):
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, label)
 
     def _paint_signal(self, painter: QPainter, rect: QRectF) -> None:
-        painter.setPen(QPen(QColor("#111111"), 1.1))
-        split_y = rect.top() + rect.height() * 0.5
-        painter.drawLine(
-            QPointF(rect.left() + 2.0, split_y),
-            QPointF(rect.right() - 2.0, split_y),
+        painter.save()
+        painter.setPen(QPen(QColor("#111111"), 1.2))
+        outer = rect.adjusted(0.8, 0.8, -0.8, -0.8)
+        painter.drawRect(outer)
+
+        split_y = outer.bottom() - max(24.0, outer.height() * 0.28)
+        painter.drawLine(QPointF(outer.left() + 1.5, split_y), QPointF(outer.right() - 1.5, split_y))
+
+        top_rect = QRectF(
+            outer.left() + 5.0,
+            outer.top() + 4.0,
+            outer.width() - 10.0,
+            split_y - outer.top() - 8.0,
         )
+        mast_x = top_rect.center().x()
+        mast_top = top_rect.top() + 6.0
+        mast_bottom = top_rect.bottom() - 4.0
+        painter.drawLine(QPointF(mast_x, mast_top), QPointF(mast_x, mast_bottom))
 
         direction = str(self.payload.get("direction", SignalDirection.RIGHT.value))
-        # UI viewpoint: invert visual facing so LEFT/RIGHT matches operator perspective.
-        is_left = direction == SignalDirection.RIGHT.value
+        # Keep current operator viewpoint mapping for LEFT/RIGHT display.
+        face_left = direction == SignalDirection.RIGHT.value
         aspect = self.payload.get("aspect", SignalAspect.STOP.value)
         lamp_color = QColor("#1f8f48") if aspect == SignalAspect.PROCEED.value else QColor("#c62828")
 
-        top_center_y = rect.top() + rect.height() * 0.25
-        head_center_x = rect.right() - 18.0 if is_left else rect.left() + 18.0
-        head_radius = 4.0
-        line_start_x = head_center_x - head_radius if is_left else head_center_x + head_radius
-        line_end_x = rect.left() + 11.0 if is_left else rect.right() - 11.0
-        stop_x = rect.left() + 9.0 if is_left else rect.right() - 9.0
+        arm_y = top_rect.top() + top_rect.height() * 0.35
+        arm_length = max(16.0, top_rect.width() * 0.32)
+        head_radius = 6.0
+        if face_left:
+            head_center_x = mast_x - arm_length
+            stop_bar_x = head_center_x - 8.0
+        else:
+            head_center_x = mast_x + arm_length
+            stop_bar_x = head_center_x + 8.0
 
-        painter.save()
-        painter.setPen(QPen(QColor("#111111"), 1.4))
+        painter.drawLine(QPointF(mast_x, arm_y), QPointF(head_center_x, arm_y))
         painter.setBrush(QBrush(lamp_color))
         painter.drawEllipse(
             QRectF(
                 head_center_x - head_radius,
-                top_center_y - head_radius,
+                arm_y - head_radius,
                 head_radius * 2.0,
                 head_radius * 2.0,
             )
         )
-        painter.drawLine(
-            QPointF(line_start_x, top_center_y),
-            QPointF(line_end_x, top_center_y),
-        )
-        painter.drawLine(
-            QPointF(stop_x, top_center_y - 4.0),
-            QPointF(stop_x, top_center_y + 4.0),
-        )
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawLine(QPointF(stop_bar_x, arm_y - 6.0), QPointF(stop_bar_x, arm_y + 6.0))
 
-        label = self.element_id
-        bottom_rect = QRectF(rect.left() + 4.0, split_y + 2.0, rect.width() - 8.0, rect.height() * 0.45)
-        painter.setPen(QPen(QColor("#111111"), 1.1))
-        painter.drawText(bottom_rect, Qt.AlignmentFlag.AlignCenter, label)
+        label_rect = QRectF(outer.left() + 3.0, split_y + 2.0, outer.width() - 6.0, outer.bottom() - split_y - 3.0)
+        painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, self.element_id)
         painter.restore()
+
+    @classmethod
+    def _dimensions_for_type(cls, element_type: str) -> tuple[float, float]:
+        if element_type.startswith("Signal"):
+            return cls.WIDTH, cls.HEIGHT
+        return cls.WIDTH, cls.HEIGHT
 
     def _paint_state_marker(self, painter: QPainter, rect: QRectF) -> None:
         color: QColor | None = None
         if self.payload.get("occupied"):
             color = QColor("#c62828")
         elif self.payload.get("locked_by"):
-            color = QColor("#1565c0")
+            color = QColor("#15c020")
         if color is None:
             return
         marker_rect = QRectF(rect.right() - 10.0, rect.top() + 4.0, 6.0, 6.0)
@@ -259,8 +273,8 @@ class NodeItem(QGraphicsObject):
             pen = QPen(QColor("#cf1322"), 3.0)
         elif self.element_id in self.editor._overlap_highlight_nodes:
             pen = QPen(QColor("#0b7285"), 2.6, Qt.PenStyle.DashLine)
-        elif self.element_id in self.editor._search_highlight_nodes:
-            pen = QPen(QColor("#d97706"), 2.2, Qt.PenStyle.DashLine)
+        ##elif self.element_id in self.editor._search_highlight_nodes:
+            ##pen = QPen(QColor("#d97706"), 2.2, Qt.PenStyle.DashLine)
         else:
             return
 
@@ -338,7 +352,7 @@ class EdgeItem(QGraphicsLineItem):
 
 
 class CanvasEditor(QGraphicsView):
-    """Grid canvas supporting block drag-drop, edge connection, and persistence."""
+    """Grid canvas supporting block drag-drop and edge connection."""
 
     GRID_STEP = 25.0
     editor_message = pyqtSignal(str)
@@ -590,6 +604,13 @@ class CanvasEditor(QGraphicsView):
                 self.editor_message.emit("Nothing to undo")
             event.accept()
             return
+        if event.matches(QKeySequence.StandardKey.Redo):
+            if self.redo():
+                self.editor_message.emit("Redo completed")
+            else:
+                self.editor_message.emit("Nothing to redo")
+            event.accept()
+            return
         if event.key() == Qt.Key.Key_Escape:
             if self._connect_source is not None:
                 self._connect_source = None
@@ -643,6 +664,17 @@ class CanvasEditor(QGraphicsView):
         previous = self._undo_stack.pop()
         self._redo_stack.append(self._snapshot_topology())
         self._rebuild_from_topology(previous)
+        return True
+
+    def redo(self) -> bool:
+        """Restore topology snapshot undone by the last undo action."""
+        if not self._redo_stack:
+            return False
+        upcoming = self._redo_stack.pop()
+        self._undo_stack.append(self._snapshot_topology())
+        if len(self._undo_stack) > self._max_undo_depth:
+            self._undo_stack.pop(0)
+        self._rebuild_from_topology(upcoming)
         return True
 
     def add_component(
@@ -1219,33 +1251,8 @@ class CanvasEditor(QGraphicsView):
             self.edges.append(edge)
             seen.add((source_id, target_id))
 
-    def save_to_json(
-        self,
-        file_path: str | Path,
-        *,
-        include_runtime_state: bool = False,
-        include_occupancy: bool = True,
-    ) -> None:
-        """Save layout to JSON file."""
-        self.topology.export_to_json(
-            file_path,
-            include_runtime_state=include_runtime_state,
-            include_occupancy=include_occupancy,
-        )
-
-    def load_from_json(
-        self,
-        file_path: str | Path,
-        *,
-        load_runtime_state: bool = False,
-        load_occupancy: bool = True,
-    ) -> None:
-        """Load layout from JSON file and rebuild scene."""
-        topology = RailwayTopology.load_from_json(
-            file_path,
-            load_runtime_state=load_runtime_state,
-            load_occupancy=load_occupancy,
-        )
+    def load_topology(self, topology: RailwayTopology) -> None:
+        """Load topology object directly."""
         self._rebuild_from_topology(topology)
 
     def clear_layout(self) -> None:

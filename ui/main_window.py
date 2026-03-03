@@ -9,6 +9,7 @@ from typing import Optional
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import (
     QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
@@ -29,10 +30,12 @@ from PyQt6.QtWidgets import (
 )
 
 from core.elements import ApproachSection, PointPosition
-from core.interlocking_table import InterlockingTableGenerator, InterlockingTableRow
-from core.route_engine import Route, RouteEngine
+from core.interlocking_table import InterlockingTableRow
+from core.route_engine import Route
 from core.simulation import Simulation
 from core.train import Train
+from generic_application import GenericApplicationProfile, GenericApplicationService
+from specific_application import SpecificLayoutEditorService, StationLayout
 from ui.canvas_editor import CanvasEditor
 from ui.components_palette import ComponentsPalette
 
@@ -40,10 +43,15 @@ from ui.components_palette import ComponentsPalette
 class MainWindow(QMainWindow):
     """Top-level editor + simulator window."""
 
-    def __init__(self) -> None:
+    def __init__(self, application_profile: GenericApplicationProfile | None = None) -> None:
         super().__init__()
         self.setWindowTitle("Geographical Interlocking Simulator")
         self.resize(1700, 900)
+
+        self.application_profile = application_profile or GenericApplicationProfile()
+        self.application_service = GenericApplicationService(profile=self.application_profile)
+        self.layout_editor_service = SpecificLayoutEditorService(self.application_service)
+        self.current_layout = self.layout_editor_service.new_layout(station_id="UNNAMED")
 
         self.palette = ComponentsPalette(self)
         self.canvas = CanvasEditor(self)
@@ -78,13 +86,17 @@ class MainWindow(QMainWindow):
 
         sample_path = Path("data/sample_layout.json")
         if sample_path.exists():
-            self.canvas.load_from_json(
-                sample_path,
-                load_runtime_state=False,
-                load_occupancy=True,
+            self._load_layout_into_canvas(
+                self.layout_editor_service.load_layout(
+                    sample_path,
+                    station_id=sample_path.stem,
+                    load_runtime_state=False,
+                    load_occupancy=True,
+                )
             )
             self.status.showMessage(f"Loaded sample layout: {sample_path}")
-        self._on_topology_changed()
+        else:
+            self.canvas.load_topology(self.current_layout.topology)
 
     def _build_toolbar(self) -> None:
         toolbar = QToolBar("Main", self)
@@ -122,37 +134,25 @@ class MainWindow(QMainWindow):
         )
         if confirm != QMessageBox.StandardButton.Yes:
             return
-        self.canvas.clear_layout()
+        self._load_layout_into_canvas(self.layout_editor_service.new_layout(station_id="UNNAMED"))
         self.status.showMessage("Started a new empty layout")
-
-    def _rename_selected(self) -> None:
-        try:
-            self.canvas.rename_selected_node_dialog()
-        except Exception as exc:
-            QMessageBox.warning(self, "Rename failed", str(exc))
-
-    def _delete_selected(self) -> None:
-        self.canvas.delete_selected_items()
-        self.status.showMessage("Deleted selected item(s)")
-
-    def _connect_selected(self) -> None:
-        try:
-            self.canvas.connect_selected_nodes()
-            self.status.showMessage("Connected selected modules")
-        except Exception as exc:
-            QMessageBox.warning(self, "Connect failed", str(exc))
 
     def _toggle_connect_mode(self, enabled: bool) -> None:
         self.canvas.set_connect_mode(enabled)
 
-    def _clear_route(self) -> None:
-        self._cancel_active_routes(show_message=False)
+    def _clear_preview_state(
+        self,
+        *,
+        clear_visualization: bool = True,
+        sync_ui: bool = False,
+    ) -> None:
+        """Clear preview route/log state after invalid/failed route actions."""
         self.preview_route = None
-        self.canvas.clear_route_visualization()
+        if clear_visualization:
+            self.canvas.clear_route_visualization()
         self.search_log.clear()
-        self.canvas.refresh_visual_state()
-        self._sync_ui_state()
-        self.status.showMessage("Cleared route visualization and active route locks")
+        if sync_ui:
+            self._sync_ui_state()
 
     def _insert_component_from_palette(self, element_type: str) -> None:
         try:
@@ -161,7 +161,6 @@ class MainWindow(QMainWindow):
             self.status.showMessage(f"Added {element_type}")
         except Exception as exc:
             QMessageBox.warning(self, "Cannot add component", str(exc))
-
 
     def _build_right_panel(self) -> QWidget:
         panel = QWidget(self)
@@ -179,7 +178,7 @@ class MainWindow(QMainWindow):
         self.exit_combo.currentTextChanged.connect(lambda _text: self._sync_ui_state())
         self.overlap_spin = QSpinBox(route_group)
         self.overlap_spin.setRange(0, 5)
-        self.overlap_spin.setValue(0)
+        self.overlap_spin.setValue(int(self.application_profile.default_overlap_length))
         self.overlap_spin.valueChanged.connect(self._refresh_interlocking_table)
         combo_row.addWidget(QLabel("Entry"))
         combo_row.addWidget(self.entry_combo)
@@ -188,6 +187,27 @@ class MainWindow(QMainWindow):
         combo_row.addWidget(QLabel("Overlap"))
         combo_row.addWidget(self.overlap_spin)
         route_layout.addLayout(combo_row)
+
+        timing_row = QHBoxLayout()
+        self.approach_time_spin = QDoubleSpinBox(route_group)
+        self.approach_time_spin.setRange(0.0, 600.0)
+        self.approach_time_spin.setDecimals(1)
+        self.approach_time_spin.setSingleStep(1.0)
+        self.approach_time_spin.setSuffix(" s")
+        self.approach_time_spin.setValue(float(self.application_profile.time_lock_seconds))
+        self.approach_time_spin.valueChanged.connect(self._on_timing_controls_changed)
+        self.overlap_release_spin = QDoubleSpinBox(route_group)
+        self.overlap_release_spin.setRange(0.0, 600.0)
+        self.overlap_release_spin.setDecimals(1)
+        self.overlap_release_spin.setSingleStep(1.0)
+        self.overlap_release_spin.setSuffix(" s")
+        self.overlap_release_spin.setValue(float(self.application_profile.overlap_release_seconds))
+        self.overlap_release_spin.valueChanged.connect(self._on_timing_controls_changed)
+        timing_row.addWidget(QLabel("Approach release"))
+        timing_row.addWidget(self.approach_time_spin)
+        timing_row.addWidget(QLabel("Overlap release"))
+        timing_row.addWidget(self.overlap_release_spin)
+        route_layout.addLayout(timing_row)
 
         button_row = QHBoxLayout()
         self.find_route_button = QPushButton("Find Route")
@@ -253,18 +273,24 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Property update failed", str(exc))
 
     def _save_layout(self) -> None:
+        default_target = "data/layout.json"
+        if self.current_layout.source_path is not None:
+            default_target = str(self.current_layout.source_path)
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save Layout", "data/layout.json", "JSON Files (*.json)"
+            self, "Save Layout", default_target, "JSON Files (*.json)"
         )
         if not path:
             return
         try:
-            self.canvas.save_to_json(
-                path,
+            self.current_layout.topology = self.canvas.topology
+            saved_path = self.layout_editor_service.save_layout(
+                self.current_layout,
+                path=path,
                 include_runtime_state=False,
                 include_occupancy=True,
             )
-            self.status.showMessage(f"Saved layout to {path}")
+            self.current_layout.station_id = saved_path.stem
+            self.status.showMessage(f"Saved layout to {saved_path}")
         except Exception as exc:
             QMessageBox.critical(self, "Save failed", str(exc))
 
@@ -284,40 +310,36 @@ class MainWindow(QMainWindow):
             == QMessageBox.StandardButton.Yes
         )
         try:
-            self.canvas.load_from_json(
+            loaded = self.layout_editor_service.load_layout(
                 path,
+                station_id=Path(path).stem,
                 load_runtime_state=False,
                 load_occupancy=keep_occupancy,
             )
+            self._load_layout_into_canvas(loaded)
             self.status.showMessage(f"Loaded layout from {path}")
         except Exception as exc:
             QMessageBox.critical(self, "Load failed", str(exc))
 
-    def _load_sample(self) -> None:
-        sample_path = Path("data/sample_layout.json")
-        if not sample_path.exists():
-            QMessageBox.warning(self, "Missing sample", f"Sample file not found: {sample_path}")
-            return
-        self.canvas.load_from_json(
-            sample_path,
-            load_runtime_state=False,
-            load_occupancy=True,
-        )
-        self.status.showMessage(f"Loaded sample layout: {sample_path}")
+    def _load_layout_into_canvas(self, layout: StationLayout) -> None:
+        self.current_layout = layout
+        self.canvas.load_topology(layout.topology)
 
-    def _load_rsp30(self) -> None:
-        rsp_path = Path("data/rsp30_layout.json")
-        if not rsp_path.exists():
-            QMessageBox.warning(self, "Missing layout", f"Layout file not found: {rsp_path}")
+    def _on_timing_controls_changed(self, _value: float) -> None:
+        if self.simulation is None:
             return
-        self.canvas.load_from_json(
-            rsp_path,
-            load_runtime_state=False,
-            load_occupancy=True,
+        self.application_service.configure_simulation_timing(
+            self.simulation,
+            approach_time_lock_seconds=float(self.approach_time_spin.value()),
+            overlap_release_seconds=float(self.overlap_release_spin.value()),
         )
-        self.status.showMessage(f"Loaded RSP30 layout: {rsp_path}")
+        self._sync_ui_state()
 
     def _on_topology_changed(self) -> None:
+        if self.current_layout is not None:
+            self.current_layout.topology = self.canvas.topology
+        if self._simulation_timer.isActive():
+            self._simulation_timer.stop()
         self.simulation = None
         self.preview_route = None
         self.canvas.clear_route_visualization()
@@ -354,13 +376,9 @@ class MainWindow(QMainWindow):
             self.table_widget.setRowCount(0)
             return
 
-        generator = InterlockingTableGenerator(
+        rows = self.application_service.generate_interlocking_rows(
             topology=self.canvas.topology,
             overlap_length=self.overlap_spin.value(),
-        )
-        rows = generator.generate(
-            entry_signal_ids=signals,
-            exit_signal_ids=signals,
         )
         rows.sort(key=lambda item: item.route_name)
         self.interlocking_rows = rows
@@ -412,33 +430,23 @@ class MainWindow(QMainWindow):
                 "Find Route",
                 f"No valid route is defined for {entry_signal_id} -> {exit_signal_id} in the current interlocking table.",
             )
-            self.preview_route = None
-            self.canvas.clear_route_visualization()
-            self.search_log.clear()
-            self._sync_ui_state()
+            self._clear_preview_state(clear_visualization=True, sync_ui=True)
             return
         if not self._validate_signal_pair_request(entry_signal_id, exit_signal_id, "Find Route"):
-            self.canvas.clear_route_visualization()
-            self.search_log.clear()
-            self.preview_route = None
+            self._clear_preview_state(clear_visualization=True, sync_ui=False)
             return
 
-        route_engine = RouteEngine(self.canvas.topology)
-        active_routes = (
-            self.simulation.locking_engine.active_routes if self.simulation is not None else {}
-        )
         try:
-            route = route_engine.find_route(
+            route = self.application_service.find_route(
+                topology=self.canvas.topology,
                 entry_signal_id=entry_signal_id,
                 exit_signal_id=exit_signal_id,
-                active_routes=active_routes,
                 overlap_length=self.overlap_spin.value(),
+                simulation=self.simulation,
             )
         except Exception as exc:
             QMessageBox.warning(self, "Route unavailable", str(exc))
-            self.preview_route = None
-            self.canvas.clear_route_visualization()
-            self.search_log.clear()
+            self._clear_preview_state(clear_visualization=True, sync_ui=False)
             return
 
         search_order, _ = self._build_search_trace(route.path[0], route.path[-1])
@@ -468,10 +476,7 @@ class MainWindow(QMainWindow):
                 "Set Route",
                 f"No valid route is defined for {entry_signal_id} -> {exit_signal_id} in the current interlocking table.",
             )
-            self.preview_route = None
-            self.canvas.clear_route_visualization()
-            self.search_log.clear()
-            self._sync_ui_state()
+            self._clear_preview_state(clear_visualization=True, sync_ui=True)
             return
         if not self._validate_signal_pair_request(entry_signal_id, exit_signal_id, "Set Route"):
             return
@@ -480,9 +485,7 @@ class MainWindow(QMainWindow):
             route, created = self._get_or_create_locked_route(entry_signal_id, exit_signal_id)
         except Exception as exc:
             QMessageBox.warning(self, "Set Route failed", str(exc))
-            self.preview_route = None
-            self.canvas.clear_route_visualization()
-            self.search_log.clear()
+            self._clear_preview_state(clear_visualization=True, sync_ui=False)
             return
 
         search_order, _ = self._build_search_trace(route.path[0], route.path[-1])
@@ -594,7 +597,11 @@ class MainWindow(QMainWindow):
         exit_signal_id: str,
         title: str,
     ) -> bool:
-        issues = self.canvas.topology.validate_signal_pair(entry_signal_id, exit_signal_id)
+        issues = self.application_service.validate_signal_pair(
+            self.canvas.topology,
+            entry_signal_id,
+            exit_signal_id,
+        )
         if not issues:
             return True
         issue_lines = "\n".join(f"- {issue}" for issue in issues)
@@ -679,13 +686,11 @@ class MainWindow(QMainWindow):
     ) -> Route | None:
         if self.simulation is None:
             return None
-        for active_route in self.simulation.locking_engine.active_routes.values():
-            if (
-                active_route.entry_signal_id == entry_signal_id
-                and active_route.exit_signal_id == exit_signal_id
-            ):
-                return active_route
-        return None
+        return self.application_service.get_active_route_for_pair(
+            self.simulation,
+            entry_signal_id,
+            exit_signal_id,
+        )
 
     def _get_or_create_locked_route(
         self,
@@ -693,16 +698,23 @@ class MainWindow(QMainWindow):
         exit_signal_id: str,
     ) -> tuple[Route, bool]:
         if self.simulation is None:
-            self.simulation = Simulation(self.canvas.topology)
+            self.simulation = self.application_service.create_simulation(self.canvas.topology)
+        self.application_service.configure_simulation_timing(
+            self.simulation,
+            approach_time_lock_seconds=float(self.approach_time_spin.value()),
+            overlap_release_seconds=float(self.overlap_release_spin.value()),
+        )
 
-        for active_route in self.simulation.locking_engine.active_routes.values():
-            if (
-                active_route.entry_signal_id == entry_signal_id
-                and active_route.exit_signal_id == exit_signal_id
-            ):
-                return active_route, False
+        existing = self.application_service.get_active_route_for_pair(
+            self.simulation,
+            entry_signal_id,
+            exit_signal_id,
+        )
+        if existing is not None:
+            return existing, False
 
-        route = self.simulation.set_route(
+        route = self.application_service.set_route(
+            simulation=self.simulation,
             entry_signal_id=entry_signal_id,
             exit_signal_id=exit_signal_id,
             overlap_length=self.overlap_spin.value(),
@@ -712,10 +724,7 @@ class MainWindow(QMainWindow):
     def _find_train_for_route(self, route_id: str) -> Train | None:
         if self.simulation is None:
             return None
-        for train in self.simulation.trains.values():
-            if train.route_id == route_id:
-                return train
-        return None
+        return self.application_service.find_train_for_route(self.simulation, route_id)
 
     def _resolve_simulation_start_section(self, route: Route) -> str:
         approach_section = route.approach_locking_section.strip() if route.approach_locking_section else ""
@@ -728,10 +737,7 @@ class MainWindow(QMainWindow):
     def _next_train_id(self) -> str:
         if self.simulation is None:
             return "T1"
-        index = 1
-        while f"T{index}" in self.simulation.trains:
-            index += 1
-        return f"T{index}"
+        return self.application_service.next_train_id(self.simulation)
 
     def _simulation_tick(self) -> None:
         if self.simulation is None:
@@ -761,20 +767,12 @@ class MainWindow(QMainWindow):
                 self.status.showMessage("No active simulation routes to cancel")
             return
 
-        active_route_ids = list(self.simulation.locking_engine.active_routes.keys())
-        if not active_route_ids:
+        if not self.application_service.has_active_routes(self.simulation):
             if show_message:
                 self.status.showMessage("No active routes to cancel")
             return
 
-        failures: list[str] = []
-        for route_id in active_route_ids:
-            try:
-                self.simulation.locking_engine.cancel_route(route_id)
-            except Exception as exc:
-                failures.append(f"{route_id}: {exc}")
-
-        self.simulation.locking_engine.update_time_locking()
+        failures = self.application_service.cancel_all_active_routes(self.simulation)
         self.canvas.refresh_visual_state()
         self._sync_ui_state()
 
@@ -790,7 +788,7 @@ class MainWindow(QMainWindow):
     def _sync_ui_state(self) -> None:
         has_signals = self.entry_combo.count() > 1 and self.exit_combo.count() > 1
         if self.simulation is not None:
-            self.simulation.locking_engine.update_time_locking()
+            self.application_service.update_time_locking(self.simulation)
             self.canvas.refresh_visual_state()
 
         selected_entry = self.entry_combo.currentText().strip()
@@ -805,10 +803,11 @@ class MainWindow(QMainWindow):
             and self._get_active_route_for_pair(selected_entry, selected_exit) is not None
         )
 
-        active_routes = (
-            self.simulation.locking_engine.active_routes if self.simulation is not None else {}
+        has_active_routes = (
+            self.application_service.has_active_routes(self.simulation)
+            if self.simulation is not None
+            else False
         )
-        has_active_routes = bool(active_routes)
         simulation_running = self._simulation_timer.isActive()
 
         self.find_route_button.setEnabled(has_signals and selected_pair_defined)
