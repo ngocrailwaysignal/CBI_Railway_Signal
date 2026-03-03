@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import uuid4
 
 import networkx as nx
 
 from core.elements import Point, PointPosition, TrackSection
+from core.flank_protection import FlankProtectionEngine
 from core.safety_rules import SafetyRules
 from core.topology import RailwayTopology
 
@@ -22,11 +23,27 @@ class Route:
     path: list[str]
     overlap_path: list[str]
     required_point_positions: dict[str, PointPosition]
+    flank_point_positions: dict[str, PointPosition] = field(default_factory=dict)
+    approach_locking_section: str | None = None
 
     @property
     def full_path(self) -> list[str]:
         """Route path including overlap footprint."""
         return [*self.path, *self.overlap_path]
+
+    @property
+    def all_required_point_positions(self) -> dict[str, PointPosition]:
+        """All point locks required by route path and flank protection."""
+        merged = dict(self.required_point_positions)
+        for point_id, position in self.flank_point_positions.items():
+            existing = merged.get(point_id)
+            if existing is not None and existing != position:
+                raise ValueError(
+                    f"Point {point_id} has conflicting route/flank locks "
+                    f"{existing.value}/{position.value}"
+                )
+            merged[point_id] = position
+        return merged
 
 
 class RouteEngine:
@@ -34,6 +51,7 @@ class RouteEngine:
 
     def __init__(self, topology: RailwayTopology) -> None:
         self.topology = topology
+        self.flank_engine = FlankProtectionEngine(topology)
 
     def find_route(
         self,
@@ -107,6 +125,10 @@ class RouteEngine:
                             overlap_length=overlap_length,
                         )
                         required_points = self.compute_required_point_positions([*path, *overlap_path])
+                        flank_points = self.compute_flank_point_positions(
+                            [*path, *overlap_path],
+                            required_points,
+                        )
                         route = Route(
                             id=f"R_{entry_signal_id}_{exit_signal_id}_{uuid4().hex[:8]}",
                             entry_signal_id=entry_signal_id,
@@ -114,13 +136,25 @@ class RouteEngine:
                             path=path,
                             overlap_path=overlap_path,
                             required_point_positions=required_points,
+                            flank_point_positions=flank_points,
+                            approach_locking_section=self._resolve_approach_locking_section(
+                                entry_signal_id
+                            ),
                         )
                     except ValueError as exc:
                         last_reason = str(exc)
                         continue
 
+                    try:
+                        all_points = route.all_required_point_positions
+                    except ValueError as exc:
+                        last_reason = str(exc)
+                        continue
+
                     route_ok, reason = SafetyRules.route_elements_available(
-                        self.topology, route.full_path, required_points
+                        self.topology,
+                        route.full_path,
+                        all_points,
                     )
                     if not route_ok:
                         last_reason = f"Route unavailable: {reason}"
@@ -128,10 +162,6 @@ class RouteEngine:
 
                     if active_routes and SafetyRules.has_conflict(route, active_routes.values()):
                         last_reason = "Route conflicts with an already locked route"
-                        continue
-
-                    if not SafetyRules.flank_protection_placeholder(route, self.topology):
-                        last_reason = "Flank protection failed"
                         continue
 
                     return route
@@ -152,6 +182,21 @@ class RouteEngine:
             route_path,
             overlap_length=overlap_length,
         )
+
+    def compute_flank_point_positions(
+        self,
+        node_path: list[str],
+        route_point_positions: dict[str, PointPosition],
+    ) -> dict[str, PointPosition]:
+        """Public helper for flank-point lock derivation."""
+        return self.flank_engine.compute_required_positions(
+            route_nodes=node_path,
+            route_point_positions=route_point_positions,
+        )
+
+    def resolve_approach_locking_section(self, entry_signal_id: str) -> str | None:
+        """Public helper to resolve approach section for one entry signal."""
+        return self._resolve_approach_locking_section(entry_signal_id)
 
     def _compute_required_point_positions(self, path: list[str]) -> dict[str, PointPosition]:
         """Compute all point positions needed to traverse the path."""
@@ -239,3 +284,20 @@ class RouteEngine:
             previous, current = current, next_node
 
         return overlap
+
+    def _resolve_approach_locking_section(self, entry_signal_id: str) -> str | None:
+        signal = self.topology.signals.get(entry_signal_id)
+        if signal is None:
+            return None
+
+        configured = signal.approach_section.strip()
+        if configured:
+            element = self.topology.get_element(configured)
+            if isinstance(element, TrackSection):
+                return configured
+
+        for node_id in self.topology.signal_approach_nodes(entry_signal_id):
+            element = self.topology.get_element(node_id)
+            if isinstance(element, TrackSection):
+                return node_id
+        return None

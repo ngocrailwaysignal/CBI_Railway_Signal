@@ -32,6 +32,7 @@ class Simulation:
         overlap_length: int = 0,
     ) -> Route:
         """Compute and lock a route."""
+        self.locking_engine.update_time_locking()
         route = self.route_engine.find_route(
             entry_signal_id=entry_signal_id,
             exit_signal_id=exit_signal_id,
@@ -51,11 +52,13 @@ class Simulation:
     def step(self) -> None:
         """Advance the simulation by one tick."""
         self.tick += 1
+        self.locking_engine.update_time_locking()
         for train in list(self.trains.values()):
             if not train.route_id:
                 continue
             route = self.locking_engine.active_routes.get(train.route_id)
             if route is None:
+                train.route_id = None
                 continue
             train.step(route, self.topology, self.locking_engine)
 

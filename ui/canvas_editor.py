@@ -33,7 +33,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 
-from core.elements import Point, PointPosition, Signal, SignalAspect, SignalRole, TrackSection
+from core.elements import ApproachSection, Point, PointPosition, Signal, SignalAspect, TrackSection
 from core.topology import RailwayTopology
 from ui.components_palette import PaletteListWidget
 
@@ -67,7 +67,7 @@ class NodeItem(QGraphicsObject):
         painter.setBrush(QBrush(QColor("#ffffff")))
         painter.drawRect(rect)
 
-        if self.element_type == "TrackSection":
+        if self.element_type in {"TrackSection", "ApproachSection"}:
             self._paint_section(painter, rect)
         elif self.element_type == "Point":
             self._paint_point(painter, rect)
@@ -78,8 +78,12 @@ class NodeItem(QGraphicsObject):
         self._paint_route_highlight(painter)
 
     def _paint_section(self, painter: QPainter, rect: QRectF) -> None:
+        if self.element_type == "ApproachSection":
+            painter.setPen(QPen(QColor("#9c6b00"), 1.4, Qt.PenStyle.DashLine))
+            painter.drawRect(rect.adjusted(3.0, 3.0, -3.0, -3.0))
         painter.setPen(QPen(QColor("#111111"), 1.1))
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.element_id)
+        label = f"{self.element_id}\nAPP" if self.element_type == "ApproachSection" else self.element_id
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
 
     def _paint_point(self, painter: QPainter, rect: QRectF) -> None:
         painter.setPen(QPen(QColor("#111111"), 2.0))
@@ -261,7 +265,7 @@ class CanvasEditor(QGraphicsView):
         self.nodes: dict[str, NodeItem] = {}
         self.edges: list[EdgeItem] = []
         self.signal_links: set[tuple[str, str]] = self.topology.signal_links
-        self._counter = {"TrackSection": 0, "Point": 0, "Signal": 0}
+        self._counter = {"TrackSection": 0, "ApproachSection": 0, "Point": 0, "Signal": 0}
 
         self._connection_start: Optional[NodeItem] = None
         self._connect_mode = False
@@ -520,15 +524,27 @@ class CanvasEditor(QGraphicsView):
         self, element_type: str, scene_pos: QPointF, element_id: str | None = None
     ) -> NodeItem:
         """Create topology element and visual node."""
-        aliases = {"Section": "TrackSection", "TrackSection": "TrackSection", "Point": "Point", "Signal": "Signal"}
+        aliases = {
+            "Section": "TrackSection",
+            "TrackSection": "TrackSection",
+            "Approach": "ApproachSection",
+            "ApproachSection": "ApproachSection",
+            "Point": "Point",
+            "Signal": "Signal",
+        }
         element_type = aliases.get(element_type, element_type)
-        if element_type not in {"TrackSection", "Point", "Signal"}:
+        if element_type not in {"TrackSection", "ApproachSection", "Point", "Signal"}:
             raise ValueError(f"Unsupported element type: {element_type}")
         scene_pos = self.snap_to_grid(scene_pos)
 
         if element_id is None:
             self._counter[element_type] += 1
-            prefix = {"TrackSection": "S", "Point": "P", "Signal": "SIG"}[element_type]
+            prefix = {
+                "TrackSection": "S",
+                "ApproachSection": "AS",
+                "Point": "P",
+                "Signal": "SIG",
+            }[element_type]
             element_id = f"{prefix}{self._counter[element_type]}"
 
         if element_id in self.nodes or self.topology.get_element(element_id):
@@ -537,6 +553,9 @@ class CanvasEditor(QGraphicsView):
         if element_type == "TrackSection":
             element = TrackSection(id=element_id)
             self.topology.add_section(element, position=(scene_pos.x(), scene_pos.y()))
+        elif element_type == "ApproachSection":
+            element = ApproachSection(id=element_id)
+            self.topology.add_approach_section(element, position=(scene_pos.x(), scene_pos.y()))
         elif element_type == "Point":
             element = Point(id=element_id)
             self.topology.add_point(element, position=(scene_pos.x(), scene_pos.y()))
@@ -636,6 +655,8 @@ class CanvasEditor(QGraphicsView):
         for signal in self.topology.signals.values():
             if signal.protects == old_id:
                 signal.protects = new_id
+            if signal.approach_section == old_id:
+                signal.approach_section = new_id
 
         updated_links: set[tuple[str, str]] = set()
         for src, dst in self.signal_links:
@@ -708,6 +729,8 @@ class CanvasEditor(QGraphicsView):
         for signal in self.topology.signals.values():
             if signal.protects == node_id:
                 signal.protects = ""
+            if signal.approach_section == node_id:
+                signal.approach_section = ""
 
         filtered_links = {
             (src, dst) for src, dst in self.signal_links if src != node_id and dst != node_id
@@ -744,7 +767,7 @@ class CanvasEditor(QGraphicsView):
         id_input = QLineEdit(node.element_id, dialog)
         form.addRow("ID", id_input)
         controls: dict[str, Any] = {}
-        if node.element_type == "TrackSection":
+        if node.element_type in {"TrackSection", "ApproachSection"}:
             length = QDoubleSpinBox(dialog)
             length.setRange(1.0, 10000.0)
             length.setValue(float(node.payload.get("length", 100.0)))
@@ -775,25 +798,16 @@ class CanvasEditor(QGraphicsView):
             form.addRow("Locked by", locked_by)
         else:
             protects = QLineEdit(str(node.payload.get("protects", "")), dialog)
+            approach_section = QLineEdit(str(node.payload.get("approach_section", "")), dialog)
             aspect = QComboBox(dialog)
             aspect.addItems([SignalAspect.STOP.value, SignalAspect.PROCEED.value])
             aspect.setCurrentText(str(node.payload.get("aspect", SignalAspect.STOP.value)))
-            role = QComboBox(dialog)
-            role.addItems(
-                [
-                    SignalRole.AUTO.value,
-                    SignalRole.ENTRY.value,
-                    SignalRole.EXIT.value,
-                    SignalRole.BOTH.value,
-                ]
-            )
-            role.setCurrentText(str(node.payload.get("role", SignalRole.AUTO.value)))
             controls["protects"] = protects
+            controls["approach_section"] = approach_section
             controls["aspect"] = aspect
-            controls["role"] = role
             form.addRow("Protects", protects)
+            form.addRow("Approach section", approach_section)
             form.addRow("Aspect", aspect)
-            form.addRow("Role", role)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, parent=dialog
@@ -827,6 +841,7 @@ class CanvasEditor(QGraphicsView):
         element = self.topology.get_element(element_id)
         if element is None:
             raise KeyError(f"Unknown element {element_id}")
+        emit_topology_change = False
 
         if isinstance(element, TrackSection):
             if "length" in updates:
@@ -857,12 +872,16 @@ class CanvasEditor(QGraphicsView):
             reverse_target = str(updates.get("reverse_target", "")).strip()
             if normal_target:
                 element.facing_connections[PointPosition.NORMAL] = normal_target
+                emit_topology_change = True
             elif PointPosition.NORMAL in element.facing_connections:
                 element.facing_connections.pop(PointPosition.NORMAL, None)
+                emit_topology_change = True
             if reverse_target:
                 element.facing_connections[PointPosition.REVERSE] = reverse_target
+                emit_topology_change = True
             elif PointPosition.REVERSE in element.facing_connections:
                 element.facing_connections.pop(PointPosition.REVERSE, None)
+                emit_topology_change = True
             if "locked_by" in updates:
                 element.locked_by = target_locked_by
 
@@ -876,13 +895,22 @@ class CanvasEditor(QGraphicsView):
                 if new_protects:
                     self.signal_links.add((element.id, new_protects))
                 self.topology.sync_signal_virtual_routes()
+                emit_topology_change = True
+            if "approach_section" in updates:
+                approach_section = str(updates["approach_section"]).strip()
+                if approach_section:
+                    approach_element = self.topology.get_element(approach_section)
+                    if not isinstance(approach_element, TrackSection):
+                        raise ValueError(
+                            "Approach section must reference an existing section/approach section node"
+                        )
+                element.approach_section = approach_section
             if "aspect" in updates:
                 element.aspect = SignalAspect(str(updates["aspect"]))
-            if "role" in updates:
-                element.role = SignalRole(str(updates["role"]))
 
         self.refresh_visual_state()
-        self.topology_changed.emit()
+        if emit_topology_change:
+            self.topology_changed.emit()
 
     def handle_node_moved(self, node: NodeItem) -> None:
         """Persist node position and update connected edges."""
@@ -929,7 +957,6 @@ class CanvasEditor(QGraphicsView):
         if isinstance(element, Signal):
             payload = asdict(element)
             payload["aspect"] = element.aspect.value
-            payload["role"] = element.role.value
             return payload
         return {}
 
@@ -963,11 +990,14 @@ class CanvasEditor(QGraphicsView):
         self.topology = topology
         self.signal_links = self.topology.signal_links
         self.topology.sync_signal_virtual_routes()
-        self._counter = {"TrackSection": 0, "Point": 0, "Signal": 0}
+        self._counter = {"TrackSection": 0, "ApproachSection": 0, "Point": 0, "Signal": 0}
 
         for node_id in topology.graph.nodes:
             element = topology.graph.nodes[node_id]["element"]
-            if isinstance(element, TrackSection):
+            if isinstance(element, ApproachSection):
+                element_type = "ApproachSection"
+                self._counter[element_type] = max(self._counter[element_type], self._extract_suffix(node_id))
+            elif isinstance(element, TrackSection):
                 element_type = "TrackSection"
                 self._counter[element_type] = max(self._counter[element_type], self._extract_suffix(node_id))
             elif isinstance(element, Point):

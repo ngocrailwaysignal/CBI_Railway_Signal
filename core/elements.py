@@ -21,15 +21,6 @@ class SignalAspect(str, Enum):
     PROCEED = "PROCEED"
 
 
-class SignalRole(str, Enum):
-    """Operational role of a signal in route setting."""
-
-    AUTO = "AUTO"
-    ENTRY = "ENTRY"
-    EXIT = "EXIT"
-    BOTH = "BOTH"
-
-
 @dataclass(slots=True)
 class TrackSection:
     """A physical track circuit / track section."""
@@ -38,6 +29,11 @@ class TrackSection:
     occupied: bool = False
     locked_by: Optional[str] = None
     length: float = 100.0
+
+
+@dataclass(slots=True)
+class ApproachSection(TrackSection):
+    """Track-circuit section used for approach-locking detection."""
 
 
 @dataclass(slots=True)
@@ -56,9 +52,9 @@ class Signal:
 
     id: str
     aspect: SignalAspect = SignalAspect.STOP
-    role: SignalRole = SignalRole.AUTO
     protects: str = ""
+    approach_section: str = ""
     route_id: Optional[str] = None
 
 
-RailElement = TrackSection | Point | Signal
+RailElement = TrackSection | ApproachSection | Point | Signal

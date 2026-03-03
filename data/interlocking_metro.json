@@ -1,0 +1,320 @@
+{
+  "sections": [
+    {
+      "id": "S1",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S2",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S4",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S5",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S7",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S8",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S10",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S11",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S13",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S14",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "AS1",
+      "kind": "approach",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "AS2",
+      "kind": "approach",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    }
+  ],
+  "points": [
+    {
+      "id": "P1",
+      "position": "NORMAL",
+      "locked_by": null,
+      "facing_connections": {
+        "NORMAL": "S2",
+        "REVERSE": "S7"
+      }
+    },
+    {
+      "id": "P2",
+      "position": "NORMAL",
+      "locked_by": null,
+      "facing_connections": {
+        "NORMAL": "S10"
+      }
+    },
+    {
+      "id": "P4",
+      "position": "NORMAL",
+      "locked_by": null,
+      "facing_connections": {
+        "NORMAL": "S5",
+        "REVERSE": "S8"
+      }
+    },
+    {
+      "id": "P6",
+      "position": "NORMAL",
+      "locked_by": null,
+      "facing_connections": {
+        "NORMAL": "S14"
+      }
+    }
+  ],
+  "signals": [
+    {
+      "id": "A1",
+      "aspect": "STOP",
+      "protects": "S1",
+      "approach_section": "AS2",
+      "route_id": "R_A1_B1_9e346506"
+    },
+    {
+      "id": "B2",
+      "aspect": "STOP",
+      "protects": "S4",
+      "approach_section": "AS1",
+      "route_id": null
+    },
+    {
+      "id": "A2",
+      "aspect": "STOP",
+      "protects": "S13",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "B1",
+      "aspect": "STOP",
+      "protects": "S11",
+      "approach_section": "",
+      "route_id": null
+    }
+  ],
+  "edges": [
+    [
+      "S1",
+      "P1"
+    ],
+    [
+      "S2",
+      "P2"
+    ],
+    [
+      "S4",
+      "P4"
+    ],
+    [
+      "S5",
+      "P6"
+    ],
+    [
+      "S7",
+      "P6"
+    ],
+    [
+      "S8",
+      "P2"
+    ],
+    [
+      "P1",
+      "S2"
+    ],
+    [
+      "P1",
+      "S7"
+    ],
+    [
+      "P2",
+      "S10"
+    ],
+    [
+      "P4",
+      "S5"
+    ],
+    [
+      "P4",
+      "S8"
+    ],
+    [
+      "P6",
+      "S14"
+    ]
+  ],
+  "signal_links": [
+    [
+      "A1",
+      "S1"
+    ],
+    [
+      "A2",
+      "S13"
+    ],
+    [
+      "AS1",
+      "B2"
+    ],
+    [
+      "AS2",
+      "A1"
+    ],
+    [
+      "B1",
+      "S11"
+    ],
+    [
+      "B2",
+      "S4"
+    ],
+    [
+      "S10",
+      "B1"
+    ],
+    [
+      "S14",
+      "A2"
+    ]
+  ],
+  "ui_positions": {
+    "S1": [
+      -175.0,
+      -250.0
+    ],
+    "S2": [
+      75.0,
+      -250.0
+    ],
+    "S4": [
+      325.0,
+      -100.0
+    ],
+    "S5": [
+      75.0,
+      -100.0
+    ],
+    "S7": [
+      -50.0,
+      -175.0
+    ],
+    "S8": [
+      200.0,
+      -175.0
+    ],
+    "S10": [
+      350.0,
+      -250.0
+    ],
+    "S11": [
+      650.0,
+      -250.0
+    ],
+    "S13": [
+      -425.0,
+      -100.0
+    ],
+    "S14": [
+      -175.0,
+      -100.0
+    ],
+    "P1": [
+      -50.0,
+      -250.0
+    ],
+    "P2": [
+      200.0,
+      -250.0
+    ],
+    "P4": [
+      200.0,
+      -100.0
+    ],
+    "P6": [
+      -50.0,
+      -100.0
+    ],
+    "A1": [
+      -300.0,
+      -250.0
+    ],
+    "B2": [
+      450.0,
+      -100.0
+    ],
+    "A2": [
+      -300.0,
+      -100.0
+    ],
+    "B1": [
+      500.0,
+      -250.0
+    ],
+    "AS1": [
+      575.0,
+      -100.0
+    ],
+    "AS2": [
+      -450.0,
+      -250.0
+    ]
+  }
+}

@@ -61,6 +61,10 @@ class InterlockingTableGenerator:
 
         rows: list[InterlockingTableRow] = []
         for route in routes:
+            try:
+                all_points = route.all_required_point_positions
+            except ValueError:
+                continue
             entry_signal = self.topology.signals[route.entry_signal_id]
             exit_signal = self.topology.signals[route.exit_signal_id]
             entry_element = entry_signal.protects
@@ -82,7 +86,7 @@ class InterlockingTableGenerator:
                     exit_element=exit_element,
                     path=route.path,
                     overlap=route.overlap_path,
-                    required_point_positions=route.required_point_positions,
+                    required_point_positions=all_points,
                     locked_sections=locked_sections,
                     conflicting_routes=[],
                 )
@@ -216,6 +220,10 @@ class InterlockingTableGenerator:
                 required_points = self.route_engine.compute_required_point_positions(
                     [*path, *overlap_path]
                 )
+                flank_points = self.route_engine.compute_flank_point_positions(
+                    [*path, *overlap_path],
+                    required_points,
+                )
             except ValueError:
                 continue
             route = Route(
@@ -225,6 +233,10 @@ class InterlockingTableGenerator:
                 path=path,
                 overlap_path=overlap_path,
                 required_point_positions=required_points,
+                flank_point_positions=flank_points,
+                approach_locking_section=self.route_engine.resolve_approach_locking_section(
+                    entry_signal_id
+                ),
             )
             return route
         return None

@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.elements import PointPosition, SignalAspect, SignalRole
+from core.elements import PointPosition, SignalAspect
 
 
 class PaletteListWidget(QListWidget):
@@ -36,6 +36,7 @@ class PaletteListWidget(QListWidget):
         self.setDragEnabled(True)
         self.setDefaultDropAction(Qt.DropAction.CopyAction)
         self._add_component("Section", "TrackSection")
+        self._add_component("Approach", "ApproachSection")
         self._add_component("Point", "Point")
         self._add_component("Signal", "Signal")
 
@@ -54,8 +55,10 @@ class PaletteListWidget(QListWidget):
         painter.setBrush(Qt.GlobalColor.white)
         painter.drawRect(3, 3, 38, 22)
 
-        if element_type == "TrackSection":
+        if element_type in {"TrackSection", "ApproachSection"}:
             painter.drawText(0, 0, 44, 28, int(Qt.AlignmentFlag.AlignCenter), "S")
+            if element_type == "ApproachSection":
+                painter.drawText(2, 17, 40, 10, int(Qt.AlignmentFlag.AlignCenter), "A")
         elif element_type == "Point":
             painter.drawLine(7, 20, 35, 6)
             painter.drawText(0, 8, 44, 18, int(Qt.AlignmentFlag.AlignCenter), "P")
@@ -133,7 +136,7 @@ class PropertiesPanel(QWidget):
         self.form_layout.addRow("ID", id_input)
         properties = dict(payload.get("properties", {}))
 
-        if self._selected_type == "TrackSection":
+        if self._selected_type in {"TrackSection", "ApproachSection"}:
             length_input = QDoubleSpinBox()
             length_input.setRange(1.0, 10000.0)
             length_input.setValue(float(properties.get("length", 100.0)))
@@ -166,25 +169,16 @@ class PropertiesPanel(QWidget):
 
         elif self._selected_type == "Signal":
             protects_input = QLineEdit(str(properties.get("protects", "")))
+            approach_section_input = QLineEdit(str(properties.get("approach_section", "")))
             aspect_input = QComboBox()
             aspect_input.addItems([SignalAspect.STOP.value, SignalAspect.PROCEED.value])
             aspect_input.setCurrentText(str(properties.get("aspect", SignalAspect.STOP.value)))
-            role_input = QComboBox()
-            role_input.addItems(
-                [
-                    SignalRole.AUTO.value,
-                    SignalRole.ENTRY.value,
-                    SignalRole.EXIT.value,
-                    SignalRole.BOTH.value,
-                ]
-            )
-            role_input.setCurrentText(str(properties.get("role", SignalRole.AUTO.value)))
             self._inputs["protects"] = protects_input
+            self._inputs["approach_section"] = approach_section_input
             self._inputs["aspect"] = aspect_input
-            self._inputs["role"] = role_input
             self.form_layout.addRow("Protects", protects_input)
+            self.form_layout.addRow("Approach section", approach_section_input)
             self.form_layout.addRow("Aspect", aspect_input)
-            self.form_layout.addRow("Role", role_input)
 
         self.apply_button.setEnabled(True)
 
@@ -199,7 +193,7 @@ class PropertiesPanel(QWidget):
         if not self._selected_id or not self._selected_type:
             return
         updated: dict[str, Any] = {}
-        if self._selected_type == "TrackSection":
+        if self._selected_type in {"TrackSection", "ApproachSection"}:
             updated["length"] = float(self._inputs["length"].value())
             updated["occupied"] = self._inputs["state"].currentText() == "OCCUPIED"
             updated["locked_by"] = str(self._inputs["locked_by"].text()).strip()
@@ -210,8 +204,8 @@ class PropertiesPanel(QWidget):
             updated["locked_by"] = str(self._inputs["locked_by"].text()).strip()
         elif self._selected_type == "Signal":
             updated["protects"] = str(self._inputs["protects"].text()).strip()
+            updated["approach_section"] = str(self._inputs["approach_section"].text()).strip()
             updated["aspect"] = str(self._inputs["aspect"].currentText())
-            updated["role"] = str(self._inputs["role"].currentText())
         updated["id"] = str(self._inputs["id"].text()).strip()
         self.properties_applied.emit(self._selected_id, updated)
 

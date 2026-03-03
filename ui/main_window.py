@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.elements import PointPosition
+from core.elements import PointPosition, TrackSection
 from core.interlocking_table import InterlockingTableGenerator, InterlockingTableRow
 from core.route_engine import Route, RouteEngine
 from core.simulation import Simulation
@@ -101,8 +101,11 @@ class MainWindow(QMainWindow):
         set_route_action = toolbar.addAction("Set Route")
         set_route_action.triggered.connect(self._set_selected_route)
 
-        clear_route_action = toolbar.addAction("Clear Route")
-        clear_route_action.triggered.connect(self._clear_route)
+        self.cancel_route_action = toolbar.addAction("Cancel Active Route")
+        self.cancel_route_action.triggered.connect(lambda: self._cancel_active_routes())
+
+        self.simulation_action = toolbar.addAction("Start Simulation")
+        self.simulation_action.triggered.connect(self._start_simulation)
 
     def _new_layout(self) -> None:
         confirm = QMessageBox.question(
@@ -138,10 +141,13 @@ class MainWindow(QMainWindow):
         self.canvas.set_connect_mode(enabled)
 
     def _clear_route(self) -> None:
+        self._cancel_active_routes(show_message=False)
         self.preview_route = None
         self.canvas.clear_route_visualization()
         self.search_log.clear()
-        self.status.showMessage("Cleared route visualization")
+        self.canvas.refresh_visual_state()
+        self._sync_ui_state()
+        self.status.showMessage("Cleared route visualization and active route locks")
 
     def _insert_component_from_palette(self, element_type: str) -> None:
         try:
@@ -159,11 +165,13 @@ class MainWindow(QMainWindow):
 
         route_group = QGroupBox("Route Finder")
         route_layout = QVBoxLayout(route_group)
-        route_layout.addWidget(QLabel("Select Entry and Exit signals, then run route search (always 2-way)."))
+        route_layout.addWidget(QLabel("Select Entry and Exit signals, then run route search."))
 
         combo_row = QHBoxLayout()
         self.entry_combo = QComboBox(route_group)
         self.exit_combo = QComboBox(route_group)
+        self.entry_combo.currentTextChanged.connect(lambda _text: self._sync_ui_state())
+        self.exit_combo.currentTextChanged.connect(lambda _text: self._sync_ui_state())
         self.overlap_spin = QSpinBox(route_group)
         self.overlap_spin.setRange(0, 5)
         self.overlap_spin.setValue(0)
@@ -181,12 +189,18 @@ class MainWindow(QMainWindow):
         self.find_route_button.clicked.connect(self._preview_selected_route)
         self.set_route_button = QPushButton("Set Route")
         self.set_route_button.clicked.connect(self._set_selected_route)
+        self.cancel_route_button = QPushButton("Cancel Active")
+        self.cancel_route_button.clicked.connect(lambda: self._cancel_active_routes())
+        self.simulate_button = QPushButton("Start Sim")
+        self.simulate_button.clicked.connect(self._start_simulation)
         self.clear_visual_button = QPushButton("Clear View")
         self.clear_visual_button.clicked.connect(self.canvas.clear_route_visualization)
         self.refresh_table_button = QPushButton("Refresh Table")
         self.refresh_table_button.clicked.connect(self._refresh_interlocking_table)
         button_row.addWidget(self.find_route_button)
         button_row.addWidget(self.set_route_button)
+        button_row.addWidget(self.cancel_route_button)
+        button_row.addWidget(self.simulate_button)
         button_row.addWidget(self.clear_visual_button)
         button_row.addWidget(self.refresh_table_button)
         route_layout.addLayout(button_row)
@@ -278,6 +292,7 @@ class MainWindow(QMainWindow):
         self._refresh_signal_selectors()
         self._refresh_interlocking_table()
         self.canvas.refresh_visual_state()
+        self._sync_ui_state()
 
     def _refresh_signal_selectors(self) -> None:
         signals = sorted(self.canvas.topology.signals.keys())
@@ -344,11 +359,14 @@ class MainWindow(QMainWindow):
             return
 
         route_engine = RouteEngine(self.canvas.topology)
+        active_routes = (
+            self.simulation.locking_engine.active_routes if self.simulation is not None else {}
+        )
         try:
             route = route_engine.find_route(
                 entry_signal_id=entry_signal_id,
                 exit_signal_id=exit_signal_id,
-                active_routes={},
+                active_routes=active_routes,
                 overlap_length=self.overlap_spin.value(),
             )
         except Exception as exc:
@@ -365,6 +383,7 @@ class MainWindow(QMainWindow):
         )
         self.preview_route = route
         self._write_search_log(route, search_order)
+        self._sync_ui_state()
         self.status.showMessage(f"Preview route: {entry_signal_id} -> {exit_signal_id}")
 
     def _set_selected_route(self) -> None:
@@ -377,15 +396,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Set Route", "Entry and Exit must be different signals.")
             return
 
-        if self.simulation is None:
-            self.simulation = Simulation(self.canvas.topology)
-
         try:
-            route = self.simulation.set_route(
-                entry_signal_id=entry_signal_id,
-                exit_signal_id=exit_signal_id,
-                overlap_length=self.overlap_spin.value(),
-            )
+            route, created = self._get_or_create_locked_route(entry_signal_id, exit_signal_id)
         except Exception as exc:
             QMessageBox.warning(self, "Set Route failed", str(exc))
             return
@@ -400,7 +412,11 @@ class MainWindow(QMainWindow):
         self.preview_route = route
         self._write_search_log(route, search_order)
         self.canvas.refresh_visual_state()
-        self.status.showMessage(f"Route set: {entry_signal_id} -> {exit_signal_id}")
+        self._sync_ui_state()
+        if created:
+            self.status.showMessage(f"Route set: {entry_signal_id} -> {exit_signal_id}")
+        else:
+            self.status.showMessage(f"Route already active: {entry_signal_id} -> {exit_signal_id}")
 
     def _on_table_row_clicked(self, row_index: int, _column_index: int) -> None:
         if row_index < 0 or row_index >= len(self.interlocking_rows):
@@ -467,13 +483,14 @@ class MainWindow(QMainWindow):
         return search_order, path
 
     def _write_search_log(self, route: Route, search_order: list[str]) -> None:
-        point_locks = self._format_point_locks(route.required_point_positions)
+        point_locks = self._format_point_locks(route.all_required_point_positions)
         self.search_log.setPlainText(
             "\n".join(
                 [
                     f"Route id: {route.id}",
                     f"Entry signal: {route.entry_signal_id}",
                     f"Exit signal: {route.exit_signal_id}",
+                    f"Approach section: {route.approach_locking_section or '-'}",
                     f"Search order: {' -> '.join(search_order)}",
                     f"Route path: {' -> '.join(route.path)}",
                     f"Overlap: {' -> '.join(route.overlap_path) if route.overlap_path else '-'}",
@@ -491,6 +508,7 @@ class MainWindow(QMainWindow):
     def _start_simulation(self) -> None:
         if self._simulation_timer.isActive():
             self._simulation_timer.stop()
+            self._sync_ui_state()
             self.status.showMessage("Simulation stopped")
             return
 
@@ -506,38 +524,117 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Simulation", "At least two signals are required.")
             return
 
-        self.simulation = Simulation(self.canvas.topology)
-        try:
-            route = self.simulation.set_route(
-                entry_signal_id,
-                exit_signal_id,
-                overlap_length=self.overlap_spin.value(),
+        route = self._get_active_route_for_pair(entry_signal_id, exit_signal_id)
+        if route is None:
+            QMessageBox.warning(
+                self,
+                "Simulation",
+                "Please Set Route first for the selected Entry/Exit before starting simulation.",
             )
-            train = Train(id="T1", current_section=route.path[0], speed=1.0)
-            self.simulation.add_train(train, route)
+            return
+
+        try:
+            train = self._find_train_for_route(route.id)
+            simulation_start_section = self._resolve_simulation_start_section(route)
+            if train is None:
+                train = Train(id=self._next_train_id(), current_section=simulation_start_section, speed=1.0)
+                if self.simulation is None:
+                    raise RuntimeError("Internal state error: missing simulation for active route")
+                self.simulation.add_train(train, route)
+            else:
+                simulation_start_section = train.current_section
         except Exception as exc:
             QMessageBox.critical(self, "Simulation failed", str(exc))
             self.canvas.refresh_visual_state()
+            self._sync_ui_state()
             return
 
-        search_order, _ = self._build_search_trace(route.path[0], route.path[-1])
+        visual_route_path = list(route.path)
+        if simulation_start_section not in visual_route_path:
+            visual_route_path = [simulation_start_section, *visual_route_path]
+
+        search_order, _ = self._build_search_trace(simulation_start_section, route.path[-1])
         self.canvas.animate_route_search(
             search_sequence=search_order,
-            route_path=route.path,
+            route_path=visual_route_path,
             overlap_path=route.overlap_path,
             interval_ms=160,
         )
         self._write_search_log(route, search_order)
-        self._simulation_ticks_remaining = max(3, len(route.full_path) + 2)
+        extra_steps = 1 if simulation_start_section not in route.full_path else 0
+        self._simulation_ticks_remaining = max(3, len(route.full_path) + extra_steps + 2)
         self.canvas.refresh_visual_state()
         self.status.showMessage(
-            f"Simulation running: {entry_signal_id} -> {exit_signal_id}, route={route.id}"
+            f"Simulation running: {entry_signal_id} -> {exit_signal_id}, route={route.id}, train={train.id}, start={simulation_start_section}"
         )
         self._simulation_timer.start(700)
+        self._sync_ui_state()
+
+    def _get_active_route_for_pair(
+        self,
+        entry_signal_id: str,
+        exit_signal_id: str,
+    ) -> Route | None:
+        if self.simulation is None:
+            return None
+        for active_route in self.simulation.locking_engine.active_routes.values():
+            if (
+                active_route.entry_signal_id == entry_signal_id
+                and active_route.exit_signal_id == exit_signal_id
+            ):
+                return active_route
+        return None
+
+    def _get_or_create_locked_route(
+        self,
+        entry_signal_id: str,
+        exit_signal_id: str,
+    ) -> tuple[Route, bool]:
+        if self.simulation is None:
+            self.simulation = Simulation(self.canvas.topology)
+
+        for active_route in self.simulation.locking_engine.active_routes.values():
+            if (
+                active_route.entry_signal_id == entry_signal_id
+                and active_route.exit_signal_id == exit_signal_id
+            ):
+                return active_route, False
+
+        route = self.simulation.set_route(
+            entry_signal_id=entry_signal_id,
+            exit_signal_id=exit_signal_id,
+            overlap_length=self.overlap_spin.value(),
+        )
+        return route, True
+
+    def _find_train_for_route(self, route_id: str) -> Train | None:
+        if self.simulation is None:
+            return None
+        for train in self.simulation.trains.values():
+            if train.route_id == route_id:
+                return train
+        return None
+
+    def _resolve_simulation_start_section(self, route: Route) -> str:
+        approach_section = route.approach_locking_section.strip() if route.approach_locking_section else ""
+        if approach_section:
+            approach_element = self.canvas.topology.get_element(approach_section)
+            if isinstance(approach_element, TrackSection) and approach_element.occupied:
+                return approach_section
+        return route.path[0]
+
+    def _next_train_id(self) -> str:
+        if self.simulation is None:
+            return "T1"
+        index = 1
+        while f"T{index}" in self.simulation.trains:
+            index += 1
+        return f"T{index}"
 
     def _simulation_tick(self) -> None:
         if self.simulation is None:
             self._simulation_timer.stop()
+            self._sync_ui_state()
             return
         try:
             self.simulation.step()
@@ -546,10 +643,77 @@ class MainWindow(QMainWindow):
             self._simulation_timer.stop()
             self.canvas.refresh_visual_state()
             QMessageBox.critical(self, "Fail-safe STOP", str(exc))
+            self._sync_ui_state()
             self.status.showMessage("Simulation halted by fail-safe")
             return
 
         self._simulation_ticks_remaining -= 1
         if self._simulation_ticks_remaining <= 0:
             self._simulation_timer.stop()
+            self._sync_ui_state()
             self.status.showMessage("Simulation complete")
+
+    def _cancel_active_routes(self, show_message: bool = True) -> None:
+        if self.simulation is None:
+            if show_message:
+                self.status.showMessage("No active simulation routes to cancel")
+            return
+
+        active_route_ids = list(self.simulation.locking_engine.active_routes.keys())
+        if not active_route_ids:
+            if show_message:
+                self.status.showMessage("No active routes to cancel")
+            return
+
+        failures: list[str] = []
+        for route_id in active_route_ids:
+            try:
+                self.simulation.locking_engine.cancel_route(route_id)
+            except Exception as exc:
+                failures.append(f"{route_id}: {exc}")
+
+        self.simulation.locking_engine.update_time_locking()
+        self.canvas.refresh_visual_state()
+        self._sync_ui_state()
+
+        if failures:
+            QMessageBox.warning(
+                self,
+                "Cancel route",
+                "Some routes remain locked:\n" + "\n".join(failures),
+            )
+        elif show_message:
+            self.status.showMessage("Cancelled all active routes")
+
+    def _sync_ui_state(self) -> None:
+        has_signals = self.entry_combo.count() > 1 and self.exit_combo.count() > 1
+        if self.simulation is not None:
+            self.simulation.locking_engine.update_time_locking()
+            self.canvas.refresh_visual_state()
+
+        selected_entry = self.entry_combo.currentText().strip()
+        selected_exit = self.exit_combo.currentText().strip()
+        selected_pair_ready = (
+            bool(selected_entry)
+            and bool(selected_exit)
+            and selected_entry != selected_exit
+            and self._get_active_route_for_pair(selected_entry, selected_exit) is not None
+        )
+
+        active_routes = (
+            self.simulation.locking_engine.active_routes if self.simulation is not None else {}
+        )
+        has_active_routes = bool(active_routes)
+        simulation_running = self._simulation_timer.isActive()
+
+        self.find_route_button.setEnabled(has_signals)
+        self.set_route_button.setEnabled(has_signals and not simulation_running)
+        self.refresh_table_button.setEnabled(True)
+        self.clear_visual_button.setEnabled(True)
+        self.cancel_route_button.setEnabled(has_active_routes)
+        self.cancel_route_action.setEnabled(has_active_routes)
+
+        self.simulation_action.setText("Stop Simulation" if simulation_running else "Start Simulation")
+        self.simulation_action.setEnabled(simulation_running or selected_pair_ready)
+        self.simulate_button.setText("Stop Sim" if simulation_running else "Start Sim")
+        self.simulate_button.setEnabled(simulation_running or selected_pair_ready)

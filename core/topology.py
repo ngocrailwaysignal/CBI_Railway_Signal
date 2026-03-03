@@ -9,12 +9,12 @@ from typing import Any, Dict, Iterable, Optional
 import networkx as nx
 
 from core.elements import (
+    ApproachSection,
     Point,
     PointPosition,
     RailElement,
     Signal,
     SignalAspect,
-    SignalRole,
     TrackSection,
 )
 
@@ -36,6 +36,14 @@ class RailwayTopology:
         self.graph.add_node(section.id, element=section)
         if position is not None:
             self.ui_positions[section.id] = position
+
+    def add_approach_section(
+        self,
+        section: ApproachSection,
+        position: tuple[float, float] | None = None,
+    ) -> None:
+        """Add an approach-locking track section node."""
+        self.add_section(section, position=position)
 
     def add_point(self, point: Point, position: tuple[float, float] | None = None) -> None:
         """Add a point node."""
@@ -68,6 +76,8 @@ class RailwayTopology:
 
         if isinstance(target, Signal):
             self.signal_links.add((source_id, target_id))
+            if isinstance(source, TrackSection) and not target.approach_section:
+                target.approach_section = source_id
             self.sync_signal_virtual_routes()
             return
 
@@ -93,6 +103,8 @@ class RailwayTopology:
 
         if isinstance(target, Signal):
             self.signal_links.discard((source_id, target_id))
+            if target.approach_section == source_id:
+                target.approach_section = ""
             self.sync_signal_virtual_routes()
             return
 
@@ -207,6 +219,7 @@ class RailwayTopology:
                 payload["sections"].append(
                     {
                         "id": element.id,
+                        "kind": "approach" if isinstance(element, ApproachSection) else "track",
                         "occupied": element.occupied,
                         "locked_by": element.locked_by,
                         "length": element.length,
@@ -229,8 +242,8 @@ class RailwayTopology:
                 {
                     "id": signal.id,
                     "aspect": signal.aspect.value,
-                    "role": signal.role.value,
                     "protects": signal.protects,
+                    "approach_section": signal.approach_section,
                     "route_id": signal.route_id,
                 }
             )
@@ -256,7 +269,9 @@ class RailwayTopology:
         positions = data.get("ui_positions", {})
 
         for section_data in data.get("sections", []):
-            section = TrackSection(
+            section_kind = str(section_data.get("kind", "track")).strip().lower()
+            section_cls = ApproachSection if section_kind == "approach" else TrackSection
+            section = section_cls(
                 id=section_data["id"],
                 occupied=bool(section_data.get("occupied", False)),
                 locked_by=section_data.get("locked_by"),
@@ -288,8 +303,8 @@ class RailwayTopology:
             signal = Signal(
                 id=signal_data["id"],
                 aspect=SignalAspect(signal_data.get("aspect", SignalAspect.STOP.value)),
-                role=SignalRole(signal_data.get("role", SignalRole.AUTO.value)),
                 protects=signal_data.get("protects", ""),
+                approach_section=str(signal_data.get("approach_section", "")).strip(),
                 route_id=signal_data.get("route_id"),
             )
             signal_pos = positions.get(signal.id)
@@ -321,40 +336,3 @@ class RailwayTopology:
 
         return topology
 
-    def resolve_signal_role(self, signal_id: str) -> SignalRole:
-        """Resolve signal role using explicit setting or topology heuristics."""
-        signal = self.signals.get(signal_id)
-        if signal is None:
-            raise KeyError(f"Unknown signal: {signal_id}")
-        if signal.role != SignalRole.AUTO:
-            return signal.role
-
-        x_position = self.ui_positions.get(signal_id, (None, None))[0]
-        known_x = [
-            self.ui_positions[sid][0]
-            for sid in self.signals
-            if sid in self.ui_positions and self.ui_positions[sid][0] is not None
-        ]
-        if x_position is not None and len(known_x) >= 2:
-            left, right = min(known_x), max(known_x)
-            midpoint = (left + right) / 2.0
-            if x_position <= midpoint:
-                return SignalRole.ENTRY
-            return SignalRole.EXIT
-
-        protected = signal.protects
-        if protected in self.graph.nodes:
-            in_degree = self.graph.in_degree(protected)
-            out_degree = self.graph.out_degree(protected)
-            if in_degree == 0 and out_degree > 0:
-                return SignalRole.ENTRY
-            if out_degree == 0 and in_degree > 0:
-                return SignalRole.EXIT
-
-        prefix = "".join(ch for ch in signal.id if ch.isalpha()).upper()
-        if prefix.startswith("A"):
-            return SignalRole.ENTRY
-        if prefix.startswith(("B", "C", "D", "X")):
-            return SignalRole.EXIT
-
-        return SignalRole.BOTH

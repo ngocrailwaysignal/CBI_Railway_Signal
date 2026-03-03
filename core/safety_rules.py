@@ -50,20 +50,15 @@ class SafetyRules:
     def has_conflict(candidate: "Route", active_routes: Iterable["Route"]) -> bool:
         """Return True if a route conflicts with any active route footprint."""
         candidate_nodes = set(candidate.full_path)
-        candidate_points = set(candidate.required_point_positions)
+        candidate_points = set(candidate.all_required_point_positions)
         for active in active_routes:
             active_nodes = set(active.full_path)
-            active_points = set(active.required_point_positions)
+            active_points = set(active.all_required_point_positions)
             if candidate_nodes.intersection(active_nodes):
                 return True
             if candidate_points.intersection(active_points):
                 return True
         return False
-
-    @staticmethod
-    def flank_protection_placeholder(_route: "Route", _topology: RailwayTopology) -> bool:
-        """Placeholder hook for flank protection extension."""
-        return True
 
     @staticmethod
     def detect_unsafe_conditions(topology: RailwayTopology, trains: Iterable["Train"]) -> list[str]:
