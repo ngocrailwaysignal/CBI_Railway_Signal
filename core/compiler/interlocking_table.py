@@ -27,6 +27,7 @@ class InterlockingTableRow:
     path: list[str]
     overlap: list[str]
     required_point_positions: dict[str, PointPosition]
+    flank_point_positions: dict[str, PointPosition]
     locked_sections: list[str]
     conflicting_routes: list[str]
 
@@ -88,6 +89,7 @@ class InterlockingTableGenerator:
                     path=route.path,
                     overlap=route.overlap_path,
                     required_point_positions=all_points,
+                    flank_point_positions=dict(route.flank_point_positions),
                     locked_sections=locked_sections,
                     conflicting_routes=[],
                 )

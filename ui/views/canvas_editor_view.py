@@ -149,38 +149,38 @@ class NodeItem(QGraphicsObject):
         painter.setBrush(QBrush(QColor("#f3f3f3")))
         painter.drawRect(panel)
 
-        position = str(self.payload.get("position", PointPosition.NORMAL.value))
         symbol_orientation = str(
             self.payload.get("symbol_orientation", PointSymbolOrientation.RIGHT.value)
         )
         branch_offset = max(6.0, panel.height() * 0.30)
         rail_half = panel.width() / 2.0 - 2.0
 
-        # 4 UI orientations are rendered as horizontal point symbols:
-        # RIGHT  -> toe left, branch to upper-right (NORMAL) / lower-right (REVERSE)
-        # DOWN   -> toe left, branch to lower-right (NORMAL) / upper-right (REVERSE)
-        # LEFT   -> toe right, branch to lower-left (NORMAL) / upper-left (REVERSE)
-        # UP     -> toe right, branch to upper-left (NORMAL) / lower-left (REVERSE)
+        # Point UI is controlled only by symbol orientation.
+        # NORMAL/REVERSE position remains a runtime logic state and does not flip symbol drawing.
+        # RIGHT  -> toe left, branch to upper-right
+        # DOWN   -> toe left, branch to lower-right
+        # LEFT   -> toe right, branch to lower-left
+        # UP     -> toe right, branch to upper-left
         if symbol_orientation == PointSymbolOrientation.LEFT.value:
             toe_x, toe_y = rail_half, 0.0
             straight_x, straight_y = -rail_half, 0.0
             branch_x = -rail_half
-            branch_y = branch_offset if position == PointPosition.NORMAL.value else -branch_offset
+            branch_y = branch_offset
         elif symbol_orientation == PointSymbolOrientation.UP.value:
             toe_x, toe_y = rail_half, 0.0
             straight_x, straight_y = -rail_half, 0.0
             branch_x = -rail_half
-            branch_y = -branch_offset if position == PointPosition.NORMAL.value else branch_offset
+            branch_y = -branch_offset
         elif symbol_orientation == PointSymbolOrientation.DOWN.value:
             toe_x, toe_y = -rail_half, 0.0
             straight_x, straight_y = rail_half, 0.0
             branch_x = rail_half
-            branch_y = branch_offset if position == PointPosition.NORMAL.value else -branch_offset
+            branch_y = branch_offset
         else:
             toe_x, toe_y = -rail_half, 0.0
             straight_x, straight_y = rail_half, 0.0
             branch_x = rail_half
-            branch_y = -branch_offset if position == PointPosition.NORMAL.value else branch_offset
+            branch_y = -branch_offset
 
         def _to_scene(x: float, y: float) -> QPointF:
             return QPointF(panel.center().x() + x, panel.center().y() + y)
@@ -443,6 +443,9 @@ class CanvasEditor(QGraphicsView):
     """Grid canvas supporting block drag-drop and edge connection."""
 
     GRID_STEP = 25.0
+    ZOOM_FACTOR = 1.15
+    MIN_ZOOM = 0.3
+    MAX_ZOOM = 4.0
     editor_message = pyqtSignal(str)
     node_selected = pyqtSignal(object)
     topology_changed = pyqtSignal()
@@ -453,6 +456,8 @@ class CanvasEditor(QGraphicsView):
         self.viewport().setAcceptDrops(True)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.scene_ref = QGraphicsScene(self)
         self.setScene(self.scene_ref)
         self.scene_ref.setSceneRect(-1000.0, -1000.0, 2200.0, 2200.0)
@@ -488,6 +493,10 @@ class CanvasEditor(QGraphicsView):
         self._train_animations: dict[str, QPropertyAnimation] = {}
         self._train_last_sections: dict[str, str] = {}
         self._train_animation_duration_ms = 420
+        self._is_panning = False
+        self._pan_last_pos: Any = None
+        self._pan_has_moved = False
+        self._suppress_context_menu_once = False
 
     def dragEnterEvent(self, event: Any) -> None:
         if event.mimeData().hasFormat(PaletteListWidget.COMPONENT_MIME):
@@ -538,6 +547,14 @@ class CanvasEditor(QGraphicsView):
         )
 
     def mousePressEvent(self, event: Any) -> None:
+        if event.button() == Qt.MouseButton.RightButton:
+            self._is_panning = True
+            self._pan_last_pos = event.position().toPoint()
+            self._pan_has_moved = False
+            self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
+            event.accept()
+            return
+
         if (
             self._connect_mode
             and event.button() == Qt.MouseButton.LeftButton
@@ -601,6 +618,17 @@ class CanvasEditor(QGraphicsView):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: Any) -> None:
+        if self._is_panning and self._pan_last_pos is not None:
+            current_pos = event.position().toPoint()
+            delta = current_pos - self._pan_last_pos
+            self._pan_last_pos = current_pos
+            if delta.manhattanLength() > 0:
+                self._pan_has_moved = True
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - delta.x())
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta.y())
+            event.accept()
+            return
+
         if self._temporary_edge is not None and self._connection_start is not None:
             start = self._connection_start.sceneBoundingRect().center()
             end = self.mapToScene(event.position().toPoint())
@@ -610,6 +638,18 @@ class CanvasEditor(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: Any) -> None:
+        if event.button() == Qt.MouseButton.RightButton and self._is_panning:
+            self._is_panning = False
+            self._pan_last_pos = None
+            self._suppress_context_menu_once = self._pan_has_moved
+            self._pan_has_moved = False
+            if self._connect_mode:
+                self.viewport().setCursor(Qt.CursorShape.CrossCursor)
+            else:
+                self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+            event.accept()
+            return
+
         if self._temporary_edge is not None and self._connection_start is not None:
             target = self._node_at_view_pos(event.position().toPoint())
             self.scene_ref.removeItem(self._temporary_edge)
@@ -624,6 +664,28 @@ class CanvasEditor(QGraphicsView):
             event.accept()
             return
         super().mouseReleaseEvent(event)
+
+    def wheelEvent(self, event: Any) -> None:
+        if not (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+            super().wheelEvent(event)
+            return
+
+        delta_y = event.angleDelta().y()
+        if delta_y == 0:
+            super().wheelEvent(event)
+            return
+
+        current_zoom = self.transform().m11()
+        zoom_in = delta_y > 0
+        next_zoom = current_zoom * (self.ZOOM_FACTOR if zoom_in else 1.0 / self.ZOOM_FACTOR)
+
+        if not (self.MIN_ZOOM <= next_zoom <= self.MAX_ZOOM):
+            event.accept()
+            return
+
+        factor = self.ZOOM_FACTOR if zoom_in else 1.0 / self.ZOOM_FACTOR
+        self.scale(factor, factor)
+        event.accept()
 
     def connect_selected_nodes(self) -> None:
         selected_nodes = [
@@ -641,6 +703,11 @@ class CanvasEditor(QGraphicsView):
         self.create_connection(first.element_id, second.element_id)
 
     def contextMenuEvent(self, event: Any) -> None:
+        if self._suppress_context_menu_once:
+            self._suppress_context_menu_once = False
+            event.accept()
+            return
+
         scene_pos = self.mapToScene(event.pos())
         item = self.scene_ref.itemAt(scene_pos, self.transform())
         node = self._extract_node_item(item)

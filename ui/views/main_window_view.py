@@ -31,7 +31,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.application import AppMode
-from core.domain.model.elements import PointPosition
+from core.domain.model.elements import PointPosition, TrackSection
 from core.compiler.interlocking_table import InterlockingTableRow
 from core.domain.model.route import Route
 from core.runtime.simulation import Simulation
@@ -51,7 +51,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, application_profile: GenericApplicationProfile | None = None) -> None:
         super().__init__()
-        self.setWindowTitle("Geographical Interlocking Simulator")
+        self.setWindowTitle("Computer-Based Interlocking")
         self.resize(1700, 900)
 
         self.application_profile = application_profile or GenericApplicationProfile()
@@ -200,7 +200,7 @@ class MainWindow(QMainWindow):
         self.set_route_action = toolbar.addAction("Set Route")
         self.set_route_action.triggered.connect(self._set_selected_route)
 
-        self.cancel_route_action = toolbar.addAction("Cancel Active Route")
+        self.cancel_route_action = toolbar.addAction("Cancel  Route")
         self.cancel_route_action.triggered.connect(lambda: self._cancel_active_routes())
 
         self.simulation_action = toolbar.addAction("Start Simulation")
@@ -267,21 +267,21 @@ class MainWindow(QMainWindow):
         self.mode_tabs.addTab(
             self._build_mode_tab_body(
                 "Build topology and interlocking assets.",
-                "Enable: add/move/connect/rename/delete elements and edit static attributes.",
+                "",
             ),
             "Design Layout",
         )
         self.mode_tabs.addTab(
             self._build_mode_tab_body(
                 "Train movement sandbox with manual state override.",
-                "Enable: set/cancel route + start simulation + edit occupied/locked_by states.",
+                "",
             ),
             "Simulation",
         )
         self.mode_tabs.addTab(
             self._build_mode_tab_body(
                 "Operational mode with strict manual state safety.",
-                "Enable: route operations only. Manual occupied/locked_by editing is blocked.",
+                "",
             ),
             "Runtime",
         )
@@ -335,9 +335,9 @@ class MainWindow(QMainWindow):
         self.find_route_button.clicked.connect(self._preview_selected_route)
         self.set_route_button = QPushButton("Set Route")
         self.set_route_button.clicked.connect(self._set_selected_route)
-        self.cancel_route_button = QPushButton("Cancel Active")
+        self.cancel_route_button = QPushButton("Cancel Route")
         self.cancel_route_button.clicked.connect(lambda: self._cancel_active_routes())
-        self.simulate_button = QPushButton("Start Sim")
+        self.simulate_button = QPushButton("Start Simulation")
         self.simulate_button.clicked.connect(self._start_simulation)
         button_row.addWidget(self.find_route_button)
         button_row.addWidget(self.set_route_button)
@@ -352,14 +352,29 @@ class MainWindow(QMainWindow):
 
         table_group = QGroupBox("Interlocking Table")
         table_layout = QVBoxLayout(table_group)
-        self.table_widget = QTableWidget(0, 7, table_group)
+        self.table_widget = QTableWidget(0, 12, table_group)
         self.table_widget.setHorizontalHeaderLabels(
-            ["Route", "Entry", "Exit", "Point locks", "Track locks", "Overlap", "Conflicts"]
+            [
+                "NO",
+                "Route",
+                "Signal",
+                "Point",
+                "Opposing Signal",
+                "Track",
+                "Approach Locking\nTrack",
+                "Approach Locking\nRelease Time",
+                "Destination Track",
+                "Flank Point",
+                "Overlap",
+                "Overlap\nRelease Time",
+            ]
         )
         self.table_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table_widget.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table_widget.verticalHeader().setVisible(False)
         header = self.table_widget.horizontalHeader()
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+        header.setFixedHeight(52)
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         header.setStretchLastSection(True)
         self.table_widget.cellClicked.connect(self._on_table_row_clicked)
@@ -530,14 +545,14 @@ class MainWindow(QMainWindow):
         self.canvas.load_topology(layout.topology)
 
     def _on_timing_controls_changed(self, _value: float) -> None:
-        if self.simulation is None:
-            return
-        self.application_service.configure_simulation_timing(
-            self.simulation,
-            approach_time_lock_seconds=float(self.approach_time_spin.value()),
-            overlap_release_seconds=float(self.overlap_release_spin.value()),
-        )
-        self._sync_ui_state()
+        if self.simulation is not None:
+            self.application_service.configure_simulation_timing(
+                self.simulation,
+                approach_time_lock_seconds=float(self.approach_time_spin.value()),
+                overlap_release_seconds=float(self.overlap_release_spin.value()),
+            )
+            self._sync_ui_state()
+        self._refresh_interlocking_table()
 
     def _on_topology_changed(self) -> None:
         if self.current_layout is not None:
@@ -593,18 +608,30 @@ class MainWindow(QMainWindow):
 
         self.table_widget.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
+            entry_signal = self.canvas.topology.signals.get(row.entry_signal)
+            approach_section = (
+                entry_signal.approach_section.strip()
+                if entry_signal is not None and entry_signal.approach_section.strip()
+                else "-"
+            )
             values = [
-                row.route_name,
-                f"{row.entry_signal} ({row.entry_element})",
-                f"{row.exit_signal} ({row.exit_element})",
+                str(row_index + 1),
+                self._format_route_label(row),
+                row.entry_signal,
                 self._format_point_locks(row.required_point_positions),
+                self._format_opposing_signals(row),
                 " -> ".join(row.locked_sections) if row.locked_sections else "-",
+                approach_section,
+                self._format_seconds(float(self.approach_time_spin.value())),
+                self._format_destination_track(row),
+                self._format_flank_points(row),
                 " -> ".join(row.overlap) if row.overlap else "-",
-                ", ".join(sorted(set(row.conflicting_routes))) if row.conflicting_routes else "-",
+                self._format_seconds(float(self.overlap_release_spin.value())),
             ]
             for col_index, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                item.setTextAlignment(int(Qt.AlignmentFlag.AlignCenter))
                 self.table_widget.setItem(row_index, col_index, item)
 
         current_pair = (
@@ -711,6 +738,7 @@ class MainWindow(QMainWindow):
         self._write_search_log(route, search_order)
         self.canvas.refresh_visual_state()
         self._sync_ui_state()
+        self._refresh_interlocking_table()
         if created:
             self.status.showMessage(f"Route set: {entry_signal_id} -> {exit_signal_id}")
         else:
@@ -729,19 +757,31 @@ class MainWindow(QMainWindow):
             overlap_path=row.overlap,
             interval_ms=180,
         )
-
-        point_locks = self.route_presenter.format_point_locks(row.required_point_positions)
+        entry_signal = self.canvas.topology.signals.get(row.entry_signal)
         self.search_log.setPlainText(
-            "\n".join(
-                [
-                    f"Route: {row.route_name}",
-                    f"Entry: {row.entry_signal} protects {row.entry_element}",
-                    f"Exit: {row.exit_signal} protects {row.exit_element}",
-                    f"Search order: {' -> '.join(search_order)}",
-                    f"Locked path: {' -> '.join(row.path)}",
-                    f"Overlap: {' -> '.join(row.overlap) if row.overlap else '-'}",
-                    f"Point locks: {point_locks}",
-                ]
+            self.route_presenter.build_interlocking_row_search_log(
+                route_id=row.route_name,
+                route_label=self._format_route_label(row),
+                entry_signal=row.entry_signal,
+                exit_signal=row.exit_signal,
+                entry_protects=row.entry_element or "-",
+                exit_protects=row.exit_element or "-",
+                direction=entry_signal.direction.value if entry_signal is not None else "-",
+                approach_locking_section=(
+                    entry_signal.approach_section.strip()
+                    if entry_signal is not None and entry_signal.approach_section.strip()
+                    else "-"
+                ),
+                search_order=search_order,
+                locked_path=row.path,
+                overlap_path=row.overlap,
+                destination_track=self._format_destination_track(row),
+                point_locks=row.required_point_positions,
+                flank_point_locks=row.flank_point_positions,
+                monitored_flank_sections=[],
+                opposing_signals=self._opposing_signals_for_row(row),
+                conflicting_routes=sorted(set(row.conflicting_routes)),
+                overlap_release_seconds=float(self.overlap_release_spin.value()),
             )
         )
 
@@ -781,11 +821,113 @@ class MainWindow(QMainWindow):
         return search_order, path
 
     def _write_search_log(self, route: Route, search_order: list[str]) -> None:
-        self.search_log.setPlainText(self.route_presenter.build_route_search_log(route, search_order))
+        entry_signal = self.canvas.topology.signals.get(route.entry_signal_id)
+        exit_signal = self.canvas.topology.signals.get(route.exit_signal_id)
+        lifecycle = route.lifecycle_state.value if getattr(route, "lifecycle_state", None) else "-"
+
+        approach_lock_state: str | None = None
+        approach_lock_remaining: float | None = None
+        if self.simulation is not None:
+            locking_engine = self.simulation.locking_engine
+            state = locking_engine.approach_lock_state(route.id)
+            if state is not None:
+                approach_lock_state = state.value
+                approach_lock_remaining = locking_engine.approach_locking.remaining_time_lock(route.id)
+
+        self.search_log.setPlainText(
+            self.route_presenter.build_route_search_log(
+                route,
+                search_order,
+                route_label=f"{route.entry_signal_id}->{route.exit_signal_id}",
+                entry_protects=(entry_signal.protects if entry_signal is not None else "-"),
+                exit_protects=(exit_signal.protects if exit_signal is not None else "-"),
+                direction=(entry_signal.direction.value if entry_signal is not None else "-"),
+                lifecycle=lifecycle,
+                destination_track=self._destination_track_from_path(route.path, fallback="-"),
+                opposing_signals=self._opposing_signals_for_route(route),
+                conflicting_routes=self._conflicting_routes_for_pair(
+                    route.entry_signal_id, route.exit_signal_id
+                ),
+                approach_lock_state=approach_lock_state,
+                approach_lock_remaining_seconds=approach_lock_remaining,
+                overlap_release_seconds=float(self.overlap_release_spin.value()),
+            )
+        )
 
     @staticmethod
     def _format_point_locks(required_points: dict[str, PointPosition]) -> str:
         return RoutePresenter.format_point_locks(required_points)
+
+    @staticmethod
+    def _format_route_label(row: InterlockingTableRow) -> str:
+        return f"{row.entry_element} -> {row.exit_signal}"
+
+    def _destination_track_from_path(self, path: list[str], fallback: str = "-") -> str:
+        for node_id in reversed(path):
+            element = self.canvas.topology.get_element(node_id)
+            if isinstance(element, TrackSection):
+                return node_id
+        return fallback
+
+    def _format_opposing_signals(self, row: InterlockingTableRow) -> str:
+        opposing = self._opposing_signals_for_row(row)
+        if not opposing:
+            return "-"
+        return ", ".join(opposing)
+
+    def _format_destination_track(self, row: InterlockingTableRow) -> str:
+        return self._destination_track_from_path(row.path, fallback=row.exit_element or "-")
+
+    def _opposing_signals_for_row(self, row: InterlockingTableRow) -> list[str]:
+        entry_signal = self.canvas.topology.signals.get(row.entry_signal)
+        if entry_signal is None:
+            return []
+        route_footprint = set(row.path)
+        route_footprint.update(row.overlap)
+        route_footprint.add(row.entry_element)
+        route_footprint.add(row.exit_element)
+        return sorted(
+            signal.id
+            for signal in self.canvas.topology.signals.values()
+            if signal.id != row.entry_signal
+            and signal.direction != entry_signal.direction
+            and signal.protects.strip() in route_footprint
+        )
+
+    def _opposing_signals_for_route(self, route: Route) -> list[str]:
+        row_like = InterlockingTableRow(
+            route_name=route.id,
+            entry_signal=route.entry_signal_id,
+            exit_signal=route.exit_signal_id,
+            entry_element=self.canvas.topology.signals.get(route.entry_signal_id).protects
+            if self.canvas.topology.signals.get(route.entry_signal_id) is not None
+            else "",
+            exit_element=self.canvas.topology.signals.get(route.exit_signal_id).protects
+            if self.canvas.topology.signals.get(route.exit_signal_id) is not None
+            else "",
+            path=list(route.path),
+            overlap=list(route.overlap_path),
+            required_point_positions=dict(route.required_point_positions),
+            flank_point_positions=dict(route.flank_point_positions),
+            locked_sections=[],
+            conflicting_routes=[],
+        )
+        return self._opposing_signals_for_row(row_like)
+
+    def _conflicting_routes_for_pair(self, entry_signal_id: str, exit_signal_id: str) -> list[str]:
+        for row in self.interlocking_rows:
+            if row.entry_signal == entry_signal_id and row.exit_signal == exit_signal_id:
+                return sorted(set(row.conflicting_routes))
+        return []
+
+
+    @staticmethod
+    def _format_seconds(value_seconds: float) -> str:
+        return f"{value_seconds:.1f} s"
+
+    @staticmethod
+    def _format_flank_points(row: InterlockingTableRow) -> str:
+        return RoutePresenter.format_point_locks(row.flank_point_positions)
 
     def _validate_signal_pair_request(
         self,
@@ -955,6 +1097,7 @@ class MainWindow(QMainWindow):
         self.canvas.clear_route_visualization()
         self.canvas.refresh_visual_state()
         self._sync_ui_state()
+        self._refresh_interlocking_table()
 
         if cancel_result.failures:
             QMessageBox.warning(
@@ -1021,7 +1164,7 @@ class MainWindow(QMainWindow):
         self.simulation_action.setEnabled(
             capabilities.can_start_simulation and (simulation_running or selected_pair_ready)
         )
-        self.simulate_button.setText("Stop Sim" if simulation_running else "Start Sim")
+        self.simulate_button.setText("Stop Sim" if simulation_running else "Start Simulation")
         self.simulate_button.setEnabled(
             capabilities.can_start_simulation and (simulation_running or selected_pair_ready)
         )
