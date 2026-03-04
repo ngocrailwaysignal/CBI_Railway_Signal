@@ -16,11 +16,12 @@ class GenericApplicationProfile:
     name: str = "Default"
     time_lock_seconds: float = 30.0
     default_overlap_length: int = 0
-    overlap_release_seconds: float = 0.0
+    overlap_release_seconds: float = 30.0
     load_runtime_state: bool = False
     load_occupancy: bool = True
     include_runtime_state: bool = False
     include_occupancy: bool = True
+    ui_language: str = "en"
 
     def to_product_rules(self) -> ProductRules:
         """Map application profile options into product-kernel rules."""

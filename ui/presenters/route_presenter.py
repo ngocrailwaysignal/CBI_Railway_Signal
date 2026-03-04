@@ -4,10 +4,20 @@ from __future__ import annotations
 
 from core.domain.model.elements import PointPosition
 from core.domain.model.route import Route
+from ui.i18n import UITranslator
 
 
 class RoutePresenter:
     """Formats route/interlocking details for logs and labels."""
+
+    def __init__(self, translator: UITranslator) -> None:
+        self._translator = translator
+
+    def set_translator(self, translator: UITranslator) -> None:
+        self._translator = translator
+
+    def _t(self, key: str, **kwargs: object) -> str:
+        return self._translator.t(key, **kwargs)
 
     @staticmethod
     def format_point_locks(required_points: dict[str, PointPosition]) -> str:
@@ -31,9 +41,8 @@ class RoutePresenter:
             return "-"
         return " -> ".join(path)
 
-    @classmethod
     def build_route_search_log(
-        cls,
+        self,
         route: Route,
         search_order: list[str],
         *,
@@ -50,11 +59,11 @@ class RoutePresenter:
         overlap_release_seconds: float | None = None,
     ) -> str:
         try:
-            point_locks = cls.format_point_locks(route.all_required_point_positions)
+            point_locks = self.format_point_locks(route.all_required_point_positions)
         except ValueError:
-            point_locks = cls.format_point_locks(route.required_point_positions)
-        flank_points = cls.format_point_locks(route.flank_point_positions)
-        flank_sections = cls._format_items(route.monitored_flank_sections)
+            point_locks = self.format_point_locks(route.required_point_positions)
+        flank_points = self.format_point_locks(route.flank_point_positions)
+        flank_sections = self._format_items(route.monitored_flank_sections)
         overlap_release_text = (
             f"{float(overlap_release_seconds):.1f}s"
             if overlap_release_seconds is not None
@@ -62,43 +71,57 @@ class RoutePresenter:
         )
         if approach_lock_state:
             if approach_lock_remaining_seconds is not None and approach_lock_remaining_seconds > 0.0:
-                approach_lock_text = (
-                    f"{approach_lock_state} ({float(approach_lock_remaining_seconds):.1f}s remaining)"
+                approach_lock_text = self._t(
+                    "route_log.approach_lock_remaining",
+                    state=approach_lock_state,
+                    seconds=float(approach_lock_remaining_seconds),
                 )
             else:
                 approach_lock_text = approach_lock_state
         else:
             approach_lock_text = "-"
+
+        route_display = route_label or f"{route.entry_signal_id}->{route.exit_signal_id}"
+        entry_display = self._t(
+            "route_log.entry_line",
+            entry_signal=route.entry_signal_id,
+            entry_protects=entry_protects or "-",
+        )
+        exit_display = self._t(
+            "route_log.exit_line",
+            exit_signal=route.exit_signal_id,
+            exit_protects=exit_protects or "-",
+        )
+
         return "\n".join(
             [
-                "[ROUTE SUMMARY]",
-                f"Route: {route_label or f'{route.entry_signal_id}->{route.exit_signal_id}'}",
-                f"Entry: {route.entry_signal_id} protects {entry_protects or '-'}",
-                f"Exit: {route.exit_signal_id} protects {exit_protects or '-'}",
-                f"Direction: {direction or '-'}",
-                f"Lifecycle: {lifecycle or '-'}",
+                self._t("route_log.section.summary"),
+                f"{self._t('route_log.label.route')}: {route_display}",
+                f"{self._t('route_log.label.entry')}: {entry_display}",
+                f"{self._t('route_log.label.exit')}: {exit_display}",
+                f"{self._t('route_log.label.direction')}: {direction or '-'}",
+                f"{self._t('route_log.label.lifecycle')}: {lifecycle or '-'}",
                 "",
-                "[PATH & LOCK]",
-                f"Search order: {cls._format_path(search_order)}",
-                f"Locked path: {cls._format_path(route.path)}",
-                f"Overlap: {cls._format_path(route.overlap_path)}",
-                f"Destination track: {destination_track or '-'}",
-                f"Point locks: {point_locks}",
-                f"Flank points: {flank_points}",
-                f"Flank monitored sections: {flank_sections}",
+                self._t("route_log.section.path_lock"),
+                f"{self._t('route_log.label.search_order')}: {self._format_path(search_order)}",
+                f"{self._t('route_log.label.locked_path')}: {self._format_path(route.path)}",
+                f"{self._t('route_log.label.overlap')}: {self._format_path(route.overlap_path)}",
+                f"{self._t('route_log.label.destination_track')}: {destination_track or '-'}",
+                f"{self._t('route_log.label.point_locks')}: {point_locks}",
+                f"{self._t('route_log.label.flank_points')}: {flank_points}",
+                f"{self._t('route_log.label.flank_monitored_sections')}: {flank_sections}",
                 "",
-                "[SAFETY & CONFLICT]",
-                f"Opposing signals: {cls._format_items(opposing_signals)}",
-                f"Conflicting routes: {cls._format_items(conflicting_routes)}",
-                f"Approach locking section: {route.approach_locking_section or '-'}",
-                f"Approach lock state: {approach_lock_text}",
-                f"Overlap release: {overlap_release_text}",
+                self._t("route_log.section.safety_conflict"),
+                f"{self._t('route_log.label.opposing_signals')}: {self._format_items(opposing_signals)}",
+                f"{self._t('route_log.label.conflicting_routes')}: {self._format_items(conflicting_routes)}",
+                f"{self._t('route_log.label.approach_locking_section')}: {route.approach_locking_section or '-'}",
+                f"{self._t('route_log.label.approach_lock_state')}: {approach_lock_text}",
+                f"{self._t('route_log.label.overlap_release')}: {overlap_release_text}",
             ]
         )
 
-    @classmethod
     def build_interlocking_row_search_log(
-        cls,
+        self,
         *,
         route_id: str,
         route_label: str,
@@ -130,7 +153,7 @@ class RoutePresenter:
             monitored_flank_sections=list(monitored_flank_sections or []),
             approach_locking_section=approach_locking_section or None,
         )
-        return cls.build_route_search_log(
+        return self.build_route_search_log(
             synthetic_route,
             search_order,
             route_label=route_label,
@@ -145,3 +168,4 @@ class RoutePresenter:
             approach_lock_remaining_seconds=None,
             overlap_release_seconds=overlap_release_seconds,
         )
+

@@ -1,10 +1,10 @@
-﻿"""Palette of draggable railway components and properties panel."""
+"""Palette of draggable railway components and properties panel."""
 
 from __future__ import annotations
 
 from typing import Any, Optional
 
-from PyQt6.QtCore import QMimeData, pyqtSignal, Qt
+from PyQt6.QtCore import QMimeData, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QDrag, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.domain.model.elements import PointPosition, PointSymbolOrientation, SignalAspect, SignalDirection
+from ui.i18n import UITranslator
 
 POINT_SYMBOL_CHOICES: tuple[tuple[str, PointSymbolOrientation], ...] = (
     ("1", PointSymbolOrientation.RIGHT),
@@ -35,17 +36,47 @@ class PaletteListWidget(QListWidget):
     """List widget that starts drag operations for component types."""
 
     COMPONENT_MIME = "application/x-rail-component"
+    COMPONENTS: tuple[tuple[str, str], ...] = (
+        ("palette.component.section", "TrackSection"),
+        ("palette.component.approach", "ApproachSection"),
+        ("palette.component.point", "Point"),
+        ("palette.component.signal", "Signal"),
+    )
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, translator: UITranslator, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self._translator = translator
         self.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
         self.setDragEnabled(True)
         self.setDefaultDropAction(Qt.DropAction.CopyAction)
-        self._add_component("Section", "TrackSection")
-        self._add_component("Approach", "ApproachSection")
-        self._add_component("Point", "Point")
-        self._add_component("Signal", "Signal")
+        self.retranslate_ui()
+
+    def _t(self, key: str, **kwargs: object) -> str:
+        return self._translator.t(key, **kwargs)
+
+    def set_translator(self, translator: UITranslator) -> None:
+        self._translator = translator
+        self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        current_element_type = ""
+        current_item = self.currentItem()
+        if current_item is not None:
+            current_element_type = str(current_item.data(Qt.ItemDataRole.UserRole))
+
+        self.clear()
+        for label_key, element_type in self.COMPONENTS:
+            self._add_component(self._t(label_key), element_type)
+
+        if not current_element_type:
+            return
+        for index in range(self.count()):
+            item = self.item(index)
+            if str(item.data(Qt.ItemDataRole.UserRole)) != current_element_type:
+                continue
+            self.setCurrentItem(item)
+            break
 
     def _add_component(self, label: str, element_type: str) -> None:
         item = QListWidgetItem(label)
@@ -118,22 +149,21 @@ class PropertiesPanel(QWidget):
 
     properties_applied = pyqtSignal(str, dict)
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, translator: UITranslator, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self._translator = translator
         self._selected_id: Optional[str] = None
         self._selected_type: Optional[str] = None
         self._inputs: dict[str, Any] = {}
+        self._current_payload: Optional[dict[str, Any]] = None
 
-        self.title = QLabel("Properties")
+        self.title = QLabel()
         self.title.setStyleSheet("font-weight: 600;")
         self.form_container = QFrame()
         self.form_layout = QFormLayout(self.form_container)
         self.form_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        self.placeholder = QLabel("Select a block to edit its properties.")
-        self.placeholder.setWordWrap(True)
-        self.form_layout.addRow(self.placeholder)
 
-        self.apply_button = QPushButton("Apply")
+        self.apply_button = QPushButton()
         self.apply_button.clicked.connect(self._apply)
         self.apply_button.setEnabled(False)
 
@@ -143,12 +173,33 @@ class PropertiesPanel(QWidget):
         layout.addWidget(self.apply_button)
         layout.addStretch(1)
 
+        self.retranslate_ui()
+
+    def _t(self, key: str, **kwargs: object) -> str:
+        return self._translator.t(key, **kwargs)
+
+    def retranslate_ui(self) -> None:
+        self.title.setText(self._t("properties.title"))
+        self.apply_button.setText(self._t("button.apply"))
+        self.set_element(self._current_payload)
+
+    def set_translator(self, translator: UITranslator) -> None:
+        self._translator = translator
+        self.retranslate_ui()
+
     @staticmethod
     def _is_signal_type(element_type: str | None) -> bool:
         return element_type in {"Signal", "SignalLeft", "SignalRight", "SignalUp", "SignalDown"}
 
+    def _render_placeholder(self) -> None:
+        self._clear_form()
+        placeholder = QLabel(self._t("properties.placeholder"))
+        placeholder.setWordWrap(True)
+        self.form_layout.addRow(placeholder)
+
     def set_element(self, payload: Optional[dict[str, Any]]) -> None:
         """Populate panel from selected node payload."""
+        self._current_payload = payload
         self._clear_form()
         self._inputs.clear()
         self._selected_id = None
@@ -156,15 +207,15 @@ class PropertiesPanel(QWidget):
         self.apply_button.setEnabled(False)
 
         if not payload:
-            self.form_layout.addRow(QLabel("Select a block to edit its properties."))
+            self._render_placeholder()
             return
 
         self._selected_id = str(payload["id"])
         self._selected_type = str(payload["type"])
         id_input = QLineEdit(self._selected_id)
-        id_input.setPlaceholderText("Element ID")
+        id_input.setPlaceholderText(self._t("field.element_id_placeholder"))
         self._inputs["id"] = id_input
-        self.form_layout.addRow("ID", id_input)
+        self.form_layout.addRow(self._t("field.id"), id_input)
         properties = dict(payload.get("properties", {}))
 
         if self._selected_type in {"TrackSection", "ApproachSection"}:
@@ -172,20 +223,25 @@ class PropertiesPanel(QWidget):
             length_input.setRange(1.0, 10000.0)
             length_input.setValue(float(properties.get("length", 100.0)))
             state_input = QComboBox()
-            state_input.addItems(["FREE", "OCCUPIED"])
-            state_input.setCurrentText("OCCUPIED" if properties.get("occupied", False) else "FREE")
+            state_input.addItem(self._t("state.free"), False)
+            state_input.addItem(self._t("state.occupied"), True)
+            state_input.setCurrentIndex(1 if properties.get("occupied", False) else 0)
             locked_by_input = QLineEdit(str(properties.get("locked_by") or ""))
             self._inputs["length"] = length_input
             self._inputs["state"] = state_input
             self._inputs["locked_by"] = locked_by_input
-            self.form_layout.addRow("Length", length_input)
-            self.form_layout.addRow("State", state_input)
-            self.form_layout.addRow("Locked by", locked_by_input)
+            self.form_layout.addRow(self._t("field.length"), length_input)
+            self.form_layout.addRow(self._t("field.state"), state_input)
+            self.form_layout.addRow(self._t("field.locked_by"), locked_by_input)
 
         elif self._selected_type == "Point":
             position_input = QComboBox()
-            position_input.addItems([PointPosition.NORMAL.value, PointPosition.REVERSE.value])
-            position_input.setCurrentText(str(properties.get("position", PointPosition.NORMAL.value)))
+            position_input.addItem(self._t("point_position.normal"), PointPosition.NORMAL.value)
+            position_input.addItem(self._t("point_position.reverse"), PointPosition.REVERSE.value)
+            current_position = str(properties.get("position", PointPosition.NORMAL.value))
+            position_index = position_input.findData(current_position)
+            position_input.setCurrentIndex(position_index if position_index >= 0 else 0)
+
             symbol_orientation_input = QComboBox()
             for label, orientation in POINT_SYMBOL_CHOICES:
                 symbol_orientation_input.addItem(label, orientation.value)
@@ -202,36 +258,43 @@ class PropertiesPanel(QWidget):
             self._inputs["normal_target"] = normal_target
             self._inputs["reverse_target"] = reverse_target
             self._inputs["locked_by"] = locked_by_input
-            self.form_layout.addRow("Position", position_input)
-            self.form_layout.addRow("Symbol", symbol_orientation_input)
-            self.form_layout.addRow("Normal ->", normal_target)
-            self.form_layout.addRow("Reverse ->", reverse_target)
-            self.form_layout.addRow("Locked by", locked_by_input)
+            self.form_layout.addRow(self._t("field.position"), position_input)
+            self.form_layout.addRow(self._t("field.symbol"), symbol_orientation_input)
+            self.form_layout.addRow(self._t("field.normal_to"), normal_target)
+            self.form_layout.addRow(self._t("field.reverse_to"), reverse_target)
+            self.form_layout.addRow(self._t("field.locked_by"), locked_by_input)
 
         elif self._is_signal_type(self._selected_type):
             protects_input = QLineEdit(str(properties.get("protects", "")))
             approach_section_input = QLineEdit(str(properties.get("approach_section", "")))
+
             aspect_input = QComboBox()
-            aspect_input.addItems([SignalAspect.STOP.value, SignalAspect.PROCEED.value])
-            aspect_input.setCurrentText(str(properties.get("aspect", SignalAspect.STOP.value)))
+            aspect_input.addItem(self._t("signal_aspect.stop"), SignalAspect.STOP.value)
+            aspect_input.addItem(self._t("signal_aspect.proceed"), SignalAspect.PROCEED.value)
+            current_aspect = str(properties.get("aspect", SignalAspect.STOP.value))
+            aspect_index = aspect_input.findData(current_aspect)
+            aspect_input.setCurrentIndex(aspect_index if aspect_index >= 0 else 0)
+
             direction_input = QComboBox()
-            direction_input.addItems([SignalDirection.LEFT.value, SignalDirection.RIGHT.value])
+            direction_input.addItem(self._t("signal_direction.left"), SignalDirection.LEFT.value)
+            direction_input.addItem(self._t("signal_direction.right"), SignalDirection.RIGHT.value)
             default_direction = (
                 SignalDirection.LEFT.value
                 if self._selected_type in {"SignalLeft", "SignalDown"}
                 else SignalDirection.RIGHT.value
             )
-            direction_input.setCurrentText(
-                str(properties.get("direction", default_direction))
-            )
+            current_direction = str(properties.get("direction", default_direction))
+            direction_index = direction_input.findData(current_direction)
+            direction_input.setCurrentIndex(direction_index if direction_index >= 0 else 0)
+
             self._inputs["protects"] = protects_input
             self._inputs["approach_section"] = approach_section_input
             self._inputs["aspect"] = aspect_input
             self._inputs["direction"] = direction_input
-            self.form_layout.addRow("Protects", protects_input)
-            self.form_layout.addRow("Approach section", approach_section_input)
-            self.form_layout.addRow("Direction", direction_input)
-            self.form_layout.addRow("Aspect", aspect_input)
+            self.form_layout.addRow(self._t("field.protects"), protects_input)
+            self.form_layout.addRow(self._t("field.approach_section"), approach_section_input)
+            self.form_layout.addRow(self._t("field.direction"), direction_input)
+            self.form_layout.addRow(self._t("field.aspect"), aspect_input)
 
         self.apply_button.setEnabled(True)
 
@@ -248,10 +311,13 @@ class PropertiesPanel(QWidget):
         updated: dict[str, Any] = {}
         if self._selected_type in {"TrackSection", "ApproachSection"}:
             updated["length"] = float(self._inputs["length"].value())
-            updated["occupied"] = self._inputs["state"].currentText() == "OCCUPIED"
+            state_data = self._inputs["state"].currentData()
+            updated["occupied"] = bool(state_data) if state_data is not None else False
             updated["locked_by"] = str(self._inputs["locked_by"].text()).strip()
         elif self._selected_type == "Point":
-            updated["position"] = str(self._inputs["position"].currentText())
+            updated["position"] = str(
+                self._inputs["position"].currentData() or PointPosition.NORMAL.value
+            )
             symbol_orientation = self._inputs["symbol_orientation"].currentData()
             updated["symbol_orientation"] = str(
                 symbol_orientation or self._inputs["symbol_orientation"].currentText()
@@ -262,8 +328,10 @@ class PropertiesPanel(QWidget):
         elif self._is_signal_type(self._selected_type):
             updated["protects"] = str(self._inputs["protects"].text()).strip()
             updated["approach_section"] = str(self._inputs["approach_section"].text()).strip()
-            updated["direction"] = str(self._inputs["direction"].currentText())
-            updated["aspect"] = str(self._inputs["aspect"].currentText())
+            updated["direction"] = str(
+                self._inputs["direction"].currentData() or SignalDirection.RIGHT.value
+            )
+            updated["aspect"] = str(self._inputs["aspect"].currentData() or SignalAspect.STOP.value)
         updated["id"] = str(self._inputs["id"].text()).strip()
         self.properties_applied.emit(self._selected_id, updated)
 
@@ -274,25 +342,42 @@ class ComponentsPalette(QWidget):
     component_insert_requested = pyqtSignal(str)
     properties_applied = pyqtSignal(str, dict)
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, translator: UITranslator, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        title = QLabel("Components")
-        title.setStyleSheet("font-size: 14px; font-weight: 600;")
-        self.component_list = PaletteListWidget()
+        self._translator = translator
+
+        self.title_label = QLabel()
+        self.title_label.setStyleSheet("font-size: 14px; font-weight: 600;")
+        self.component_list = PaletteListWidget(self._translator)
         self.component_list.itemDoubleClicked.connect(self._on_component_double_clicked)
-        hint = QLabel(
-            "Drag modules to canvas (or double-click to add). Use Connect Mode (2 clicks) or Connect Selected. Right-click or use Delete/F2 to edit."
-        )
-        hint.setWordWrap(True)
-        hint.setStyleSheet("color: #4b5563; font-size: 11px;")
-        self.properties_panel = PropertiesPanel()
+
+        self.hint_label = QLabel()
+        self.hint_label.setWordWrap(True)
+        self.hint_label.setStyleSheet("color: #4b5563; font-size: 11px;")
+
+        self.properties_panel = PropertiesPanel(self._translator)
         self.properties_panel.properties_applied.connect(self.properties_applied.emit)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(title)
+        layout.addWidget(self.title_label)
         layout.addWidget(self.component_list)
-        layout.addWidget(hint)
+        layout.addWidget(self.hint_label)
         layout.addWidget(self.properties_panel)
+
+        self.retranslate_ui()
+
+    def _t(self, key: str, **kwargs: object) -> str:
+        return self._translator.t(key, **kwargs)
+
+    def set_translator(self, translator: UITranslator) -> None:
+        self._translator = translator
+        self.component_list.set_translator(translator)
+        self.properties_panel.set_translator(translator)
+        self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        self.title_label.setText(self._t("palette.components"))
+        self.hint_label.setText(self._t("palette.hint"))
 
     def set_selected_element(self, payload: Optional[dict[str, Any]]) -> None:
         """Update properties pane for selected node."""
@@ -301,4 +386,3 @@ class ComponentsPalette(QWidget):
     def _on_component_double_clicked(self, item: QListWidgetItem) -> None:
         component_name = str(item.data(Qt.ItemDataRole.UserRole))
         self.component_insert_requested.emit(component_name)
-

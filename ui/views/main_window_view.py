@@ -38,9 +38,10 @@ from core.runtime.simulation import Simulation
 from generic_application import GenericApplicationProfile, GenericApplicationService
 from specific_application import SpecificLayoutEditorService, StationLayout
 from ui.controllers import MainWindowController
+from ui.i18n import SUPPORTED_LANGUAGES, UITranslator, normalize_language
+from ui.presenters import RoutePresenter
 from ui.views.canvas_editor_view import CanvasEditor
 from ui.views.components_palette_view import ComponentsPalette
-from ui.presenters import RoutePresenter
 
 
 OperatingMode = AppMode
@@ -51,20 +52,20 @@ class MainWindow(QMainWindow):
 
     def __init__(self, application_profile: GenericApplicationProfile | None = None) -> None:
         super().__init__()
-        self.setWindowTitle("Computer-Based Interlocking")
         self.resize(1700, 900)
 
         self.application_profile = application_profile or GenericApplicationProfile()
+        self._translator = UITranslator(getattr(self.application_profile, "ui_language", "en"))
         self.application_service = GenericApplicationService(profile=self.application_profile)
         self.controller = MainWindowController(self.application_service)
-        self.route_presenter = RoutePresenter()
+        self.route_presenter = RoutePresenter(self._translator)
         self.mode_policy = self.application_service.mode_policy
         self.layout_editor_service = SpecificLayoutEditorService(self.application_service)
         self.current_layout = self.layout_editor_service.new_layout(station_id="UNNAMED")
         self._operating_mode = OperatingMode.DESIGN_LAYOUT
 
-        self.palette = ComponentsPalette(self)
-        self.canvas = CanvasEditor(self)
+        self.palette = ComponentsPalette(self._translator, self)
+        self.canvas = CanvasEditor(self, translator=self._translator)
         self.canvas.set_manual_override_handler(self._manual_override_from_canvas)
         self.right_panel = self._build_right_panel()
         self.palette.properties_applied.connect(self._on_properties_applied)
@@ -109,11 +110,149 @@ class MainWindow(QMainWindow):
                     load_occupancy=True,
                 )
             )
-            self.status.showMessage(f"Loaded sample layout: {sample_path}")
+            self.status.showMessage(
+                self._t("status.loaded_sample_layout", path=sample_path)
+            )
         else:
             self.canvas.load_topology(self.current_layout.topology)
         self._set_operating_mode(OperatingMode.DESIGN_LAYOUT, announce=False)
         self._sync_ui_state()
+        self._retranslate_ui()
+
+    def _t(self, key: str, **kwargs: object) -> str:
+        return self._translator.t(key, **kwargs)
+
+    @staticmethod
+    def _mode_translation_key(mode: OperatingMode) -> str:
+        if mode is OperatingMode.DESIGN_LAYOUT:
+            return "mode.design_layout"
+        if mode is OperatingMode.SIMULATION:
+            return "mode.simulation"
+        return "mode.runtime"
+
+    def _mode_text(self, mode: OperatingMode) -> str:
+        return self._t(self._mode_translation_key(mode))
+
+    def _populate_language_selector(self) -> None:
+        current_language = self._translator.language
+        options = [code for code in SUPPORTED_LANGUAGES if code in {"en", "vi"}] or ["en", "vi"]
+        self.language_combo.blockSignals(True)
+        self.language_combo.clear()
+        for language_code in options:
+            option_key = (
+                "language.option.vi"
+                if language_code == "vi"
+                else "language.option.en"
+            )
+            self.language_combo.addItem(self._t(option_key), language_code)
+        selected_index = self.language_combo.findData(current_language)
+        self.language_combo.setCurrentIndex(selected_index if selected_index >= 0 else 0)
+        self.language_combo.blockSignals(False)
+
+    def _set_table_headers(self) -> None:
+        self.table_widget.setHorizontalHeaderLabels(
+            [
+                self._t("interlocking_table.header.no"),
+                self._t("interlocking_table.header.route"),
+                self._t("interlocking_table.header.signal"),
+                self._t("interlocking_table.header.point"),
+                self._t("interlocking_table.header.opposing_signal"),
+                self._t("interlocking_table.header.track"),
+                self._t("interlocking_table.header.approach_lock_track"),
+                self._t("interlocking_table.header.approach_lock_release"),
+                self._t("interlocking_table.header.destination_track"),
+                self._t("interlocking_table.header.flank_point"),
+                self._t("interlocking_table.header.overlap"),
+                self._t("interlocking_table.header.overlap_release"),
+            ]
+        )
+
+    def _retranslate_ui(self) -> None:
+        self.setWindowTitle(self._t("app.window_title"))
+
+        self.toolbar.setWindowTitle(self._t("toolbar.main"))
+        self.new_layout_action.setText(self._t("toolbar.new_layout"))
+        self.save_layout_action.setText(self._t("toolbar.save_layout"))
+        self.load_layout_action.setText(self._t("toolbar.load_layout"))
+        self.connect_mode_action.setText(self._t("toolbar.connect_mode"))
+        self.set_route_action.setText(self._t("toolbar.set_route"))
+        self.cancel_route_action.setText(self._t("toolbar.cancel_route"))
+        self.language_label.setText(self._t("language.label"))
+        self._populate_language_selector()
+
+        self.mode_group.setTitle(self._t("workspace.group"))
+        mode_keys = [
+            "mode.design_layout",
+            "mode.simulation",
+            "mode.runtime",
+        ]
+        summary_keys = [
+            "workspace.summary.design_layout",
+            "workspace.summary.simulation",
+            "workspace.summary.runtime",
+        ]
+        for tab_index, mode_key in enumerate(mode_keys):
+            self.mode_tabs.setTabText(tab_index, self._t(mode_key))
+            self.mode_summary_labels[tab_index].setText(self._t(summary_keys[tab_index]))
+
+        self.route_group.setTitle(self._t("route_finder.group"))
+        self.route_help_label.setText(self._t("route_finder.instructions"))
+        self.entry_label.setText(self._t("field.entry"))
+        self.exit_label.setText(self._t("field.exit"))
+        self.overlap_label.setText(self._t("field.overlap"))
+        self.approach_release_label.setText(self._t("field.approach_release"))
+        self.overlap_release_label.setText(self._t("field.overlap_release"))
+
+        self.find_route_button.setText(self._t("button.find_route"))
+        self.set_route_button.setText(self._t("button.set_route"))
+        self.cancel_route_button.setText(self._t("button.cancel_route"))
+        self.search_log.setPlaceholderText(self._t("route_finder.placeholder"))
+
+        self.table_group.setTitle(self._t("interlocking_table.group"))
+        self._set_table_headers()
+        self._refresh_interlocking_table()
+
+        self.approach_time_spin.setSuffix(self._t("unit.seconds_suffix"))
+        self.overlap_release_spin.setSuffix(self._t("unit.seconds_suffix"))
+
+        self.palette.set_translator(self._translator)
+        self.canvas.set_translator(self._translator)
+        self.route_presenter.set_translator(self._translator)
+        self.canvas.set_layout_edit_lock(
+            self.mode_policy.layout_edit_locked(self._operating_mode),
+            self._t("main.lock.layout_edit_reason"),
+        )
+        if self.mode_policy.capabilities(self._operating_mode).can_edit_layout:
+            self.palette.component_list.setToolTip("")
+        else:
+            self.palette.component_list.setToolTip(
+                self._t("main.tooltip.component_insertion_disabled")
+            )
+
+        self._sync_ui_state()
+        if self.preview_route is not None:
+            search_order, _ = self._build_search_trace(
+                self.preview_route.path[0],
+                self.preview_route.path[-1],
+            )
+            self._write_search_log(self.preview_route, search_order)
+        else:
+            selected_row = self.table_widget.currentRow()
+            if 0 <= selected_row < len(self.interlocking_rows):
+                self._render_interlocking_row_log(self.interlocking_rows[selected_row])
+
+    def _set_language(self, language_code: str) -> None:
+        normalized_language = normalize_language(language_code)
+        if normalized_language == self._translator.language:
+            return
+        self._translator.set_language(normalized_language)
+        self._retranslate_ui()
+
+    def _on_language_changed(self, index: int) -> None:
+        if index < 0:
+            return
+        selected_language = str(self.language_combo.itemData(index) or "en")
+        self._set_language(selected_language)
 
     def _apply_visual_theme(self) -> None:
         self.setStyleSheet(
@@ -181,43 +320,51 @@ class MainWindow(QMainWindow):
         )
 
     def _build_toolbar(self) -> None:
-        toolbar = QToolBar("Main", self)
-        self.addToolBar(toolbar)
+        self.toolbar = QToolBar(self._t("toolbar.main"), self)
+        self.addToolBar(self.toolbar)
 
-        new_action = toolbar.addAction("New Layout")
-        new_action.triggered.connect(self._new_layout)
+        self.new_layout_action = self.toolbar.addAction(self._t("toolbar.new_layout"))
+        self.new_layout_action.triggered.connect(self._new_layout)
 
-        save_action = toolbar.addAction("Save Layout")
-        save_action.triggered.connect(self._save_layout)
+        self.save_layout_action = self.toolbar.addAction(self._t("toolbar.save_layout"))
+        self.save_layout_action.triggered.connect(self._save_layout)
 
-        load_action = toolbar.addAction("Load Layout")
-        load_action.triggered.connect(self._load_layout)
+        self.load_layout_action = self.toolbar.addAction(self._t("toolbar.load_layout"))
+        self.load_layout_action.triggered.connect(self._load_layout)
 
-        self.connect_mode_action = toolbar.addAction("Connect Mode")
+        self.connect_mode_action = self.toolbar.addAction(self._t("toolbar.connect_mode"))
         self.connect_mode_action.setCheckable(True)
         self.connect_mode_action.toggled.connect(self._toggle_connect_mode)
 
-        self.set_route_action = toolbar.addAction("Set Route")
+        self.set_route_action = self.toolbar.addAction(self._t("toolbar.set_route"))
         self.set_route_action.triggered.connect(self._set_selected_route)
 
-        self.cancel_route_action = toolbar.addAction("Cancel  Route")
+        self.cancel_route_action = self.toolbar.addAction(self._t("toolbar.cancel_route"))
         self.cancel_route_action.triggered.connect(lambda: self._cancel_active_routes())
 
-        self.simulation_action = toolbar.addAction("Start Simulation")
+        self.simulation_action = self.toolbar.addAction(self._t("toolbar.start_simulation"))
         self.simulation_action.triggered.connect(self._start_simulation)
+
+        self.toolbar.addSeparator()
+        self.language_label = QLabel(self._t("language.label"), self.toolbar)
+        self.language_combo = QComboBox(self.toolbar)
+        self._populate_language_selector()
+        self.language_combo.currentIndexChanged.connect(self._on_language_changed)
+        self.toolbar.addWidget(self.language_label)
+        self.toolbar.addWidget(self.language_combo)
 
     def _new_layout(self) -> None:
         confirm = QMessageBox.question(
             self,
-            "New layout",
-            "Clear current layout and start a new one?",
+            self._t("dialog.new_layout.title"),
+            self._t("dialog.new_layout.message"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if confirm != QMessageBox.StandardButton.Yes:
             return
         self._load_layout_into_canvas(self.layout_editor_service.new_layout(station_id="UNNAMED"))
-        self.status.showMessage("Started a new empty layout")
+        self.status.showMessage(self._t("status.started_new_empty_layout"))
 
     def _toggle_connect_mode(self, enabled: bool) -> None:
         if not self.mode_policy.capabilities(self._operating_mode).can_edit_layout and enabled:
@@ -226,8 +373,8 @@ class MainWindow(QMainWindow):
             self.connect_mode_action.blockSignals(False)
             QMessageBox.information(
                 self,
-                "Connect mode",
-                "Connect mode is available only in Design Layout workspace.",
+                self._t("dialog.connect_mode.title"),
+                self._t("dialog.connect_mode.only_design_layout"),
             )
             return
         self.canvas.set_connect_mode(enabled)
@@ -250,94 +397,103 @@ class MainWindow(QMainWindow):
         try:
             center = self.canvas.mapToScene(self.canvas.viewport().rect().center())
             self.canvas.add_component(element_type, center)
-            self.status.showMessage(f"Added {element_type}")
+            self.status.showMessage(self._t("status.component_added", element_type=element_type))
         except Exception as exc:
-            QMessageBox.warning(self, "Cannot add component", str(exc))
+            QMessageBox.warning(
+                self,
+                self._t("dialog.cannot_add_component.title"),
+                str(exc),
+            )
 
     def _build_right_panel(self) -> QWidget:
         panel = QWidget(self)
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(6, 6, 6, 6)
 
-        mode_group = QGroupBox("Workspace")
-        mode_layout = QVBoxLayout(mode_group)
-        self.mode_tabs = QTabWidget(mode_group)
+        self.mode_group = QGroupBox(self._t("workspace.group"))
+        mode_layout = QVBoxLayout(self.mode_group)
+        self.mode_tabs = QTabWidget(self.mode_group)
         self.mode_tabs.setDocumentMode(True)
         self.mode_tabs.setTabPosition(QTabWidget.TabPosition.North)
+        self.mode_summary_labels: list[QLabel] = []
         self.mode_tabs.addTab(
             self._build_mode_tab_body(
-                "Build topology and interlocking assets.",
-                "",
+                self._t("workspace.summary.design_layout"),
             ),
-            "Design Layout",
+            self._t("mode.design_layout"),
         )
         self.mode_tabs.addTab(
             self._build_mode_tab_body(
-                "Train movement sandbox with manual state override.",
-                "",
+                self._t("workspace.summary.simulation"),
             ),
-            "Simulation",
+            self._t("mode.simulation"),
         )
         self.mode_tabs.addTab(
             self._build_mode_tab_body(
-                "Operational mode with strict manual state safety.",
-                "",
+                self._t("workspace.summary.runtime"),
             ),
-            "Runtime",
+            self._t("mode.runtime"),
         )
         self.mode_tabs.currentChanged.connect(self._on_mode_tab_changed)
         mode_layout.addWidget(self.mode_tabs)
 
-        route_group = QGroupBox("Route Finder")
-        route_layout = QVBoxLayout(route_group)
-        route_layout.addWidget(QLabel("Select Entry and Exit signals, then run route search."))
+        self.route_group = QGroupBox(self._t("route_finder.group"))
+        route_layout = QVBoxLayout(self.route_group)
+        self.route_help_label = QLabel(self._t("route_finder.instructions"))
+        self.route_help_label.setWordWrap(True)
+        route_layout.addWidget(self.route_help_label)
 
         combo_row = QHBoxLayout()
-        self.entry_combo = QComboBox(route_group)
-        self.exit_combo = QComboBox(route_group)
+        self.entry_combo = QComboBox(self.route_group)
+        self.exit_combo = QComboBox(self.route_group)
         self.entry_combo.currentTextChanged.connect(lambda _text: self._sync_ui_state())
         self.exit_combo.currentTextChanged.connect(lambda _text: self._sync_ui_state())
-        self.overlap_spin = QSpinBox(route_group)
+        self.overlap_spin = QSpinBox(self.route_group)
         self.overlap_spin.setRange(0, 5)
         self.overlap_spin.setValue(int(self.application_profile.default_overlap_length))
         self.overlap_spin.valueChanged.connect(self._refresh_interlocking_table)
-        combo_row.addWidget(QLabel("Entry"))
+        self.entry_label = QLabel(self._t("field.entry"))
+        self.exit_label = QLabel(self._t("field.exit"))
+        self.overlap_label = QLabel(self._t("field.overlap"))
+        combo_row.addWidget(self.entry_label)
         combo_row.addWidget(self.entry_combo)
-        combo_row.addWidget(QLabel("Exit"))
+        combo_row.addWidget(self.exit_label)
         combo_row.addWidget(self.exit_combo)
-        combo_row.addWidget(QLabel("Overlap"))
+        combo_row.addWidget(self.overlap_label)
         combo_row.addWidget(self.overlap_spin)
         route_layout.addLayout(combo_row)
 
         timing_row = QHBoxLayout()
-        self.approach_time_spin = QDoubleSpinBox(route_group)
+        self.approach_time_spin = QDoubleSpinBox(self.route_group)
         self.approach_time_spin.setRange(0.0, 600.0)
         self.approach_time_spin.setDecimals(1)
         self.approach_time_spin.setSingleStep(1.0)
-        self.approach_time_spin.setSuffix(" s")
+        self.approach_time_spin.setSuffix(self._t("unit.seconds_suffix"))
         self.approach_time_spin.setValue(float(self.application_profile.time_lock_seconds))
         self.approach_time_spin.valueChanged.connect(self._on_timing_controls_changed)
-        self.overlap_release_spin = QDoubleSpinBox(route_group)
+        self.overlap_release_spin = QDoubleSpinBox(self.route_group)
         self.overlap_release_spin.setRange(0.0, 600.0)
         self.overlap_release_spin.setDecimals(1)
         self.overlap_release_spin.setSingleStep(1.0)
-        self.overlap_release_spin.setSuffix(" s")
+        self.overlap_release_spin.setSuffix(self._t("unit.seconds_suffix"))
         self.overlap_release_spin.setValue(float(self.application_profile.overlap_release_seconds))
         self.overlap_release_spin.valueChanged.connect(self._on_timing_controls_changed)
-        timing_row.addWidget(QLabel("Approach release"))
+        self.approach_release_label = QLabel(self._t("field.approach_release"))
+        self.overlap_release_label = QLabel(self._t("field.overlap_release"))
+        timing_row.addWidget(self.approach_release_label)
         timing_row.addWidget(self.approach_time_spin)
-        timing_row.addWidget(QLabel("Overlap release"))
+        timing_row.addWidget(self.overlap_release_label)
         timing_row.addWidget(self.overlap_release_spin)
         route_layout.addLayout(timing_row)
 
         button_row = QHBoxLayout()
-        self.find_route_button = QPushButton("Find Route")
+        self.find_route_button = QPushButton(self._t("button.find_route"))
         self.find_route_button.clicked.connect(self._preview_selected_route)
-        self.set_route_button = QPushButton("Set Route")
+        self.set_route_button = QPushButton(self._t("button.set_route"))
         self.set_route_button.clicked.connect(self._set_selected_route)
-        self.cancel_route_button = QPushButton("Cancel Route")
+        self.cancel_route_button = QPushButton(self._t("button.cancel_route"))
         self.cancel_route_button.clicked.connect(lambda: self._cancel_active_routes())
-        self.simulate_button = QPushButton("Start Simulation")
+        self.simulate_button = QPushButton(self._t("button.start_simulation"))
         self.simulate_button.clicked.connect(self._start_simulation)
         button_row.addWidget(self.find_route_button)
         button_row.addWidget(self.set_route_button)
@@ -345,30 +501,15 @@ class MainWindow(QMainWindow):
         button_row.addWidget(self.simulate_button)
         route_layout.addLayout(button_row)
 
-        self.search_log = QPlainTextEdit(route_group)
+        self.search_log = QPlainTextEdit(self.route_group)
         self.search_log.setReadOnly(True)
-        self.search_log.setPlaceholderText("Route search steps will appear here.")
+        self.search_log.setPlaceholderText(self._t("route_finder.placeholder"))
         route_layout.addWidget(self.search_log)
 
-        table_group = QGroupBox("Interlocking Table")
-        table_layout = QVBoxLayout(table_group)
-        self.table_widget = QTableWidget(0, 12, table_group)
-        self.table_widget.setHorizontalHeaderLabels(
-            [
-                "NO",
-                "Route",
-                "Signal",
-                "Point",
-                "Opposing Signal",
-                "Track",
-                "Approach Locking\nTrack",
-                "Approach Locking\nRelease Time",
-                "Destination Track",
-                "Flank Point",
-                "Overlap",
-                "Overlap\nRelease Time",
-            ]
-        )
+        self.table_group = QGroupBox(self._t("interlocking_table.group"))
+        table_layout = QVBoxLayout(self.table_group)
+        self.table_widget = QTableWidget(0, 12, self.table_group)
+        self._set_table_headers()
         self.table_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table_widget.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table_widget.verticalHeader().setVisible(False)
@@ -380,24 +521,20 @@ class MainWindow(QMainWindow):
         self.table_widget.cellClicked.connect(self._on_table_row_clicked)
         table_layout.addWidget(self.table_widget)
 
-        panel_layout.addWidget(mode_group)
-        panel_layout.addWidget(route_group)
-        panel_layout.addWidget(table_group, stretch=1)
+        panel_layout.addWidget(self.mode_group)
+        panel_layout.addWidget(self.route_group)
+        panel_layout.addWidget(self.table_group, stretch=1)
         return panel
 
-    @staticmethod
-    def _build_mode_tab_body(summary: str, policy: str) -> QWidget:
+    def _build_mode_tab_body(self, summary: str) -> QWidget:
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(8, 6, 8, 6)
         summary_label = QLabel(summary, container)
         summary_label.setWordWrap(True)
         summary_label.setStyleSheet("font-weight: 600; color: #12384d;")
-        policy_label = QLabel(policy, container)
-        policy_label.setWordWrap(True)
-        policy_label.setStyleSheet("color: #32576e;")
         layout.addWidget(summary_label)
-        layout.addWidget(policy_label)
+        self.mode_summary_labels.append(summary_label)
         return container
 
     @staticmethod
@@ -434,7 +571,7 @@ class MainWindow(QMainWindow):
         design_mode = capabilities.can_edit_layout
         if not capabilities.can_start_simulation and self._simulation_timer.isActive():
             self._simulation_timer.stop()
-            self.status.showMessage("Simulation stopped after leaving Simulation workspace.")
+            self.status.showMessage(self._t("status.simulation_stopped_workspace"))
 
         if self.connect_mode_action.isChecked() and not design_mode:
             self.connect_mode_action.blockSignals(True)
@@ -444,19 +581,21 @@ class MainWindow(QMainWindow):
 
         self.canvas.set_layout_edit_lock(
             self.mode_policy.layout_edit_locked(mode),
-            "Switch to Design Layout workspace to modify topology and static properties.",
+            self._t("main.lock.layout_edit_reason"),
         )
         self.palette.component_list.setEnabled(design_mode)
         if design_mode:
             self.palette.component_list.setToolTip("")
         else:
             self.palette.component_list.setToolTip(
-                "Component insertion is available only in Design Layout workspace."
+                self._t("main.tooltip.component_insertion_disabled")
             )
 
         self._sync_ui_state()
         if announce and previous_mode is not mode:
-            self.status.showMessage(f"Workspace mode: {mode.title}")
+            self.status.showMessage(
+                self._t("status.workspace_mode", mode=self._mode_text(mode))
+            )
 
     def _on_properties_applied(self, element_id: str, updates: dict) -> None:
         try:
@@ -472,9 +611,13 @@ class MainWindow(QMainWindow):
                 self.canvas.refresh_visual_state()
                 self.canvas.topology_changed.emit()
 
-            self.status.showMessage(f"Updated {current_id}")
+            self.status.showMessage(self._t("status.updated_element", element_id=current_id))
         except Exception as exc:
-            QMessageBox.warning(self, "Property update failed", str(exc))
+            QMessageBox.warning(
+                self,
+                self._t("dialog.property_update_failed.title"),
+                str(exc),
+            )
 
     def _manual_override_from_canvas(
         self,
@@ -496,7 +639,10 @@ class MainWindow(QMainWindow):
         if self.current_layout.source_path is not None:
             default_target = str(self.current_layout.source_path)
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save Layout", default_target, "JSON Files (*.json)"
+            self,
+            self._t("dialog.save_layout.title"),
+            default_target,
+            self._t("dialog.file_filter.json"),
         )
         if not path:
             return
@@ -509,20 +655,28 @@ class MainWindow(QMainWindow):
                 include_occupancy=True,
             )
             self.current_layout.station_id = saved_path.stem
-            self.status.showMessage(f"Saved layout to {saved_path}")
+            self.status.showMessage(self._t("status.saved_layout", path=saved_path))
         except Exception as exc:
-            QMessageBox.critical(self, "Save failed", str(exc))
+            QMessageBox.critical(
+                self,
+                self._t("dialog.save_failed.title"),
+                str(exc),
+            )
 
     def _load_layout(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Load Layout", "data", "JSON Files (*.json)")
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            self._t("dialog.load_layout.title"),
+            "data",
+            self._t("dialog.file_filter.json"),
+        )
         if not path:
             return
         keep_occupancy = (
             QMessageBox.question(
                 self,
-                "Load occupancy state",
-                "Restore OCCUPIED/FREE states from file?\n"
-                "Route locks and signal route states are always reset on load.",
+                self._t("dialog.load_occupancy.title"),
+                self._t("dialog.load_occupancy.message"),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes,
             )
@@ -536,9 +690,13 @@ class MainWindow(QMainWindow):
                 load_occupancy=keep_occupancy,
             )
             self._load_layout_into_canvas(loaded)
-            self.status.showMessage(f"Loaded layout from {path}")
+            self.status.showMessage(self._t("status.loaded_layout", path=path))
         except Exception as exc:
-            QMessageBox.critical(self, "Load failed", str(exc))
+            QMessageBox.critical(
+                self,
+                self._t("dialog.load_failed.title"),
+                str(exc),
+            )
 
     def _load_layout_into_canvas(self, layout: StationLayout) -> None:
         self.current_layout = layout
@@ -651,20 +809,36 @@ class MainWindow(QMainWindow):
         entry_signal_id = self.entry_combo.currentText().strip()
         exit_signal_id = self.exit_combo.currentText().strip()
         if not entry_signal_id or not exit_signal_id:
-            QMessageBox.warning(self, "Find Route", "Please select both Entry and Exit signals.")
+            QMessageBox.warning(
+                self,
+                self._t("dialog.find_route.title"),
+                self._t("dialog.find_route.select_both"),
+            )
             return
         if entry_signal_id == exit_signal_id:
-            QMessageBox.warning(self, "Find Route", "Entry and Exit must be different signals.")
+            QMessageBox.warning(
+                self,
+                self._t("dialog.find_route.title"),
+                self._t("dialog.find_route.same_signal"),
+            )
             return
         if (entry_signal_id, exit_signal_id) not in self.valid_route_pairs:
             QMessageBox.warning(
                 self,
-                "Find Route",
-                f"No valid route is defined for {entry_signal_id} -> {exit_signal_id} in the current interlocking table.",
+                self._t("dialog.find_route.title"),
+                self._t(
+                    "dialog.find_route.no_valid_route",
+                    entry=entry_signal_id,
+                    exit=exit_signal_id,
+                ),
             )
             self._clear_preview_state(clear_visualization=True, sync_ui=True)
             return
-        if not self._validate_signal_pair_request(entry_signal_id, exit_signal_id, "Find Route"):
+        if not self._validate_signal_pair_request(
+            entry_signal_id,
+            exit_signal_id,
+            "dialog.find_route.title",
+        ):
             self._clear_preview_state(clear_visualization=True, sync_ui=False)
             return
 
@@ -677,7 +851,11 @@ class MainWindow(QMainWindow):
                 simulation=self.simulation,
             )
         except Exception as exc:
-            QMessageBox.warning(self, "Route unavailable", str(exc))
+            QMessageBox.warning(
+                self,
+                self._t("dialog.route_unavailable.title"),
+                str(exc),
+            )
             self._clear_preview_state(clear_visualization=True, sync_ui=False)
             return
 
@@ -691,39 +869,65 @@ class MainWindow(QMainWindow):
         self.preview_route = route
         self._write_search_log(route, search_order)
         self._sync_ui_state()
-        self.status.showMessage(f"Preview route: {entry_signal_id} -> {exit_signal_id}")
+        self.status.showMessage(
+            self._t(
+                "status.preview_route",
+                entry=entry_signal_id,
+                exit=exit_signal_id,
+            )
+        )
 
     def _set_selected_route(self) -> None:
         if not self.mode_policy.capabilities(self._operating_mode).can_set_route:
             QMessageBox.information(
                 self,
-                "Set Route",
-                "Switch to Simulation or Runtime workspace to set routes.",
+                self._t("dialog.set_route.title"),
+                self._t("dialog.set_route.switch_workspace"),
             )
             return
         entry_signal_id = self.entry_combo.currentText().strip()
         exit_signal_id = self.exit_combo.currentText().strip()
         if not entry_signal_id or not exit_signal_id:
-            QMessageBox.warning(self, "Set Route", "Please select both Entry and Exit signals.")
+            QMessageBox.warning(
+                self,
+                self._t("dialog.set_route.title"),
+                self._t("dialog.find_route.select_both"),
+            )
             return
         if entry_signal_id == exit_signal_id:
-            QMessageBox.warning(self, "Set Route", "Entry and Exit must be different signals.")
+            QMessageBox.warning(
+                self,
+                self._t("dialog.set_route.title"),
+                self._t("dialog.find_route.same_signal"),
+            )
             return
         if (entry_signal_id, exit_signal_id) not in self.valid_route_pairs:
             QMessageBox.warning(
                 self,
-                "Set Route",
-                f"No valid route is defined for {entry_signal_id} -> {exit_signal_id} in the current interlocking table.",
+                self._t("dialog.set_route.title"),
+                self._t(
+                    "dialog.find_route.no_valid_route",
+                    entry=entry_signal_id,
+                    exit=exit_signal_id,
+                ),
             )
             self._clear_preview_state(clear_visualization=True, sync_ui=True)
             return
-        if not self._validate_signal_pair_request(entry_signal_id, exit_signal_id, "Set Route"):
+        if not self._validate_signal_pair_request(
+            entry_signal_id,
+            exit_signal_id,
+            "dialog.set_route.title",
+        ):
             return
 
         try:
             route, created = self._get_or_create_locked_route(entry_signal_id, exit_signal_id)
         except Exception as exc:
-            QMessageBox.warning(self, "Set Route failed", str(exc))
+            QMessageBox.warning(
+                self,
+                self._t("dialog.set_route.failed_title"),
+                str(exc),
+            )
             self._clear_preview_state(clear_visualization=True, sync_ui=False)
             return
 
@@ -740,9 +944,21 @@ class MainWindow(QMainWindow):
         self._sync_ui_state()
         self._refresh_interlocking_table()
         if created:
-            self.status.showMessage(f"Route set: {entry_signal_id} -> {exit_signal_id}")
+            self.status.showMessage(
+                self._t(
+                    "status.route_set",
+                    entry=entry_signal_id,
+                    exit=exit_signal_id,
+                )
+            )
         else:
-            self.status.showMessage(f"Route already active: {entry_signal_id} -> {exit_signal_id}")
+            self.status.showMessage(
+                self._t(
+                    "status.route_already_active",
+                    entry=entry_signal_id,
+                    exit=exit_signal_id,
+                )
+            )
 
     def _on_table_row_clicked(self, row_index: int, _column_index: int) -> None:
         if row_index < 0 or row_index >= len(self.interlocking_rows):
@@ -756,6 +972,18 @@ class MainWindow(QMainWindow):
             route_path=row.path,
             overlap_path=row.overlap,
             interval_ms=180,
+        )
+        self._render_interlocking_row_log(row, search_order=search_order)
+
+    def _render_interlocking_row_log(
+        self,
+        row: InterlockingTableRow,
+        search_order: list[str] | None = None,
+    ) -> None:
+        effective_search_order = (
+            list(search_order)
+            if search_order is not None
+            else self._build_search_trace(row.path[0], row.path[-1])[0]
         )
         entry_signal = self.canvas.topology.signals.get(row.entry_signal)
         self.search_log.setPlainText(
@@ -772,7 +1000,7 @@ class MainWindow(QMainWindow):
                     if entry_signal is not None and entry_signal.approach_section.strip()
                     else "-"
                 ),
-                search_order=search_order,
+                search_order=effective_search_order,
                 locked_path=row.path,
                 overlap_path=row.overlap,
                 destination_track=self._format_destination_track(row),
@@ -921,9 +1149,8 @@ class MainWindow(QMainWindow):
         return []
 
 
-    @staticmethod
-    def _format_seconds(value_seconds: float) -> str:
-        return f"{value_seconds:.1f} s"
+    def _format_seconds(self, value_seconds: float) -> str:
+        return f"{value_seconds:.1f}{self._t('unit.seconds_suffix')}"
 
     @staticmethod
     def _format_flank_points(row: InterlockingTableRow) -> str:
@@ -933,7 +1160,7 @@ class MainWindow(QMainWindow):
         self,
         entry_signal_id: str,
         exit_signal_id: str,
-        title: str,
+        title_key: str,
     ) -> bool:
         issues = self.application_service.validate_signal_pair(
             self.canvas.topology,
@@ -945,8 +1172,8 @@ class MainWindow(QMainWindow):
         issue_lines = "\n".join(f"- {issue}" for issue in issues)
         QMessageBox.warning(
             self,
-            title,
-            "Invalid signal/topology configuration:\n" + issue_lines,
+            self._t(title_key),
+            self._t("dialog.invalid_signal_config.message", issues=issue_lines),
         )
         return False
 
@@ -954,36 +1181,52 @@ class MainWindow(QMainWindow):
         if not self.mode_policy.capabilities(self._operating_mode).can_start_simulation:
             QMessageBox.information(
                 self,
-                "Simulation",
-                "Switch to Simulation workspace to start or stop train simulation.",
+                self._t("dialog.simulation.title"),
+                self._t("dialog.simulation.switch_workspace"),
             )
             return
         if self._simulation_timer.isActive():
             self._simulation_timer.stop()
             self._sync_ui_state()
-            self.status.showMessage("Simulation stopped")
+            self.status.showMessage(self._t("status.simulation_stopped"))
             return
 
         entry_signal_id = self.entry_combo.currentText().strip()
         exit_signal_id = self.exit_combo.currentText().strip()
         if not entry_signal_id or not exit_signal_id:
-            QMessageBox.warning(self, "Simulation", "Please choose both Entry and Exit signals.")
+            QMessageBox.warning(
+                self,
+                self._t("dialog.simulation.title"),
+                self._t("dialog.simulation.select_both"),
+            )
             return
         if entry_signal_id == exit_signal_id:
-            QMessageBox.warning(self, "Simulation", "Entry and Exit must be different signals.")
+            QMessageBox.warning(
+                self,
+                self._t("dialog.simulation.title"),
+                self._t("dialog.simulation.same_signal"),
+            )
             return
         if len(self.canvas.topology.signals) < 2:
-            QMessageBox.warning(self, "Simulation", "At least two signals are required.")
+            QMessageBox.warning(
+                self,
+                self._t("dialog.simulation.title"),
+                self._t("dialog.simulation.at_least_two_signals"),
+            )
             return
-        if not self._validate_signal_pair_request(entry_signal_id, exit_signal_id, "Simulation"):
+        if not self._validate_signal_pair_request(
+            entry_signal_id,
+            exit_signal_id,
+            "dialog.simulation.title",
+        ):
             return
 
         route = self._get_active_route_for_pair(entry_signal_id, exit_signal_id)
         if route is None:
             QMessageBox.warning(
                 self,
-                "Simulation",
-                "Please Set Route first for the selected Entry/Exit before starting simulation.",
+                self._t("dialog.simulation.title"),
+                self._t("dialog.simulation.set_route_first"),
             )
             return
 
@@ -999,7 +1242,11 @@ class MainWindow(QMainWindow):
                 train_speed=1.0,
             )
         except Exception as exc:
-            QMessageBox.critical(self, "Simulation failed", str(exc))
+            QMessageBox.critical(
+                self,
+                self._t("dialog.simulation_failed.title"),
+                str(exc),
+            )
             self.canvas.refresh_visual_state()
             self._sync_ui_state()
             return
@@ -1020,7 +1267,14 @@ class MainWindow(QMainWindow):
         self._simulation_ticks_remaining = start_result.suggested_ticks
         self.canvas.refresh_visual_state()
         self.status.showMessage(
-            f"Simulation running: {entry_signal_id} -> {exit_signal_id}, route={route.id}, train={train.id}, start={simulation_start_section}"
+            self._t(
+                "status.simulation_running",
+                entry=entry_signal_id,
+                exit=exit_signal_id,
+                route_id=route.id,
+                train_id=train.id,
+                start=simulation_start_section,
+            )
         )
         self._simulation_timer.start(700)
         self._sync_ui_state()
@@ -1067,30 +1321,34 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self._simulation_timer.stop()
             self.canvas.refresh_visual_state()
-            QMessageBox.critical(self, "Fail-safe STOP", str(exc))
+            QMessageBox.critical(
+                self,
+                self._t("dialog.fail_safe_stop.title"),
+                str(exc),
+            )
             self._sync_ui_state()
-            self.status.showMessage("Simulation halted by fail-safe")
+            self.status.showMessage(self._t("status.simulation_halted_fail_safe"))
             return
 
         self._simulation_ticks_remaining -= 1
         if self._simulation_ticks_remaining <= 0:
             self._simulation_timer.stop()
             self._sync_ui_state()
-            self.status.showMessage("Simulation complete")
+            self.status.showMessage(self._t("status.simulation_complete"))
 
     def _cancel_active_routes(self, show_message: bool = True) -> None:
         if not self.mode_policy.capabilities(self._operating_mode).can_cancel_route:
             if show_message:
-                self.status.showMessage("Cancel route is disabled in Design Layout workspace")
+                self.status.showMessage(self._t("status.cancel_route_disabled"))
             return
         if self.simulation is None:
             if show_message:
-                self.status.showMessage("No active simulation routes to cancel")
+                self.status.showMessage(self._t("status.no_active_simulation_routes"))
             return
 
         if not self.application_service.has_active_routes(self.simulation):
             if show_message:
-                self.status.showMessage("No active routes to cancel")
+                self.status.showMessage(self._t("status.no_active_routes"))
             return
 
         cancel_result = self.controller.cancel_active_routes(self.simulation)
@@ -1102,11 +1360,14 @@ class MainWindow(QMainWindow):
         if cancel_result.failures:
             QMessageBox.warning(
                 self,
-                "Cancel route",
-                "Some routes remain locked:\n" + "\n".join(cancel_result.failures),
+                self._t("dialog.cancel_route.title"),
+                self._t(
+                    "dialog.cancel_route.some_locked",
+                    details="\n".join(cancel_result.failures),
+                ),
             )
         elif show_message:
-            self.status.showMessage("Cancelled all active routes")
+            self.status.showMessage(self._t("status.cancelled_all_active_routes"))
 
     def _sync_ui_state(self) -> None:
         self.canvas.set_simulation(self.simulation)
@@ -1134,12 +1395,17 @@ class MainWindow(QMainWindow):
         )
         capabilities = self.mode_policy.capabilities(self._operating_mode)
         simulation_running = self._simulation_timer.isActive()
-        runtime_edit_lock_reason = "Manual occupied/locked_by editing is blocked in Runtime workspace."
+        runtime_edit_lock_reason = self._t("main.lock.runtime_edit_reason")
         self.canvas.set_runtime_edit_lock(
             self.mode_policy.runtime_edit_locked(self._operating_mode),
             runtime_edit_lock_reason,
         )
-        self.mode_status_label.setText(f"Mode: {self._operating_mode.title}")
+        self.mode_status_label.setText(
+            self._t(
+                "mode.status",
+                mode=self._mode_text(self._operating_mode),
+            )
+        )
         self.connect_mode_action.setEnabled(capabilities.can_edit_layout)
 
         self.find_route_button.setEnabled(has_signals and selected_pair_defined)
@@ -1160,11 +1426,19 @@ class MainWindow(QMainWindow):
         self.approach_time_spin.setEnabled(capabilities.can_set_route)
         self.overlap_release_spin.setEnabled(capabilities.can_set_route)
 
-        self.simulation_action.setText("Stop Simulation" if simulation_running else "Start Simulation")
+        self.simulation_action.setText(
+            self._t("toolbar.stop_simulation")
+            if simulation_running
+            else self._t("toolbar.start_simulation")
+        )
         self.simulation_action.setEnabled(
             capabilities.can_start_simulation and (simulation_running or selected_pair_ready)
         )
-        self.simulate_button.setText("Stop Sim" if simulation_running else "Start Simulation")
+        self.simulate_button.setText(
+            self._t("button.stop_sim_short")
+            if simulation_running
+            else self._t("button.start_simulation")
+        )
         self.simulate_button.setEnabled(
             capabilities.can_start_simulation and (simulation_running or selected_pair_ready)
         )

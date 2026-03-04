@@ -46,6 +46,7 @@ from core.domain.model.elements import (
     TrackSection,
 )
 from core.domain.model.topology import RailwayTopology
+from ui.i18n import UITranslator
 from ui.views.components_palette_view import PaletteListWidget
 
 POINT_SYMBOL_CHOICES: tuple[tuple[str, PointSymbolOrientation], ...] = (
@@ -126,8 +127,12 @@ class NodeItem(QGraphicsObject):
         )
         painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, self.element_id)
 
-        state_text = "OCCUPIED" if bool(self.payload.get("occupied")) else "FREE"
-        state_color = QColor("#c62828") if state_text == "OCCUPIED" else QColor("#2e7d32")
+        is_occupied = bool(self.payload.get("occupied"))
+        if self.editor is not None:
+            state_text = self.editor.state_label(is_occupied)
+        else:
+            state_text = "OCCUPIED" if is_occupied else "FREE"
+        state_color = QColor("#c62828") if is_occupied else QColor("#2e7d32")
         state_rect = QRectF(
             rect.left() + 4.0,
             label_rect.bottom() - 1.0,
@@ -450,8 +455,13 @@ class CanvasEditor(QGraphicsView):
     node_selected = pyqtSignal(object)
     topology_changed = pyqtSignal()
 
-    def __init__(self, parent: Optional[Any] = None) -> None:
+    def __init__(
+        self,
+        parent: Optional[Any] = None,
+        translator: UITranslator | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._translator = translator or UITranslator()
         self.setAcceptDrops(True)
         self.viewport().setAcceptDrops(True)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -498,6 +508,16 @@ class CanvasEditor(QGraphicsView):
         self._pan_has_moved = False
         self._suppress_context_menu_once = False
 
+    def _t(self, key: str, **kwargs: object) -> str:
+        return self._translator.t(key, **kwargs)
+
+    def set_translator(self, translator: UITranslator) -> None:
+        self._translator = translator
+        self.refresh_visual_state()
+
+    def state_label(self, occupied: bool) -> str:
+        return self._t("state.occupied" if occupied else "state.free")
+
     def dragEnterEvent(self, event: Any) -> None:
         if event.mimeData().hasFormat(PaletteListWidget.COMPONENT_MIME):
             event.setDropAction(Qt.DropAction.CopyAction)
@@ -522,7 +542,11 @@ class CanvasEditor(QGraphicsView):
         try:
             self.add_component(element_type, scene_pos)
         except Exception as exc:
-            QMessageBox.warning(self, "Cannot add component", str(exc))
+            QMessageBox.warning(
+                self,
+                self._t("canvas.dialog.cannot_add_component.title"),
+                str(exc),
+            )
             event.ignore()
             return
         event.setDropAction(Qt.DropAction.CopyAction)
@@ -575,7 +599,10 @@ class CanvasEditor(QGraphicsView):
             if self._connect_source is None:
                 self._connect_source = node
                 self.editor_message.emit(
-                    f"Connect mode: start {node.element_id}. Click target node to create connection."
+                    self._t(
+                        "canvas.message.connect_start_select_target",
+                        node_id=node.element_id,
+                    )
                 )
                 self.refresh_visual_state()
                 event.accept()
@@ -584,16 +611,29 @@ class CanvasEditor(QGraphicsView):
             source = self._connect_source
             if node.element_id == source.element_id:
                 self.editor_message.emit(
-                    f"Connect mode: start {node.element_id}. Click another node as target."
+                    self._t(
+                        "canvas.message.connect_start_select_another",
+                        node_id=node.element_id,
+                    )
                 )
                 event.accept()
                 return
 
             try:
                 self.create_connection(source.element_id, node.element_id)
-                self.editor_message.emit(f"Connected {source.element_id} to {node.element_id}")
+                self.editor_message.emit(
+                    self._t(
+                        "canvas.message.connected_pair",
+                        source=source.element_id,
+                        target=node.element_id,
+                    )
+                )
             except Exception as exc:
-                QMessageBox.warning(self, "Connection rejected", str(exc))
+                QMessageBox.warning(
+                    self,
+                    self._t("canvas.dialog.connection_rejected.title"),
+                    str(exc),
+                )
             finally:
                 self._connect_source = None
                 self.refresh_visual_state()
@@ -660,7 +700,11 @@ class CanvasEditor(QGraphicsView):
                 try:
                     self.create_connection(source.element_id, target.element_id)
                 except Exception as exc:  # UI path
-                    QMessageBox.warning(self, "Connection rejected", str(exc))
+                    QMessageBox.warning(
+                        self,
+                        self._t("canvas.dialog.connection_rejected.title"),
+                        str(exc),
+                    )
             event.accept()
             return
         super().mouseReleaseEvent(event)
@@ -692,7 +736,7 @@ class CanvasEditor(QGraphicsView):
             item for item in self.scene_ref.selectedItems() if isinstance(item, NodeItem)
         ]
         if len(selected_nodes) != 2:
-            raise ValueError("Select exactly 2 modules to connect")
+            raise ValueError(self._t("canvas.error.select_exactly_two_modules"))
         first, second = selected_nodes
         if self._is_signal_type_name(first.element_type) and not self._is_signal_type_name(second.element_type):
             self.create_connection(first.element_id, second.element_id)
@@ -715,9 +759,9 @@ class CanvasEditor(QGraphicsView):
 
         menu = QMenu(self)
         if node is not None:
-            edit_action = menu.addAction("Edit properties")
-            rename_action = menu.addAction("Rename")
-            delete_action = menu.addAction("Delete")
+            edit_action = menu.addAction(self._t("canvas.menu.edit_properties"))
+            rename_action = menu.addAction(self._t("canvas.menu.rename"))
+            delete_action = menu.addAction(self._t("canvas.menu.delete"))
             connect_from_selected_action = None
             connect_to_selected_action = None
             selected_nodes = [
@@ -728,10 +772,18 @@ class CanvasEditor(QGraphicsView):
                 other = other_nodes[0]
                 menu.addSeparator()
                 connect_from_selected_action = menu.addAction(
-                    f"Connect {other.element_id} to {node.element_id}"
+                    self._t(
+                        "canvas.menu.connect_pair",
+                        source=other.element_id,
+                        target=node.element_id,
+                    )
                 )
                 connect_to_selected_action = menu.addAction(
-                    f"Connect {node.element_id} to {other.element_id}"
+                    self._t(
+                        "canvas.menu.connect_pair",
+                        source=node.element_id,
+                        target=other.element_id,
+                    )
                 )
             chosen = menu.exec(event.globalPos())
             if chosen == edit_action:
@@ -744,16 +796,24 @@ class CanvasEditor(QGraphicsView):
                 try:
                     self.create_connection(other_nodes[0].element_id, node.element_id)
                 except Exception as exc:
-                    QMessageBox.warning(self, "Connection rejected", str(exc))
+                    QMessageBox.warning(
+                        self,
+                        self._t("canvas.dialog.connection_rejected.title"),
+                        str(exc),
+                    )
             elif chosen == connect_to_selected_action and len(other_nodes) == 1:
                 try:
                     self.create_connection(node.element_id, other_nodes[0].element_id)
                 except Exception as exc:
-                    QMessageBox.warning(self, "Connection rejected", str(exc))
+                    QMessageBox.warning(
+                        self,
+                        self._t("canvas.dialog.connection_rejected.title"),
+                        str(exc),
+                    )
             return
 
         if edge is not None:
-            delete_edge_action = menu.addAction("Delete connection")
+            delete_edge_action = menu.addAction(self._t("canvas.menu.delete_connection"))
             chosen = menu.exec(event.globalPos())
             if chosen == delete_edge_action:
                 self.delete_edge(edge)
@@ -764,23 +824,23 @@ class CanvasEditor(QGraphicsView):
     def keyPressEvent(self, event: Any) -> None:
         if event.matches(QKeySequence.StandardKey.Undo):
             if self.undo():
-                self.editor_message.emit("Undo completed")
+                self.editor_message.emit(self._t("canvas.message.undo_completed"))
             else:
-                self.editor_message.emit("Nothing to undo")
+                self.editor_message.emit(self._t("canvas.message.nothing_to_undo"))
             event.accept()
             return
         if event.matches(QKeySequence.StandardKey.Redo):
             if self.redo():
-                self.editor_message.emit("Redo completed")
+                self.editor_message.emit(self._t("canvas.message.redo_completed"))
             else:
-                self.editor_message.emit("Nothing to redo")
+                self.editor_message.emit(self._t("canvas.message.nothing_to_redo"))
             event.accept()
             return
         if event.key() == Qt.Key.Key_Escape:
             if self._connect_source is not None:
                 self._connect_source = None
                 self.refresh_visual_state()
-                self.editor_message.emit("Connect mode: canceled source selection")
+                self.editor_message.emit(self._t("canvas.message.connect_mode_canceled_source"))
                 event.accept()
                 return
         if event.key() == Qt.Key.Key_Delete:
@@ -804,9 +864,9 @@ class CanvasEditor(QGraphicsView):
         )
         self.refresh_visual_state()
         if self._connect_mode:
-            self.editor_message.emit("Connect mode ON: click source node, then target node")
+            self.editor_message.emit(self._t("canvas.message.connect_mode_on"))
         else:
-            self.editor_message.emit("Connect mode OFF")
+            self.editor_message.emit(self._t("canvas.message.connect_mode_off"))
 
     def set_runtime_edit_lock(self, enabled: bool, reason: str = "") -> None:
         """Enable/disable runtime protection for unsafe manual state edits."""
@@ -832,11 +892,17 @@ class CanvasEditor(QGraphicsView):
         for node in self.nodes.values():
             node.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, movable)
 
-    def _ensure_layout_edit_allowed(self, action: str) -> None:
+    def _ensure_layout_edit_allowed(self, action_key: str) -> None:
         if not self._layout_edit_locked:
             return
-        reason = self._layout_edit_lock_reason or "Switch to Design Layout mode to edit topology."
-        raise RuntimeError(f"Cannot {action} while layout editing is locked. {reason}")
+        reason = self._layout_edit_lock_reason or self._t("main.lock.layout_edit_reason")
+        raise RuntimeError(
+            self._t(
+                "canvas.error.layout_edit_locked",
+                action=self._t(action_key),
+                reason=reason,
+            )
+        )
 
     def set_simulation(self, simulation: Any | None) -> None:
         """Attach simulation state to render animated train sprites."""
@@ -894,7 +960,7 @@ class CanvasEditor(QGraphicsView):
         self, element_type: str, scene_pos: QPointF, element_id: str | None = None
     ) -> NodeItem:
         """Create topology element and visual node."""
-        self._ensure_layout_edit_allowed("add components")
+        self._ensure_layout_edit_allowed("canvas.action.add_components")
         self._push_undo_state()
         aliases = {
             "Section": "TrackSection",
@@ -919,7 +985,12 @@ class CanvasEditor(QGraphicsView):
             "SignalLeft",
             "SignalRight",
         }:
-            raise ValueError(f"Unsupported element type: {element_type}")
+            raise ValueError(
+                self._t(
+                    "canvas.error.unsupported_element_type",
+                    element_type=element_type,
+                )
+            )
         scene_pos = self.snap_to_grid(scene_pos)
 
         if self._is_signal_type_name(element_type):
@@ -939,7 +1010,12 @@ class CanvasEditor(QGraphicsView):
             element_id = f"{prefix}{self._counter[counter_key]}"
 
         if element_id in self.nodes or self.topology.get_element(element_id):
-            raise ValueError(f"Element id already exists: {element_id}")
+            raise ValueError(
+                self._t(
+                    "canvas.error.element_id_exists",
+                    element_id=element_id,
+                )
+            )
 
         if element_type == "TrackSection":
             element = TrackSection(id=element_id)
@@ -975,13 +1051,13 @@ class CanvasEditor(QGraphicsView):
 
     def create_connection(self, source_id: str, target_id: str) -> None:
         """Create directed connection between blocks."""
-        self._ensure_layout_edit_allowed("create connections")
+        self._ensure_layout_edit_allowed("canvas.action.create_connections")
         source = self.nodes.get(source_id)
         target = self.nodes.get(target_id)
         if source is None or target is None:
-            raise KeyError("Connection requires existing source and target nodes")
+            raise KeyError(self._t("canvas.error.connection_requires_existing_nodes"))
         if source_id == target_id:
-            raise ValueError("Cannot self-connect")
+            raise ValueError(self._t("canvas.error.cannot_self_connect"))
 
         if self._is_signal_type_name(source.element_type):
             signal = self.topology.signals.get(source_id)
@@ -1012,8 +1088,8 @@ class CanvasEditor(QGraphicsView):
     def rename_node_dialog(self, node: NodeItem) -> None:
         new_id, ok = QInputDialog.getText(
             self,
-            "Rename element",
-            "New ID:",
+            self._t("canvas.dialog.rename_element.title"),
+            self._t("canvas.dialog.rename_element.prompt"),
             text=node.element_id,
         )
         if not ok:
@@ -1024,20 +1100,29 @@ class CanvasEditor(QGraphicsView):
         try:
             self.rename_node(node.element_id, new_id)
         except Exception as exc:
-            QMessageBox.warning(self, "Rename failed", str(exc))
+            QMessageBox.warning(
+                self,
+                self._t("canvas.dialog.rename_failed.title"),
+                str(exc),
+            )
 
     def rename_node(self, old_id: str, new_id: str) -> None:
-        self._ensure_layout_edit_allowed("rename elements")
+        self._ensure_layout_edit_allowed("canvas.action.rename_elements")
         if old_id not in self.nodes:
-            raise KeyError(f"Unknown element {old_id}")
+            raise KeyError(self._t("canvas.error.unknown_element", element_id=old_id))
         if new_id in self.nodes or self.topology.get_element(new_id):
-            raise ValueError(f"Element id already exists: {new_id}")
+            raise ValueError(
+                self._t(
+                    "canvas.error.element_id_exists",
+                    element_id=new_id,
+                )
+            )
         self._push_undo_state()
 
         node = self.nodes[old_id]
         element = self.topology.get_element(old_id)
         if element is None:
-            raise KeyError(f"Unknown element {old_id}")
+            raise KeyError(self._t("canvas.error.unknown_element", element_id=old_id))
         element.id = new_id
 
         if old_id in self.topology.graph.nodes:
@@ -1098,7 +1183,7 @@ class CanvasEditor(QGraphicsView):
 
         if not edges and not nodes:
             return
-        self._ensure_layout_edit_allowed("delete elements or connections")
+        self._ensure_layout_edit_allowed("canvas.action.delete_elements_or_connections")
         self._push_undo_state()
 
         changed = False
@@ -1120,7 +1205,7 @@ class CanvasEditor(QGraphicsView):
         emit_change: bool = True,
         record_undo: bool = True,
     ) -> None:
-        self._ensure_layout_edit_allowed("delete elements")
+        self._ensure_layout_edit_allowed("canvas.action.delete_elements")
         node_id = node.element_id
         if node_id not in self.nodes:
             return
@@ -1185,7 +1270,7 @@ class CanvasEditor(QGraphicsView):
         emit_change: bool = True,
         record_undo: bool = True,
     ) -> None:
-        self._ensure_layout_edit_allowed("delete connections")
+        self._ensure_layout_edit_allowed("canvas.action.delete_connections")
         if record_undo:
             self._push_undo_state()
         source_id = edge.source.element_id
@@ -1201,12 +1286,14 @@ class CanvasEditor(QGraphicsView):
     def edit_node_properties_dialog(self, node: NodeItem) -> None:
         """Open a double-click edit dialog for a node."""
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Edit {node.element_id}")
+        dialog.setWindowTitle(
+            self._t("canvas.dialog.edit_element.title", element_id=node.element_id)
+        )
         form = QFormLayout(dialog)
-        layout_lock_hint = self._layout_edit_lock_reason or "Layout editing is locked."
+        layout_lock_hint = self._layout_edit_lock_reason or self._t("canvas.lock.layout_editing_locked")
 
         id_input = QLineEdit(node.element_id, dialog)
-        form.addRow("ID", id_input)
+        form.addRow(self._t("field.id"), id_input)
         if self._layout_edit_locked:
             id_input.setEnabled(False)
             id_input.setToolTip(layout_lock_hint)
@@ -1216,28 +1303,32 @@ class CanvasEditor(QGraphicsView):
             length.setRange(1.0, 10000.0)
             length.setValue(float(node.payload.get("length", 100.0)))
             occupied = QComboBox(dialog)
-            occupied.addItems(["FREE", "OCCUPIED"])
-            occupied.setCurrentText("OCCUPIED" if node.payload.get("occupied", False) else "FREE")
+            occupied.addItem(self._t("state.free"), False)
+            occupied.addItem(self._t("state.occupied"), True)
+            occupied.setCurrentIndex(1 if node.payload.get("occupied", False) else 0)
             locked_by = QLineEdit(str(node.payload.get("locked_by") or ""), dialog)
             controls["length"] = length
             controls["occupied"] = occupied
             controls["locked_by"] = locked_by
-            form.addRow("Length", length)
-            form.addRow("State", occupied)
-            form.addRow("Locked by", locked_by)
+            form.addRow(self._t("field.length"), length)
+            form.addRow(self._t("field.state"), occupied)
+            form.addRow(self._t("field.locked_by"), locked_by)
             if self._layout_edit_locked:
                 length.setEnabled(False)
                 length.setToolTip(layout_lock_hint)
             if self._runtime_edit_locked:
                 occupied.setEnabled(False)
                 locked_by.setEnabled(False)
-                hint = self._runtime_edit_lock_reason or "Runtime lock active"
+                hint = self._runtime_edit_lock_reason or self._t("canvas.lock.runtime_lock_active")
                 occupied.setToolTip(hint)
                 locked_by.setToolTip(hint)
         elif node.element_type == "Point":
             position = QComboBox(dialog)
-            position.addItems([PointPosition.NORMAL.value, PointPosition.REVERSE.value])
-            position.setCurrentText(str(node.payload.get("position", PointPosition.NORMAL.value)))
+            position.addItem(self._t("point_position.normal"), PointPosition.NORMAL.value)
+            position.addItem(self._t("point_position.reverse"), PointPosition.REVERSE.value)
+            current_position = str(node.payload.get("position", PointPosition.NORMAL.value))
+            position_index = position.findData(current_position)
+            position.setCurrentIndex(position_index if position_index >= 0 else 0)
             symbol_orientation = QComboBox(dialog)
             for label, orientation in POINT_SYMBOL_CHOICES:
                 symbol_orientation.addItem(label, orientation.value)
@@ -1254,11 +1345,11 @@ class CanvasEditor(QGraphicsView):
             controls["normal_target"] = normal
             controls["reverse_target"] = reverse
             controls["locked_by"] = locked_by
-            form.addRow("Position", position)
-            form.addRow("Symbol", symbol_orientation)
-            form.addRow("Normal ->", normal)
-            form.addRow("Reverse ->", reverse)
-            form.addRow("Locked by", locked_by)
+            form.addRow(self._t("field.position"), position)
+            form.addRow(self._t("field.symbol"), symbol_orientation)
+            form.addRow(self._t("field.normal_to"), normal)
+            form.addRow(self._t("field.reverse_to"), reverse)
+            form.addRow(self._t("field.locked_by"), locked_by)
             if self._layout_edit_locked:
                 symbol_orientation.setEnabled(False)
                 normal.setEnabled(False)
@@ -1268,24 +1359,32 @@ class CanvasEditor(QGraphicsView):
                 reverse.setToolTip(layout_lock_hint)
             if self._runtime_edit_locked:
                 locked_by.setEnabled(False)
-                locked_by.setToolTip(self._runtime_edit_lock_reason or "Runtime lock active")
+                locked_by.setToolTip(
+                    self._runtime_edit_lock_reason or self._t("canvas.lock.runtime_lock_active")
+                )
         else:
             protects = QLineEdit(str(node.payload.get("protects", "")), dialog)
             approach_section = QLineEdit(str(node.payload.get("approach_section", "")), dialog)
             direction = QComboBox(dialog)
-            direction.addItems([SignalDirection.LEFT.value, SignalDirection.RIGHT.value])
-            direction.setCurrentText(str(node.payload.get("direction", SignalDirection.RIGHT.value)))
+            direction.addItem(self._t("signal_direction.left"), SignalDirection.LEFT.value)
+            direction.addItem(self._t("signal_direction.right"), SignalDirection.RIGHT.value)
+            current_direction = str(node.payload.get("direction", SignalDirection.RIGHT.value))
+            direction_index = direction.findData(current_direction)
+            direction.setCurrentIndex(direction_index if direction_index >= 0 else 0)
             aspect = QComboBox(dialog)
-            aspect.addItems([SignalAspect.STOP.value, SignalAspect.PROCEED.value])
-            aspect.setCurrentText(str(node.payload.get("aspect", SignalAspect.STOP.value)))
+            aspect.addItem(self._t("signal_aspect.stop"), SignalAspect.STOP.value)
+            aspect.addItem(self._t("signal_aspect.proceed"), SignalAspect.PROCEED.value)
+            current_aspect = str(node.payload.get("aspect", SignalAspect.STOP.value))
+            aspect_index = aspect.findData(current_aspect)
+            aspect.setCurrentIndex(aspect_index if aspect_index >= 0 else 0)
             controls["protects"] = protects
             controls["approach_section"] = approach_section
             controls["direction"] = direction
             controls["aspect"] = aspect
-            form.addRow("Protects", protects)
-            form.addRow("Approach section", approach_section)
-            form.addRow("Direction", direction)
-            form.addRow("Aspect", aspect)
+            form.addRow(self._t("field.protects"), protects)
+            form.addRow(self._t("field.approach_section"), approach_section)
+            form.addRow(self._t("field.direction"), direction)
+            form.addRow(self._t("field.aspect"), aspect)
             if self._layout_edit_locked:
                 protects.setEnabled(False)
                 approach_section.setEnabled(False)
@@ -1316,20 +1415,26 @@ class CanvasEditor(QGraphicsView):
                         if key == "symbol_orientation":
                             symbol_orientation = widget.currentData()
                             updates[key] = str(symbol_orientation or widget.currentText())
+                        elif key == "occupied":
+                            updates[key] = bool(widget.currentData())
                         else:
-                            updates[key] = str(widget.currentText())
+                            updates[key] = str(widget.currentData() or widget.currentText())
                     elif isinstance(widget, QLineEdit):
                         updates[key] = str(widget.text()).strip()
                 if updates:
                     self.update_node_properties(node.element_id, updates)
             except Exception as exc:
-                QMessageBox.warning(self, "Property update failed", str(exc))
+                QMessageBox.warning(
+                    self,
+                    self._t("canvas.dialog.property_update_failed.title"),
+                    str(exc),
+                )
 
     def update_node_properties(self, element_id: str, updates: dict[str, Any]) -> None:
         """Apply updated properties to domain model and refresh visuals."""
         element = self.topology.get_element(element_id)
         if element is None:
-            raise KeyError(f"Unknown element {element_id}")
+            raise KeyError(self._t("canvas.error.unknown_element", element_id=element_id))
         track_occupied_before = bool(element.occupied) if isinstance(element, TrackSection) else None
         self._validate_layout_property_updates(element, updates)
         self._validate_runtime_state_updates(element, updates)
@@ -1343,7 +1448,9 @@ class CanvasEditor(QGraphicsView):
             if "occupied" in updates:
                 occupied_value = updates["occupied"]
                 if isinstance(occupied_value, str):
-                    element.occupied = occupied_value.strip().upper() == "OCCUPIED"
+                    occupied_token = occupied_value.strip().upper()
+                    localized_occupied = self._t("state.occupied").strip().upper()
+                    element.occupied = occupied_token in {"OCCUPIED", localized_occupied}
                 else:
                     element.occupied = bool(occupied_value)
             if "locked_by" in updates:
@@ -1364,7 +1471,11 @@ class CanvasEditor(QGraphicsView):
                 requested_position = PointPosition(str(updates["position"]))
                 if target_locked_by and requested_position != element.position:
                     raise RuntimeError(
-                        f"Point {element.id} is locked by {target_locked_by}. Unlock before moving."
+                        self._t(
+                            "canvas.error.point_locked_by",
+                            point_id=element.id,
+                            locked_by=target_locked_by,
+                        )
                     )
                 element.position = requested_position
             if "symbol_orientation" in updates:
@@ -1393,7 +1504,7 @@ class CanvasEditor(QGraphicsView):
                 new_protects = str(updates["protects"]).strip()
                 if new_protects and new_protects not in self.topology.graph.nodes:
                     raise ValueError(
-                        "Protects must reference an existing track section or point node"
+                        self._t("canvas.error.protects_invalid")
                     )
                 element.protects = new_protects
                 self.topology.sync_signal_virtual_routes()
@@ -1405,11 +1516,11 @@ class CanvasEditor(QGraphicsView):
                     approach_element = self.topology.get_element(approach_section)
                     if not isinstance(approach_element, ApproachSection):
                         raise ValueError(
-                            "Approach section must reference an existing ApproachSection node"
+                            self._t("canvas.error.approach_section_invalid")
                         )
                     if not self.topology.is_signal_back_side_node(element_id, approach_section):
                         raise ValueError(
-                            "Approach section must be on the rear side of the signal direction"
+                            self._t("canvas.error.approach_section_rear_side")
                         )
                 element.approach_section = approach_section
             if "direction" in updates:
@@ -1463,38 +1574,56 @@ class CanvasEditor(QGraphicsView):
         if removed_train_ids:
             joined = ", ".join(sorted(removed_train_ids))
             self.editor_message.emit(
-                f"Manual FREE on {section_id}: removed train(s) {joined} from simulation state."
+                self._t(
+                    "canvas.message.manual_free_removed_trains",
+                    section_id=section_id,
+                    train_ids=joined,
+                )
             )
 
     def _validate_layout_property_updates(self, element: Any, updates: dict[str, Any]) -> None:
         if not self._layout_edit_locked or not updates:
             return
-        reason = self._layout_edit_lock_reason or "Switch to Design Layout mode to edit topology."
+        reason = self._layout_edit_lock_reason or self._t("main.lock.layout_edit_reason")
 
         if isinstance(element, TrackSection) and "length" in updates:
             if float(updates["length"]) != float(element.length):
-                raise RuntimeError(f"Cannot edit length while layout editing is locked. {reason}")
+                raise RuntimeError(
+                    self._t(
+                        "canvas.error.cannot_edit_length_locked",
+                        reason=reason,
+                    )
+                )
 
         if isinstance(element, Point):
             if "symbol_orientation" in updates:
                 incoming_orientation = PointSymbolOrientation(str(updates["symbol_orientation"]))
                 if incoming_orientation != element.symbol_orientation:
                     raise RuntimeError(
-                        f"Cannot edit point symbol while layout editing is locked. {reason}"
+                        self._t(
+                            "canvas.error.cannot_edit_point_symbol_locked",
+                            reason=reason,
+                        )
                     )
             if "normal_target" in updates:
                 incoming_normal = str(updates["normal_target"]).strip()
                 current_normal = element.facing_connections.get(PointPosition.NORMAL, "")
                 if incoming_normal != current_normal:
                     raise RuntimeError(
-                        f"Cannot edit point targets while layout editing is locked. {reason}"
+                        self._t(
+                            "canvas.error.cannot_edit_point_targets_locked",
+                            reason=reason,
+                        )
                     )
             if "reverse_target" in updates:
                 incoming_reverse = str(updates["reverse_target"]).strip()
                 current_reverse = element.facing_connections.get(PointPosition.REVERSE, "")
                 if incoming_reverse != current_reverse:
                     raise RuntimeError(
-                        f"Cannot edit point targets while layout editing is locked. {reason}"
+                        self._t(
+                            "canvas.error.cannot_edit_point_targets_locked",
+                            reason=reason,
+                        )
                     )
 
         if isinstance(element, Signal):
@@ -1502,44 +1631,70 @@ class CanvasEditor(QGraphicsView):
                 incoming_protects = str(updates["protects"]).strip()
                 if incoming_protects != element.protects:
                     raise RuntimeError(
-                        f"Cannot edit signal protection while layout editing is locked. {reason}"
+                        self._t(
+                            "canvas.error.cannot_edit_signal_protection_locked",
+                            reason=reason,
+                        )
                     )
             if "approach_section" in updates:
                 incoming_approach = str(updates["approach_section"]).strip()
                 if incoming_approach != element.approach_section:
                     raise RuntimeError(
-                        f"Cannot edit signal approach section while layout editing is locked. {reason}"
+                        self._t(
+                            "canvas.error.cannot_edit_signal_approach_locked",
+                            reason=reason,
+                        )
                     )
             if "direction" in updates:
                 incoming_direction = SignalDirection(str(updates["direction"]))
                 if incoming_direction != element.direction:
                     raise RuntimeError(
-                        f"Cannot edit signal direction while layout editing is locked. {reason}"
+                        self._t(
+                            "canvas.error.cannot_edit_signal_direction_locked",
+                            reason=reason,
+                        )
                     )
 
     def _validate_runtime_state_updates(self, element: Any, updates: dict[str, Any]) -> None:
         if not self._runtime_edit_locked or not updates:
             return
-        reason = self._runtime_edit_lock_reason or "Runtime lock active"
+        reason = self._runtime_edit_lock_reason or self._t("canvas.lock.runtime_lock_active")
 
         if isinstance(element, TrackSection):
             if "occupied" in updates:
                 incoming = updates["occupied"]
                 if isinstance(incoming, str):
-                    next_occupied = incoming.strip().upper() == "OCCUPIED"
+                    incoming_token = incoming.strip().upper()
+                    localized_occupied = self._t("state.occupied").strip().upper()
+                    next_occupied = incoming_token in {"OCCUPIED", localized_occupied}
                 else:
                     next_occupied = bool(incoming)
                 if next_occupied != bool(element.occupied):
-                    raise RuntimeError(f"Cannot edit occupied while runtime is active. {reason}")
+                    raise RuntimeError(
+                        self._t(
+                            "canvas.error.cannot_edit_occupied_runtime",
+                            reason=reason,
+                        )
+                    )
             if "locked_by" in updates:
                 next_locked_by = str(updates["locked_by"]).strip() or None
                 if next_locked_by != element.locked_by:
-                    raise RuntimeError(f"Cannot edit locked_by while runtime is active. {reason}")
+                    raise RuntimeError(
+                        self._t(
+                            "canvas.error.cannot_edit_locked_by_runtime",
+                            reason=reason,
+                        )
+                    )
 
         if isinstance(element, Point) and "locked_by" in updates:
             next_locked_by = str(updates["locked_by"]).strip() or None
             if next_locked_by != element.locked_by:
-                raise RuntimeError(f"Cannot edit locked_by while runtime is active. {reason}")
+                raise RuntimeError(
+                    self._t(
+                        "canvas.error.cannot_edit_locked_by_runtime",
+                        reason=reason,
+                    )
+                )
 
     def handle_node_moved(self, node: NodeItem) -> None:
         """Persist node position and update connected edges."""
