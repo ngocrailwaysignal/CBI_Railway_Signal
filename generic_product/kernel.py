@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.interlocking_table import InterlockingTableGenerator, InterlockingTableRow
-from core.route_engine import Route, RouteEngine
-from core.simulation import Simulation
-from core.topology import RailwayTopology
+from core.compiler.interlocking_table import InterlockingTableGenerator, InterlockingTableRow
+from core.domain.model.route import Route
+from core.domain.model.topology import RailwayTopology
+from core.runtime.route_engine import RouteEngine
+from core.runtime.simulation import Simulation
 
 
 @dataclass(slots=True, frozen=True)

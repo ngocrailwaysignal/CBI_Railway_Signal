@@ -4,11 +4,27 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.interlocking_table import InterlockingTableRow
-from core.route_engine import Route
-from core.simulation import Simulation
-from core.topology import RailwayTopology
-from core.train import Train
+from core.application import ModePolicy
+from core.application.use_cases import (
+    CancelActiveRoutesUseCase,
+    CancelRoutesResult,
+    ManualOverrideResult,
+    ManualOverrideUseCase,
+    SetOrReuseRouteUseCase,
+    SetRouteResult,
+    StartRouteSimulationUseCase,
+    StartSimulationResult,
+)
+from core.compiler import InterlockingSpec, RouteCompiler
+from core.compiler.interlocking_table import InterlockingTableRow
+from core.domain.model.route import Route
+from core.domain.model.topology import RailwayTopology
+from core.domain.model.train import Train
+from core.infrastructure.persistence import (
+    InterlockingSpecRepository,
+    RuntimeSnapshotRepository,
+)
+from core.runtime.simulation import Simulation
 from generic_product import GenericProductKernel
 
 from .profile import GenericApplicationProfile
@@ -24,6 +40,14 @@ class GenericApplicationService:
     ) -> None:
         self.profile = profile or GenericApplicationProfile()
         self.kernel = kernel or GenericProductKernel(self.profile.to_product_rules())
+        self.mode_policy = ModePolicy()
+        self._set_route_use_case = SetOrReuseRouteUseCase(self.kernel)
+        self._cancel_routes_use_case = CancelActiveRoutesUseCase()
+        self._manual_override_use_case = ManualOverrideUseCase()
+        self._start_simulation_use_case = StartRouteSimulationUseCase(self.kernel)
+        self._route_compiler = RouteCompiler(self.kernel)
+        self._spec_repository = InterlockingSpecRepository()
+        self._snapshot_repository = RuntimeSnapshotRepository()
 
     def load_topology(
         self,
@@ -194,3 +218,157 @@ class GenericApplicationService:
             approach_time_lock_seconds=approach_time_lock_seconds,
             overlap_release_seconds=overlap_release_seconds,
         )
+
+    def set_or_reuse_route(
+        self,
+        *,
+        topology: RailwayTopology,
+        simulation: Simulation | None,
+        entry_signal_id: str,
+        exit_signal_id: str,
+        overlap_length: int,
+        approach_time_lock_seconds: float,
+        overlap_release_seconds: float,
+    ) -> SetRouteResult:
+        """Set route or return already-active route for one signal pair."""
+        return self._set_route_use_case.execute(
+            topology=topology,
+            simulation=simulation,
+            entry_signal_id=entry_signal_id,
+            exit_signal_id=exit_signal_id,
+            overlap_length=overlap_length,
+            approach_time_lock_seconds=approach_time_lock_seconds,
+            overlap_release_seconds=overlap_release_seconds,
+        )
+
+    def cancel_active_routes(self, simulation: Simulation | None) -> CancelRoutesResult:
+        """Cancel all active routes and return detailed result."""
+        return self._cancel_routes_use_case.execute(simulation)
+
+    def start_route_simulation(
+        self,
+        *,
+        topology: RailwayTopology,
+        simulation: Simulation | None,
+        entry_signal_id: str,
+        exit_signal_id: str,
+        overlap_length: int,
+        approach_time_lock_seconds: float,
+        overlap_release_seconds: float,
+        train_speed: float = 1.0,
+    ) -> StartSimulationResult:
+        """Prepare route/train for simulation and return run metadata."""
+        return self._start_simulation_use_case.execute(
+            topology=topology,
+            simulation=simulation,
+            entry_signal_id=entry_signal_id,
+            exit_signal_id=exit_signal_id,
+            overlap_length=overlap_length,
+            approach_time_lock_seconds=approach_time_lock_seconds,
+            overlap_release_seconds=overlap_release_seconds,
+            train_speed=train_speed,
+        )
+
+    def manual_set_section_occupied(
+        self,
+        *,
+        simulation: Simulation | None,
+        section_id: str,
+        occupied: bool,
+    ) -> ManualOverrideResult:
+        """Apply manual occupancy override and reconcile train occupancy state."""
+        return self._manual_override_use_case.execute_set_section_occupied(
+            simulation=simulation,
+            section_id=section_id,
+            occupied=occupied,
+        )
+
+    def compile_interlocking_spec(
+        self,
+        topology: RailwayTopology,
+        *,
+        station_id: str = "UNNAMED",
+        overlap_length: int | None = None,
+    ) -> InterlockingSpec:
+        """Compile topology into one deterministic interlocking specification."""
+        return self._route_compiler.compile(
+            topology=topology,
+            station_id=station_id,
+            overlap_length=(
+                self.profile.default_overlap_length
+                if overlap_length is None
+                else overlap_length
+            ),
+        )
+
+    def save_interlocking_spec(self, spec: InterlockingSpec, path: str | Path) -> None:
+        """Save one compiled interlocking specification to JSON."""
+        self._spec_repository.save(spec, path)
+
+    def load_interlocking_spec(self, path: str | Path) -> InterlockingSpec:
+        """Load one compiled interlocking specification from JSON."""
+        return self._spec_repository.load(path)
+
+    def save_runtime_snapshot(self, snapshot: dict, path: str | Path) -> None:
+        """Save runtime snapshot artifact (occupancy/locks/routes/trains)."""
+        self._snapshot_repository.save(snapshot, path)
+
+    def load_runtime_snapshot(self, path: str | Path) -> dict:
+        """Load runtime snapshot artifact."""
+        return self._snapshot_repository.load(path)
+
+    @staticmethod
+    def build_runtime_snapshot(simulation: Simulation | None) -> dict:
+        """Serialize runtime-only state for snapshot persistence."""
+        if simulation is None:
+            return {"routes": [], "trains": [], "occupancy": [], "signal_state": []}
+
+        topology = simulation.topology
+        occupancy: list[dict] = []
+        for node_id in topology.graph.nodes:
+            element = topology.get_element(node_id)
+            if element is None:
+                continue
+            record = {"id": node_id, "locked_by": getattr(element, "locked_by", None)}
+            if hasattr(element, "occupied"):
+                record["occupied"] = bool(getattr(element, "occupied", False))
+            if hasattr(element, "position"):
+                position = getattr(element, "position", None)
+                record["position"] = getattr(position, "value", position)
+            occupancy.append(record)
+
+        routes = [
+            {
+                "id": route.id,
+                "entry_signal_id": route.entry_signal_id,
+                "exit_signal_id": route.exit_signal_id,
+                "path": list(route.path),
+                "overlap_path": list(route.overlap_path),
+                "lifecycle_state": route.lifecycle_state.value,
+            }
+            for route in simulation.locking_engine.active_routes.values()
+        ]
+        trains = [
+            {
+                "id": train.id,
+                "current_section": train.current_section,
+                "speed": float(train.speed),
+                "route_id": train.route_id,
+            }
+            for train in simulation.trains.values()
+        ]
+        signal_state = [
+            {
+                "id": signal.id,
+                "aspect": signal.aspect.value,
+                "route_id": signal.route_id,
+            }
+            for signal in topology.signals.values()
+        ]
+        return {
+            "tick": simulation.tick,
+            "routes": routes,
+            "trains": trains,
+            "occupancy": occupancy,
+            "signal_state": signal_state,
+        }

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.topology import RailwayTopology
+from core.domain.model.topology import RailwayTopology
 from generic_application import GenericApplicationService
 
 from .station_layout import StationLayout

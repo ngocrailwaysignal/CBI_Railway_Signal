@@ -1,56 +1,95 @@
-# Layered Architecture
+# Hybrid CBI Architecture
 
-The simulator is organized into 3 layers to separate reusable interlocking logic, operator profile rules, and station-specific data.
+The project follows a hybrid model:
+- **Design-time** is route-oriented: compile layout into interlocking routes, conflict matrix, flank and overlap requirements.
+- **Runtime** is geographical/state-driven: lock/release follows live occupancy, approach-lock state, timers, and fail-safe monitoring.
 
-## 1. Generic Product
+## Bounded Contexts
 
-Path: `generic_product/`
+### 1) `layout_context`
+Responsibility:
+- Edit and validate topology/configuration.
 
-Purpose:
-- Contains core reusable interlocking kernel behavior.
-- No dependency on one station layout file or one operator profile.
-
-Main module:
-- `generic_product/kernel.py`
-  - `ProductRules`: product defaults (`time_lock_seconds`, `default_overlap_length`)
-  - `GenericProductKernel`: route finding, route setting, simulation creation, interlocking-table generation
-
-## 2. Generic Application
-
-Path: `generic_application/`
-
-Purpose:
-- Applies operator/country policy on top of the product kernel.
-- Defines application profile defaults for load/save/runtime behavior.
-
-Main modules:
-- `generic_application/profile.py`
-  - `GenericApplicationProfile`
-- `generic_application/service.py`
-  - `GenericApplicationService`
-  - Wraps product kernel with profile settings.
-
-## 3. Specific Application
-
-Path: `specific_application/`
-
-Purpose:
-- Handles one concrete station layout (track plan + element data).
-- Supports editor-facing load/save/new operations.
-
-Main modules:
-- `specific_application/station_layout.py`
-  - `StationLayout`
+Key modules:
 - `specific_application/editor_service.py`
-  - `SpecificLayoutEditorService`
+- `specific_application/station_layout.py`
+- `ui/views/canvas_editor_view.py`
 
-## UI Integration
+### 2) `interlocking_compile_context`
+Responsibility:
+- Compile `layout.json` into deterministic `interlocking_spec.json`.
 
-`ui/main_window.py` now uses:
-- `GenericApplicationService` for route/interlocking/simulation use-cases.
-- `SpecificLayoutEditorService` for station layout load/save/new.
-- Runtime timing controls (approach-lock release and overlap release) are configured from UI and applied through `GenericApplicationService`.
+Key modules:
+- `core/compiler/route_compiler.py`
+- `core/compiler/spec_models.py`
 
-`main.py` is responsible for selecting the `GenericApplicationProfile` and injecting it into `MainWindow`.
+### 3) `runtime_control_context`
+Responsibility:
+- Route set/cancel/release, lifecycle transitions, occupancy reconcile, and safety monitor.
 
-`ui/canvas_editor.py` remains the drawing/editor surface and topology mutator. JSON persistence is handled by the specific/generic application services.
+Key modules:
+- `core/runtime/route_dispatcher.py`
+- `core/runtime/occupancy_reconciler.py`
+- `core/runtime/safety_monitor.py`
+- `core/locking_engine.py`
+- `core/simulation.py`
+
+### 4) `presentation_context`
+Responsibility:
+- GUI orchestration for Design / Simulation / Runtime modes.
+
+Key modules:
+- `ui/controllers/main_window_controller.py`
+- `ui/views/main_window_view.py`
+- `ui/views/canvas_editor_view.py`
+- `ui/presenters/route_presenter.py`
+
+## Folder Structure
+
+```text
+core/
+  domain/
+    model/
+    policy/
+    lifecycle/
+  application/
+    use_cases/
+    dto/
+    mode_policy/
+  compiler/
+  runtime/
+  infrastructure/
+    persistence/
+    clocks/
+```
+
+```text
+ui/
+  controllers/
+  views/
+  presenters/
+```
+
+## Data Artifacts
+
+- `layout.json`: static design topology.
+- `interlocking_spec.json`: compiled route/conflict/flank/overlap spec.
+- `runtime_snapshot.json`: runtime state snapshot (occupancy, locks, active routes, trains, signals).
+
+Persistence adapters:
+- `core/infrastructure/persistence/interlocking_spec_repository.py`
+- `core/infrastructure/persistence/runtime_snapshot_repository.py`
+
+## Application Layer
+
+`generic_application/service.py` is the facade called by UI and exposes:
+- route set/reuse, cancel, simulation start use-cases
+- manual occupancy override use-case
+- mode policy for 3 UI modes
+- compile/load/save interlocking spec
+- build/load/save runtime snapshot
+
+## Compatibility Notes
+
+- Root UI modules (`ui/main_window.py`, `ui/canvas_editor.py`, `ui/components_palette.py`) are compatibility wrappers to new `ui/views/*` modules.
+- Legacy core modules remain available and are used as compatibility shims while logic is progressively moved into bounded-context modules.

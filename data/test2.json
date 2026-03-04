@@ -76,6 +76,20 @@
       "occupied": false,
       "locked_by": null,
       "length": 100.0
+    },
+    {
+      "id": "AS1",
+      "kind": "approach",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "AS2",
+      "kind": "approach",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
     }
   ],
   "points": [
@@ -116,7 +130,7 @@
       "aspect": "STOP",
       "direction": "RIGHT",
       "protects": "S1",
-      "approach_section": "",
+      "approach_section": "AS1",
       "route_id": null
     },
     {
@@ -124,7 +138,7 @@
       "aspect": "STOP",
       "direction": "LEFT",
       "protects": "S9",
-      "approach_section": "",
+      "approach_section": "AS2",
       "route_id": null
     },
     {
@@ -224,6 +238,14 @@
       "N2"
     ],
     [
+      "AS1",
+      "A"
+    ],
+    [
+      "AS2",
+      "F"
+    ],
+    [
       "S10",
       "N1"
     ],
@@ -232,6 +254,7 @@
       "Y"
     ]
   ],
+  "clearance_conflict_groups": [],
   "ui_positions": {
     "S1": [
       -250.0,
@@ -273,6 +296,10 @@
       -575.0,
       -400.0
     ],
+    "S14": [
+      -250.0,
+      -400.0
+    ],
     "P2": [
       -125.0,
       -400.0
@@ -309,13 +336,17 @@
       150.0,
       -250.0
     ],
-    "S14": [
-      -250.0,
-      -400.0
-    ],
     "Y": [
       -400.0,
       -400.0
+    ],
+    "AS1": [
+      -475.0,
+      -175.0
+    ],
+    "AS2": [
+      1025.0,
+      -175.0
     ]
   }
 }

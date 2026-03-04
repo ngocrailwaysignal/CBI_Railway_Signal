@@ -1,0 +1,36 @@
+﻿"""Use case for canceling all active routes in one simulation."""
+
+from __future__ import annotations
+
+from core.runtime.simulation import Simulation
+
+from core.application.dto import CancelRoutesResult
+
+
+class CancelActiveRoutesUseCase:
+    """Cancel all active routes while preserving per-route error details."""
+
+    def execute(self, simulation: Simulation | None) -> CancelRoutesResult:
+        if simulation is None:
+            return CancelRoutesResult()
+
+        route_ids = list(simulation.locking_engine.active_routes.keys())
+        if not route_ids:
+            return CancelRoutesResult()
+
+        failures: list[str] = []
+        for route_id in route_ids:
+            try:
+                simulation.locking_engine.cancel_route(route_id)
+            except Exception as exc:  # pragma: no cover - defensive path
+                failures.append(f"{route_id}: {exc}")
+
+        simulation.locking_engine.update_time_locking()
+        active_after = set(simulation.locking_engine.active_routes.keys())
+        cancelled_routes = len([route_id for route_id in route_ids if route_id not in active_after])
+        return CancelRoutesResult(
+            attempted_routes=len(route_ids),
+            cancelled_routes=cancelled_routes,
+            failures=failures,
+        )
+

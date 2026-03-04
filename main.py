@@ -1,4 +1,4 @@
-"""Application entrypoint."""
+﻿"""Application entrypoint."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import sys
 from PyQt6.QtWidgets import QApplication
 
 from generic_application import GenericApplicationProfile
-from ui.main_window import MainWindow
+from ui.views.main_window_view import MainWindow
 
 
 def main() -> int:
@@ -21,4 +21,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 

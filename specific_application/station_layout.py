@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.topology import RailwayTopology
+from core.domain.model.topology import RailwayTopology
 
 
 @dataclass(slots=True)
