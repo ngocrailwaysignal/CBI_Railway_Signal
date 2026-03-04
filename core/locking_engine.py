@@ -110,6 +110,12 @@ class LockingEngine:
         )
         if not can_cancel:
             raise RuntimeError(reason)
+        occupied_sections = self._occupied_route_sections(route)
+        if occupied_sections:
+            joined = ", ".join(occupied_sections)
+            raise RuntimeError(
+                f"Route {route_id} is occupied by train on sections: {joined}"
+            )
         self._unlock_route(route_id)
 
     def notify_train_entered(self, route_id: str, node_id: str) -> None:
@@ -146,6 +152,8 @@ class LockingEngine:
             if route is None:
                 continue
             if self._is_approach_occupied(route):
+                continue
+            if self._occupied_route_sections(route):
                 continue
             self._unlock_route(route_id)
 
@@ -312,3 +320,11 @@ class LockingEngine:
             if isinstance(element, ApproachSection) and element.occupied:
                 return True
         return False
+
+    def _occupied_route_sections(self, route: Route) -> list[str]:
+        occupied: list[str] = []
+        for node_id in route.full_path:
+            section = self.topology.get_element(node_id)
+            if isinstance(section, TrackSection) and section.occupied:
+                occupied.append(section.id)
+        return occupied
