@@ -37,7 +37,9 @@ class ManualOverrideUseCase:
         occupied_before = bool(section.occupied)
         section.occupied = bool(occupied)
         removed_trains: list[str] = []
-        if occupied_before and not section.occupied:
+        # Reconcile whenever final state is FREE to handle cases where
+        # occupancy was already changed externally before this use-case runs.
+        if not section.occupied:
             removed_trains = simulation.reconcile_manual_free_section(section_id)
         return ManualOverrideResult(
             section_id=section_id,
