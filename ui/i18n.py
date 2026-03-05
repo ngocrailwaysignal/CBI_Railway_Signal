@@ -162,7 +162,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "interlocking_table.header.approach_lock_release": {
         "en": "Approach Locking\nRelease Time",
-        "vi": " Thời gian nhả\n Khóa tiếp cận ",
+        "vi": " Thời gian giải phóng\n Khóa tiếp cận ",
     },
     "interlocking_table.header.destination_track": {
         "en": "Destination Track",
@@ -178,7 +178,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "interlocking_table.header.overlap_release": {
         "en": "Overlap\nRelease Time",
-        "vi": "Thời gian nhả\nVùng chồng lấn",
+        "vi": "Thời gian giải phóng\nVùng chồng lấn",
     },
     "field.entry": {
         "en": "Entry",
@@ -190,15 +190,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "field.overlap": {
         "en": "Overlap",
-        "vi": "Overlap",
+        "vi": "Chồng lấn",
     },
     "field.approach_release": {
         "en": "Approach release",
-        "vi": "Thời gian nhả khóa tiếp cận",
+        "vi": "Thời gian giải phóng khóa tiếp cận",
     },
     "field.overlap_release": {
         "en": "Overlap release",
-        "vi": "Thời gian nhả overlap",
+        "vi": "Thời gian giải phóng chồng lấn",
     },
     "field.id": {
         "en": "ID",
@@ -279,6 +279,42 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "signal_direction.right": {
         "en": "RIGHT",
         "vi": "PHẢI",
+    },
+    "route_lifecycle.reserved": {
+        "en": "RESERVED",
+        "vi": "DỰ TRỮ",
+    },
+    "route_lifecycle.cleared_reversible": {
+        "en": "CLEARED_REVERSIBLE",
+        "vi": "ĐÃ THIẾT LẬP",
+    },
+    "route_lifecycle.approach_locked": {
+        "en": "APPROACH_LOCKED",
+        "vi": "KHÓA TIẾP CẬN",
+    },
+    "route_lifecycle.train_in_route": {
+        "en": "TRAIN_IN_ROUTE",
+        "vi": "TÀU TRONG HÀNH TRÌNH",
+    },
+    "route_lifecycle.releasing": {
+        "en": "RELEASING",
+        "vi": "ĐANG giải phóng",
+    },
+    "route_lifecycle.released": {
+        "en": "RELEASED",
+        "vi": "ĐÃ giải phóng",
+    },
+    "approach_lock_state.route_set": {
+        "en": "ROUTE_SET",
+        "vi": "ĐÃ ĐẶT HÀNH TRÌNH",
+    },
+    "approach_lock_state.approach_locked": {
+        "en": "APPROACH_LOCKED",
+        "vi": "KHÓA TIẾP CẬN",
+    },
+    "approach_lock_state.time_locked": {
+        "en": "TIME_LOCKED",
+        "vi": "KHÓA THỜI GIAN",
     },
     "signal_aspect.stop": {
         "en": "STOP",
@@ -778,7 +814,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "route_log.label.overlap": {
         "en": "Overlap",
-        "vi": "Overlap",
+        "vi": "Chồng lấn",
     },
     "route_log.label.destination_track": {
         "en": "Destination track",
@@ -814,7 +850,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "route_log.label.overlap_release": {
         "en": "Overlap release",
-        "vi": "Nhả chồng lấn",
+        "vi": "Giải phóng chồng lấn",
     },
     "route_log.entry_line": {
         "en": "{entry_signal} protects {entry_protects}",

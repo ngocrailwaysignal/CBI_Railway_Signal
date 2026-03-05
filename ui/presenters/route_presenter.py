@@ -19,12 +19,52 @@ class RoutePresenter:
     def _t(self, key: str, **kwargs: object) -> str:
         return self._translator.t(key, **kwargs)
 
-    @staticmethod
-    def format_point_locks(required_points: dict[str, PointPosition]) -> str:
+    def _translate_point_position(self, raw: str) -> str:
+        key = {
+            "NORMAL": "point_position.normal",
+            "REVERSE": "point_position.reverse",
+        }.get(str(raw or "").strip().upper())
+        if key is None:
+            return str(raw)
+        return self._t(key)
+
+    def _translate_signal_direction(self, raw: str) -> str:
+        key = {
+            "LEFT": "signal_direction.left",
+            "RIGHT": "signal_direction.right",
+        }.get(str(raw or "").strip().upper())
+        if key is None:
+            return str(raw)
+        return self._t(key)
+
+    def _translate_route_lifecycle(self, raw: str) -> str:
+        key = {
+            "RESERVED": "route_lifecycle.reserved",
+            "CLEARED_REVERSIBLE": "route_lifecycle.cleared_reversible",
+            "APPROACH_LOCKED": "route_lifecycle.approach_locked",
+            "TRAIN_IN_ROUTE": "route_lifecycle.train_in_route",
+            "RELEASING": "route_lifecycle.releasing",
+            "RELEASED": "route_lifecycle.released",
+        }.get(str(raw or "").strip().upper())
+        if key is None:
+            return str(raw)
+        return self._t(key)
+
+    def _translate_approach_lock_state(self, raw: str) -> str:
+        key = {
+            "ROUTE_SET": "approach_lock_state.route_set",
+            "APPROACH_LOCKED": "approach_lock_state.approach_locked",
+            "TIME_LOCKED": "approach_lock_state.time_locked",
+        }.get(str(raw or "").strip().upper())
+        if key is None:
+            return str(raw)
+        return self._t(key)
+
+    def format_point_locks(self, required_points: dict[str, PointPosition]) -> str:
         if not required_points:
             return "-"
         return ", ".join(
-            f"{point_id}:{position.value}"
+            f"{point_id}:{self._translate_point_position(position.value)}"
             for point_id, position in sorted(required_points.items())
         )
 
@@ -64,20 +104,27 @@ class RoutePresenter:
             point_locks = self.format_point_locks(route.required_point_positions)
         flank_points = self.format_point_locks(route.flank_point_positions)
         flank_sections = self._format_items(route.monitored_flank_sections)
+        direction_text = (
+            self._translate_signal_direction(direction) if direction and direction != "-" else (direction or "-")
+        )
+        lifecycle_text = (
+            self._translate_route_lifecycle(lifecycle) if lifecycle and lifecycle != "-" else (lifecycle or "-")
+        )
         overlap_release_text = (
             f"{float(overlap_release_seconds):.1f}s"
             if overlap_release_seconds is not None
             else "-"
         )
         if approach_lock_state:
+            translated_approach_lock_state = self._translate_approach_lock_state(approach_lock_state)
             if approach_lock_remaining_seconds is not None and approach_lock_remaining_seconds > 0.0:
                 approach_lock_text = self._t(
                     "route_log.approach_lock_remaining",
-                    state=approach_lock_state,
+                    state=translated_approach_lock_state,
                     seconds=float(approach_lock_remaining_seconds),
                 )
             else:
-                approach_lock_text = approach_lock_state
+                approach_lock_text = translated_approach_lock_state
         else:
             approach_lock_text = "-"
 
@@ -99,8 +146,8 @@ class RoutePresenter:
                 f"{self._t('route_log.label.route')}: {route_display}",
                 f"{self._t('route_log.label.entry')}: {entry_display}",
                 f"{self._t('route_log.label.exit')}: {exit_display}",
-                f"{self._t('route_log.label.direction')}: {direction or '-'}",
-                f"{self._t('route_log.label.lifecycle')}: {lifecycle or '-'}",
+                f"{self._t('route_log.label.direction')}: {direction_text}",
+                f"{self._t('route_log.label.lifecycle')}: {lifecycle_text}",
                 "",
                 self._t("route_log.section.path_lock"),
                 f"{self._t('route_log.label.search_order')}: {self._format_path(search_order)}",

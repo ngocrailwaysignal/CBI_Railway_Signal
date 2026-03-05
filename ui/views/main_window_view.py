@@ -1082,9 +1082,8 @@ class MainWindow(QMainWindow):
             )
         )
 
-    @staticmethod
-    def _format_point_locks(required_points: dict[str, PointPosition]) -> str:
-        return RoutePresenter.format_point_locks(required_points)
+    def _format_point_locks(self, required_points: dict[str, PointPosition]) -> str:
+        return self.route_presenter.format_point_locks(required_points)
 
     @staticmethod
     def _format_route_label(row: InterlockingTableRow) -> str:
@@ -1152,9 +1151,8 @@ class MainWindow(QMainWindow):
     def _format_seconds(self, value_seconds: float) -> str:
         return f"{value_seconds:.1f}{self._t('unit.seconds_suffix')}"
 
-    @staticmethod
-    def _format_flank_points(row: InterlockingTableRow) -> str:
-        return RoutePresenter.format_point_locks(row.flank_point_positions)
+    def _format_flank_points(self, row: InterlockingTableRow) -> str:
+        return self.route_presenter.format_point_locks(row.flank_point_positions)
 
     def _validate_signal_pair_request(
         self,
