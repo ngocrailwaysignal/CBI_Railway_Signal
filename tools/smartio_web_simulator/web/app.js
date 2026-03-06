@@ -603,6 +603,7 @@
       overlapPath = [];
     }
     const fullPath = [...path, ...overlapPath];
+    const mainSectionPath = path.filter((nodeId) => state.layoutSectionIds.has(nodeId));
     const sectionPath = fullPath.filter((nodeId) => state.layoutSectionIds.has(nodeId));
     return {
       route_id: routeId,
@@ -611,6 +612,7 @@
       path,
       overlap_path: overlapPath,
       full_path: fullPath,
+      main_section_path: mainSectionPath,
       section_path: sectionPath,
       lifecycle_state: String(rawRoute.lifecycle_state || "").trim(),
     };
@@ -1237,11 +1239,13 @@
       return;
     }
     const route = state.activeRoutes.get(routeId);
-    if (!route.section_path.length) {
+    const mainPath = Array.isArray(route.main_section_path) ? route.main_section_path : [];
+    const autoPath = mainPath.length ? mainPath : route.section_path;
+    if (!autoPath.length) {
       showToast(`Route ${routeId} has no section path for movement.`);
       return;
     }
-    const startSection = route.section_path[0];
+    const startSection = autoPath[0];
     if (!canOccupySection(startSection, null)) {
       showToast(`Cannot spawn train. Section ${startSection} is occupied.`);
       return;
@@ -1251,7 +1255,8 @@
     state.localTrains.set(trainId, {
       id: trainId,
       routeId: routeId,
-      sectionPath: [...route.section_path],
+      // Auto-run should stop at route body and not enter overlap.
+      sectionPath: [...autoPath],
       index: 0,
       currentSection: startSection,
     });
@@ -1384,21 +1389,24 @@
 
   function updateSectionOccupancyForMove(oldSection, newSection, movingTrainId) {
     const updates = [];
-    if (oldSection) {
-      const remaining = localTrainCount(oldSection, movingTrainId);
-      if (remaining === 0) {
-        const sectionState = state.sections.get(oldSection) || { occupied: false, locked_by: null };
-        sectionState.occupied = false;
-        state.sections.set(oldSection, sectionState);
-        updates.push({ id: oldSection, occupied: false });
-      }
+    const oldToken = String(oldSection || "").trim();
+    const newToken = String(newSection || "").trim();
+
+    if (newToken) {
+      const sectionState = state.sections.get(newToken) || { occupied: false, locked_by: null };
+      sectionState.occupied = true;
+      state.sections.set(newToken, sectionState);
+      updates.push({ id: newToken, occupied: true });
     }
 
-    if (newSection) {
-      const sectionState = state.sections.get(newSection) || { occupied: false, locked_by: null };
-      sectionState.occupied = true;
-      state.sections.set(newSection, sectionState);
-      updates.push({ id: newSection, occupied: true });
+    if (oldToken && oldToken !== newToken) {
+      const remaining = localTrainCount(oldToken, movingTrainId);
+      if (remaining === 0) {
+        const sectionState = state.sections.get(oldToken) || { occupied: false, locked_by: null };
+        sectionState.occupied = false;
+        state.sections.set(oldToken, sectionState);
+        updates.push({ id: oldToken, occupied: false });
+      }
     }
 
     if (updates.length) {

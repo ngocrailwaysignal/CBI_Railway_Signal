@@ -33,6 +33,8 @@ class LockingEngine:
         self.overlap_release_seconds = max(0.0, float(overlap_release_seconds))
         self.clock: Clock = clock or MonotonicClock()
         self._pending_overlap_releases: dict[str, float] = {}
+        self._sequence_track_sections: dict[str, list[str]] = {}
+        self._sequence_seen_occupied: dict[str, set[str]] = {}
 
     def configure_release_timing(
         self,
@@ -95,6 +97,7 @@ class LockingEngine:
             entry_signal_id=route.entry_signal_id,
             approach_section_id=route.approach_locking_section,
         )
+        self._initialize_sequence_locking_state(route)
         self._pending_overlap_releases.pop(route.id, None)
 
     def set_point_position(self, point_id: str, new_position: PointPosition) -> None:
@@ -168,6 +171,8 @@ class LockingEngine:
         self.topology.clear_runtime_state(keep_occupancy=keep_occupancy)
         self.active_routes.clear()
         self._pending_overlap_releases.clear()
+        self._sequence_track_sections.clear()
+        self._sequence_seen_occupied.clear()
         self.approach_locking.clear_all()
 
     def cancel_route(self, route_id: str) -> None:
@@ -202,6 +207,7 @@ class LockingEngine:
         route = self.active_routes.get(route_id)
         if route is None:
             return
+        self._mark_sequence_section_occupied(route_id, node_id)
         if route.approach_locking_section and node_id == route.approach_locking_section:
             self.approach_locking.mark_approach_locked(route_id)
             if route.lifecycle_state == RouteLifecycleState.CLEARED_REVERSIBLE:
@@ -217,9 +223,7 @@ class LockingEngine:
         route = self.active_routes.get(route_id)
         if route is None:
             return
-        section = self.topology.get_element(section_id)
-        if isinstance(section, TrackSection) and section.locked_by == route_id and not section.occupied:
-            section.locked_by = None
+        self._try_sequence_section_release(route_id, section_id)
         self._cleanup_route_if_complete(route_id)
 
     def force_all_signals_stop(self) -> None:
@@ -270,23 +274,102 @@ class LockingEngine:
             return None
         return route.lifecycle_state
 
+    def _initialize_sequence_locking_state(self, route: Route) -> None:
+        track_sections = [
+            node_id
+            for node_id in route.path
+            if self._is_sequence_track_section(self.topology.get_element(node_id))
+        ]
+        self._sequence_track_sections[route.id] = track_sections
+        self._sequence_seen_occupied[route.id] = set()
+
+    def _clear_sequence_locking_state(self, route_id: str) -> None:
+        self._sequence_track_sections.pop(route_id, None)
+        self._sequence_seen_occupied.pop(route_id, None)
+
+    def _mark_sequence_section_occupied(self, route_id: str, node_id: str) -> None:
+        track_sections = self._sequence_track_sections.get(route_id)
+        if not track_sections or node_id not in track_sections:
+            return
+        self._sequence_seen_occupied.setdefault(route_id, set()).add(node_id)
+
+    def _try_sequence_section_release(self, route_id: str, section_id: str) -> bool:
+        section = self.topology.get_element(section_id)
+        if not self._is_sequence_track_section(section):
+            return False
+        if section.locked_by != route_id or section.occupied:
+            return False
+
+        track_sections = self._sequence_track_sections.get(route_id, [])
+        if not track_sections:
+            section.locked_by = None
+            return True
+        if section_id not in track_sections:
+            section.locked_by = None
+            return True
+
+        seen_occupied = self._sequence_seen_occupied.setdefault(route_id, set())
+        section_index = track_sections.index(section_id)
+
+        if len(track_sections) == 1:
+            if section_id not in seen_occupied:
+                raise RuntimeError(
+                    f"Sequence locking violation on {section_id}: "
+                    "section has no prior occupied evidence"
+                )
+            section.locked_by = None
+            return True
+
+        if section_index == len(track_sections) - 1:
+            # Destination section is released by route-completion/overlap logic.
+            return False
+
+        if section_id not in seen_occupied:
+            raise RuntimeError(
+                f"Sequence locking violation on {section_id}: "
+                "section occupancy was never confirmed"
+            )
+
+        next_section_id = track_sections[section_index + 1]
+        if next_section_id not in seen_occupied:
+            raise RuntimeError(
+                f"Sequence locking violation on {section_id}: "
+                f"next section {next_section_id} has not been confirmed occupied"
+            )
+
+        if section_index > 0:
+            previous_section_id = track_sections[section_index - 1]
+            previous = self.topology.get_element(previous_section_id)
+            if self._is_sequence_track_section(previous) and previous.locked_by == route_id:
+                raise RuntimeError(
+                    f"Sequence locking violation on {section_id}: "
+                    f"previous section {previous_section_id} is still locked"
+                )
+
+        section.locked_by = None
+        return True
+
+    @staticmethod
+    def _is_sequence_track_section(element: object) -> bool:
+        return isinstance(element, TrackSection) and not isinstance(element, ApproachSection)
+
     def _cleanup_route_if_complete(self, route_id: str) -> None:
         route = self.active_routes.get(route_id)
         if route is None:
             return
 
-        track_sections = [
+        body_track_sections = [
             node_id
-            for node_id in route.full_path
+            for node_id in route.path
             if isinstance(self.topology.get_element(node_id), TrackSection)
         ]
-        if not track_sections:
+        if not body_track_sections:
             self._unlock_route(route_id)
             return
 
-        destination_section = track_sections[-1]
+        destination_section = body_track_sections[-1]
         destination_occupied = False
-        for section_id in track_sections:
+        for section_id in body_track_sections:
             section = self.topology.get_element(section_id)
             if not isinstance(section, TrackSection):
                 continue
@@ -347,6 +430,7 @@ class LockingEngine:
         self._transition_route_state(route, RouteLifecycleState.RELEASED)
         self._pending_overlap_releases.pop(route_id, None)
         self.approach_locking.clear(route_id)
+        self._clear_sequence_locking_state(route_id)
         self.active_routes.pop(route_id, None)
 
     @staticmethod
@@ -354,15 +438,15 @@ class LockingEngine:
         route.lifecycle_state = RouteLifecycleFSM.transition(route.lifecycle_state, target)
 
     def _destination_force_unlock_sections(self, route: Route) -> set[str] | None:
-        """Return destination section to force-unlock if still occupied."""
-        track_sections = [
+        """Return route-body destination section to force-unlock if still occupied."""
+        body_track_sections = [
             node_id
-            for node_id in route.full_path
+            for node_id in route.path
             if isinstance(self.topology.get_element(node_id), TrackSection)
         ]
-        if not track_sections:
+        if not body_track_sections:
             return None
-        destination_section = track_sections[-1]
+        destination_section = body_track_sections[-1]
         destination = self.topology.get_element(destination_section)
         if isinstance(destination, TrackSection) and destination.occupied:
             return {destination_section}

@@ -636,7 +636,14 @@ class MainWindow(QMainWindow):
             )
             return
         except Exception as exc:
-            self.status.showMessage(self._t("status.smartio_error", message=str(exc)), 5000)
+            message = str(exc)
+            self.status.showMessage(self._t("status.smartio_error", message=message), 5000)
+            if "Sequence locking violation" in message:
+                QMessageBox.warning(
+                    self,
+                    self._t("dialog.property_update_failed.title"),
+                    message,
+                )
             return
 
         for section_item in payload.get("sections", []):

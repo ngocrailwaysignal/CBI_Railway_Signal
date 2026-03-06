@@ -196,7 +196,7 @@ class SmartIORuntimeAdapter:
                     {"train_id": existing_train_id},
                 )
 
-        for section_id, occupied in sorted(section_updates, key=lambda item: item[1]):
+        for section_id, occupied in section_updates:
             self.simulation.apply_runtime_command(
                 "set_section_occupied",
                 {

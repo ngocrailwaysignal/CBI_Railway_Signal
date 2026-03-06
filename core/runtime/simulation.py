@@ -175,6 +175,16 @@ class Simulation:
                 train.speed = normalized_speed
                 return train
 
+            if train.route_id == normalized_route_id:
+                train.relocate_on_route(
+                    route,
+                    self.topology,
+                    self.locking_engine,
+                    new_section=normalized_section,
+                    speed=normalized_speed,
+                )
+                return train
+
             self._vacate_train_current_section(train)
             train.current_section = normalized_section
             train.speed = normalized_speed

@@ -1569,7 +1569,14 @@ class CanvasEditor(QGraphicsView):
                 removed_train_ids = list(
                     self._manual_override_handler(section_id, occupied_before, occupied_after)
                 )
-            except Exception:
+            except Exception as exc:
+                message = str(exc)
+                if "Sequence locking violation" in message:
+                    QMessageBox.warning(
+                        self,
+                        self._t("dialog.property_update_failed.title"),
+                        message,
+                    )
                 removed_train_ids = []
         elif self._simulation is not None:
             command_fn = getattr(self._simulation, "apply_runtime_command", None)
@@ -1584,7 +1591,14 @@ class CanvasEditor(QGraphicsView):
                     )
                     if isinstance(command_result, dict):
                         removed_train_ids = list(command_result.get("removed_trains", []))
-                except Exception:
+                except Exception as exc:
+                    message = str(exc)
+                    if "Sequence locking violation" in message:
+                        QMessageBox.warning(
+                            self,
+                            self._t("dialog.property_update_failed.title"),
+                            message,
+                        )
                     removed_train_ids = []
             else:
                 reconcile_fn = getattr(self._simulation, "reconcile_manual_free_section", None)

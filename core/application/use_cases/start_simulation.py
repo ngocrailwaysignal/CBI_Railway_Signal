@@ -74,17 +74,26 @@ class StartRouteSimulationUseCase:
                 id=self._next_train_id(active_simulation),
                 current_section=simulation_start_section,
                 speed=float(train_speed),
+                traverse_overlap=False,
             )
             active_simulation.add_train(train, route)
             created_train = True
         else:
+            train.traverse_overlap = False
+            train.relocate_on_route(
+                route,
+                topology,
+                active_simulation.locking_engine,
+                new_section=train.current_section,
+                speed=train.speed,
+            )
             simulation_start_section = train.current_section
 
         visual_route_path = list(route.path)
         if simulation_start_section not in visual_route_path:
             visual_route_path = [simulation_start_section, *visual_route_path]
-        extra_steps = 1 if simulation_start_section not in route.full_path else 0
-        suggested_ticks = max(3, len(route.full_path) + extra_steps + 2)
+        extra_steps = 1 if simulation_start_section not in route.path else 0
+        suggested_ticks = max(3, len(route.path) + extra_steps + 2)
 
         return StartSimulationResult(
             simulation=active_simulation,
