@@ -65,6 +65,7 @@ class LockingEngine:
             route.full_path,
             all_points,
             monitored_flank_sections=route.monitored_flank_sections,
+            allow_occupied_sections=[route.path[0]] if route.path else None,
         )
         if not ok:
             raise ValueError(f"Cannot lock route: {reason}")
@@ -203,6 +204,22 @@ class LockingEngine:
             )
         self._transition_route_state(route, RouteLifecycleState.RELEASING)
         self._unlock_route(route_id)
+
+    def emergency_release_route(self, route_id: str) -> None:
+        """Force-release one route, bypassing occupancy/approach-lock checks."""
+        route = self.active_routes.get(route_id)
+        if route is None:
+            return
+        self._transition_route_state(route, RouteLifecycleState.RELEASING)
+        force_unlock_sections = {
+            node_id
+            for node_id in route.full_path
+            if isinstance(self.topology.get_element(node_id), TrackSection)
+        }
+        self._unlock_route(
+            route_id,
+            force_unlock_sections=(force_unlock_sections or None),
+        )
 
     def notify_train_entered(self, route_id: str, node_id: str) -> None:
         """React to train progression for approach locking behavior."""

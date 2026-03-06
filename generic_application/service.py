@@ -16,6 +16,7 @@ from core.application.serialization import build_layout_payload, build_runtime_s
 from core.application.use_cases import (
     CancelActiveRoutesUseCase,
     CancelRoutesResult,
+    EmergencyReleaseRoutesUseCase,
     ManualOverrideResult,
     ManualOverrideUseCase,
     SetOrReuseRouteUseCase,
@@ -51,6 +52,7 @@ class GenericApplicationService:
         self.mode_policy = ModePolicy()
         self._set_route_use_case = SetOrReuseRouteUseCase(self.kernel)
         self._cancel_routes_use_case = CancelActiveRoutesUseCase()
+        self._emergency_release_use_case = EmergencyReleaseRoutesUseCase()
         self._manual_override_use_case = ManualOverrideUseCase()
         self._start_simulation_use_case = StartRouteSimulationUseCase(self.kernel)
         self._route_compiler = RouteCompiler(self.kernel)
@@ -233,6 +235,10 @@ class GenericApplicationService:
     def cancel_active_routes(self, simulation: Simulation | None) -> CancelRoutesResult:
         """Cancel all active routes and return detailed result."""
         return self._cancel_routes_use_case.execute(simulation)
+
+    def emergency_release_active_routes(self, simulation: Simulation | None) -> CancelRoutesResult:
+        """Force-release all active routes and return detailed result."""
+        return self._emergency_release_use_case.execute(simulation)
 
     def start_route_simulation(
         self,

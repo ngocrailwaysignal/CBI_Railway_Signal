@@ -226,13 +226,10 @@ class PropertiesPanel(QWidget):
             state_input.addItem(self._t("state.free"), False)
             state_input.addItem(self._t("state.occupied"), True)
             state_input.setCurrentIndex(1 if properties.get("occupied", False) else 0)
-            locked_by_input = QLineEdit(str(properties.get("locked_by") or ""))
             self._inputs["length"] = length_input
             self._inputs["state"] = state_input
-            self._inputs["locked_by"] = locked_by_input
             self.form_layout.addRow(self._t("field.length"), length_input)
             self.form_layout.addRow(self._t("field.state"), state_input)
-            self.form_layout.addRow(self._t("field.locked_by"), locked_by_input)
 
         elif self._selected_type == "Point":
             position_input = QComboBox()
@@ -252,17 +249,14 @@ class PropertiesPanel(QWidget):
             symbol_orientation_input.setCurrentIndex(symbol_index if symbol_index >= 0 else 0)
             normal_target = QLineEdit(str(properties.get("normal_target", "")))
             reverse_target = QLineEdit(str(properties.get("reverse_target", "")))
-            locked_by_input = QLineEdit(str(properties.get("locked_by") or ""))
             self._inputs["position"] = position_input
             self._inputs["symbol_orientation"] = symbol_orientation_input
             self._inputs["normal_target"] = normal_target
             self._inputs["reverse_target"] = reverse_target
-            self._inputs["locked_by"] = locked_by_input
             self.form_layout.addRow(self._t("field.position"), position_input)
             self.form_layout.addRow(self._t("field.symbol"), symbol_orientation_input)
             self.form_layout.addRow(self._t("field.normal_to"), normal_target)
             self.form_layout.addRow(self._t("field.reverse_to"), reverse_target)
-            self.form_layout.addRow(self._t("field.locked_by"), locked_by_input)
 
         elif self._is_signal_type(self._selected_type):
             protects_input = QLineEdit(str(properties.get("protects", "")))
@@ -313,7 +307,6 @@ class PropertiesPanel(QWidget):
             updated["length"] = float(self._inputs["length"].value())
             state_data = self._inputs["state"].currentData()
             updated["occupied"] = bool(state_data) if state_data is not None else False
-            updated["locked_by"] = str(self._inputs["locked_by"].text()).strip()
         elif self._selected_type == "Point":
             updated["position"] = str(
                 self._inputs["position"].currentData() or PointPosition.NORMAL.value
@@ -324,7 +317,6 @@ class PropertiesPanel(QWidget):
             )
             updated["normal_target"] = str(self._inputs["normal_target"].text()).strip()
             updated["reverse_target"] = str(self._inputs["reverse_target"].text()).strip()
-            updated["locked_by"] = str(self._inputs["locked_by"].text()).strip()
         elif self._is_signal_type(self._selected_type):
             updated["protects"] = str(self._inputs["protects"].text()).strip()
             updated["approach_section"] = str(self._inputs["approach_section"].text()).strip()

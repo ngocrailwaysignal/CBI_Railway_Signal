@@ -135,6 +135,8 @@ class RouteEngine:
                         flank_result = self.compute_flank_requirements(
                             [*path, *overlap_path],
                             required_points,
+                            entry_signal_id=entry_signal_id,
+                            route_start_node=(path[0] if path else None),
                         )
                         route = Route(
                             id=self._build_route_id(
@@ -169,6 +171,7 @@ class RouteEngine:
                         route.full_path,
                         all_points,
                         monitored_flank_sections=route.monitored_flank_sections,
+                        allow_occupied_sections=[path[0]] if path else None,
                     )
                     if not route_ok:
                         last_reason = f"Route unavailable: {reason}"
@@ -231,22 +234,32 @@ class RouteEngine:
         self,
         node_path: list[str],
         route_point_positions: dict[str, PointPosition],
+        *,
+        entry_signal_id: str | None = None,
+        route_start_node: str | None = None,
     ) -> dict[str, PointPosition]:
         """Public helper for flank-point lock derivation."""
         return self.flank_engine.compute_required_positions(
             route_nodes=node_path,
             route_point_positions=route_point_positions,
+            entry_signal_id=entry_signal_id,
+            route_start_node=route_start_node,
         )
 
     def compute_flank_requirements(
         self,
         node_path: list[str],
         route_point_positions: dict[str, PointPosition],
+        *,
+        entry_signal_id: str | None = None,
+        route_start_node: str | None = None,
     ) -> FlankProtectionResult:
         """Public helper for flank-point and flank-section derivation."""
         return self.flank_engine.compute_requirements(
             route_nodes=node_path,
             route_point_positions=route_point_positions,
+            entry_signal_id=entry_signal_id,
+            route_start_node=route_start_node,
         )
 
     def resolve_approach_locking_section(self, entry_signal_id: str) -> str | None:

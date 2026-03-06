@@ -52,6 +52,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Cancel Route",
         "vi": "Hủy hành trình",
     },
+    "toolbar.emergency_release": {
+        "en": "Emergency Release",
+        "vi": "Giải phóng khẩn cấp",
+    },
     "toolbar.start_simulation": {
         "en": "Start Simulation",
         "vi": "Bắt đầu mô phỏng",
@@ -71,6 +75,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "button.cancel_route": {
         "en": "Cancel Route",
         "vi": "Hủy hành trình",
+    },
+    "button.emergency_release": {
+        "en": "Emergency Release",
+        "vi": "Giải phóng khẩn cấp",
     },
     "button.start_simulation": {
         "en": "Start Simulation",
@@ -488,6 +496,22 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Some routes remain locked:\n{details}",
         "vi": "Một số hành trình vẫn đang bị khóa:\n{details}",
     },
+    "dialog.emergency_release.title": {
+        "en": "Emergency route release",
+        "vi": "Giải phóng hành trình khẩn cấp",
+    },
+    "dialog.emergency_release.password_prompt": {
+        "en": "Enter emergency release password:",
+        "vi": "Nhập mật khẩu giải phóng khẩn cấp:",
+    },
+    "dialog.emergency_release.password_invalid": {
+        "en": "Invalid emergency release password.",
+        "vi": "Mật khẩu giải phóng khẩn cấp không đúng.",
+    },
+    "dialog.emergency_release.some_failed": {
+        "en": "Some routes could not be emergency-released:\n{details}",
+        "vi": "Một số hành trình không thể giải phóng khẩn cấp:\n{details}",
+    },
     "dialog.invalid_signal_config.message": {
         "en": "Invalid signal/topology configuration:\n{issues}",
         "vi": "Cấu hình tín hiệu/topology không hợp lệ:\n{issues}",
@@ -567,6 +591,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "status.cancelled_all_active_routes": {
         "en": "Cancelled all active routes",
         "vi": "Đã hủy tất cả hành trình đang hoạt động",
+    },
+    "status.emergency_release_disabled": {
+        "en": "Emergency release is disabled in Design Layout workspace",
+        "vi": "Không thể giải phóng khẩn cấp trong không gian Thiết kế sa bàn",
+    },
+    "status.emergency_released_all_active_routes": {
+        "en": "Emergency released all active routes",
+        "vi": "Đã giải phóng khẩn cấp tất cả hành trình đang hoạt động",
     },
     "status.smartio_error": {
         "en": "SmartIO error: {message}",

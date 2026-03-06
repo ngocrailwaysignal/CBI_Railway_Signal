@@ -47,6 +47,22 @@ def find_train_for_route(simulation: Simulation, route_id: str) -> Train | None:
     return None
 
 
+def find_idle_train_on_section(simulation: Simulation, section_id: str) -> Train | None:
+    """Return one idle train standing on a section, if present."""
+    target = str(section_id).strip()
+    if not target:
+        return None
+    candidates = [
+        train
+        for train in simulation.trains.values()
+        if train.route_id is None and train.current_section == target
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item.id)
+    return candidates[0]
+
+
 def next_train_id(simulation: Simulation, prefix: str = "T") -> str:
     """Generate the next free train id for one simulation."""
     index = 1

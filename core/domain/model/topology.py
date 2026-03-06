@@ -188,23 +188,20 @@ class RailwayTopology:
         return self.graph.nodes
 
     def signal_approach_nodes(self, signal_id: str) -> list[str]:
-        """Return graph nodes that connect into the given signal from its rear side."""
-        candidates = sorted(
+        """Return graph nodes explicitly linked into one signal (node -> signal)."""
+        return sorted(
             source_id
             for source_id, target_id in self.signal_links
             if target_id == signal_id and source_id in self.graph.nodes
         )
-        return [node_id for node_id in candidates if self._is_node_on_signal_back_side(signal_id, node_id)]
 
     def signal_protected_node(self, signal_id: str) -> str | None:
-        """Return protected node only when it is on the signal front side."""
+        """Return protected node defined by explicit signal.protects mapping."""
         signal = self.signals.get(signal_id)
         if signal is None:
             return None
         node_id = signal.protects.strip()
         if node_id not in self.graph.nodes:
-            return None
-        if not self._is_node_on_signal_front_side(signal_id, node_id):
             return None
         return node_id
 

@@ -33,6 +33,9 @@ class FlankProtectionEngine:
         self,
         route_nodes: Iterable[str],
         route_point_positions: dict[str, PointPosition],
+        *,
+        entry_signal_id: str | None = None,
+        route_start_node: str | None = None,
     ) -> FlankProtectionResult:
         """Return flank-point locks plus monitored flank sections."""
         route_node_set = set(route_nodes)
@@ -40,12 +43,24 @@ class FlankProtectionEngine:
         flank_positions: dict[str, PointPosition] = {}
         monitored_sections: set[str] = set()
         visited_edges: set[tuple[str, str]] = set()
+        normalized_start = str(route_start_node or "").strip()
+        entry_rear_sections = self._entry_rear_track_sections(
+            entry_signal_id=entry_signal_id,
+            route_nodes=route_node_set,
+        )
 
         for protected_node in sorted(route_node_set):
             if protected_node not in graph.nodes:
                 continue
             for branch_node in sorted(graph.neighbors(protected_node)):
                 if branch_node in route_node_set:
+                    continue
+                if self._should_skip_entry_rear_branch(
+                    protected_node=protected_node,
+                    branch_start=branch_node,
+                    route_start_node=normalized_start,
+                    entry_rear_sections=entry_rear_sections,
+                ):
                     continue
                 self._scan_flank_branch(
                     protected_node=protected_node,
@@ -66,13 +81,50 @@ class FlankProtectionEngine:
         self,
         route_nodes: Iterable[str],
         route_point_positions: dict[str, PointPosition],
+        *,
+        entry_signal_id: str | None = None,
+        route_start_node: str | None = None,
     ) -> dict[str, PointPosition]:
         """Backward-compatible helper returning only flank-point positions."""
         result = self.compute_requirements(
             route_nodes=route_nodes,
             route_point_positions=route_point_positions,
+            entry_signal_id=entry_signal_id,
+            route_start_node=route_start_node,
         )
         return result.required_point_positions
+
+    def _entry_rear_track_sections(
+        self,
+        *,
+        entry_signal_id: str | None,
+        route_nodes: set[str],
+    ) -> set[str]:
+        signal_id = str(entry_signal_id or "").strip()
+        if not signal_id:
+            return set()
+        rear_sections: set[str] = set()
+        for node_id in self.topology.signal_approach_nodes(signal_id):
+            if node_id in route_nodes:
+                continue
+            element = self.topology.get_element(node_id)
+            if isinstance(element, TrackSection):
+                rear_sections.add(node_id)
+        return rear_sections
+
+    @staticmethod
+    def _should_skip_entry_rear_branch(
+        *,
+        protected_node: str,
+        branch_start: str,
+        route_start_node: str,
+        entry_rear_sections: set[str],
+    ) -> bool:
+        if not route_start_node:
+            return False
+        if protected_node != route_start_node:
+            return False
+        return branch_start in entry_rear_sections
 
     @staticmethod
     def _protective_position(

@@ -51,6 +51,7 @@ from ui.views.canvas_view_helpers import (
     connection_pairs,
     is_train_renderable,
     node_scene_anchor,
+    resolve_connection_direction,
 )
 from ui.views.components_palette_view import PaletteListWidget
 
@@ -743,13 +744,12 @@ class CanvasEditor(QGraphicsView):
         if len(selected_nodes) != 2:
             raise ValueError(self._t("canvas.error.select_exactly_two_modules"))
         first, second = selected_nodes
-        if self._is_signal_type_name(first.element_type) and not self._is_signal_type_name(second.element_type):
-            self.create_connection(first.element_id, second.element_id)
-            return
-        if self._is_signal_type_name(second.element_type) and not self._is_signal_type_name(first.element_type):
-            self.create_connection(second.element_id, first.element_id)
-            return
-        self.create_connection(first.element_id, second.element_id)
+        source_id, target_id = resolve_connection_direction(
+            topology=self.topology,
+            source_id=first.element_id,
+            target_id=second.element_id,
+        )
+        self.create_connection(source_id, target_id)
 
     def contextMenuEvent(self, event: Any) -> None:
         if self._suppress_context_menu_once:
@@ -799,7 +799,12 @@ class CanvasEditor(QGraphicsView):
                 self.delete_node(node)
             elif chosen == connect_from_selected_action and len(other_nodes) == 1:
                 try:
-                    self.create_connection(other_nodes[0].element_id, node.element_id)
+                    source_id, target_id = resolve_connection_direction(
+                        topology=self.topology,
+                        source_id=other_nodes[0].element_id,
+                        target_id=node.element_id,
+                    )
+                    self.create_connection(source_id, target_id)
                 except Exception as exc:
                     QMessageBox.warning(
                         self,
@@ -808,7 +813,12 @@ class CanvasEditor(QGraphicsView):
                     )
             elif chosen == connect_to_selected_action and len(other_nodes) == 1:
                 try:
-                    self.create_connection(node.element_id, other_nodes[0].element_id)
+                    source_id, target_id = resolve_connection_direction(
+                        topology=self.topology,
+                        source_id=node.element_id,
+                        target_id=other_nodes[0].element_id,
+                    )
+                    self.create_connection(source_id, target_id)
                 except Exception as exc:
                     QMessageBox.warning(
                         self,
@@ -1057,12 +1067,24 @@ class CanvasEditor(QGraphicsView):
     def create_connection(self, source_id: str, target_id: str) -> None:
         """Create directed connection between blocks."""
         self._ensure_layout_edit_allowed("canvas.action.create_connections")
+        if source_id not in self.nodes or target_id not in self.nodes:
+            raise KeyError(self._t("canvas.error.connection_requires_existing_nodes"))
+        if source_id == target_id:
+            raise ValueError(self._t("canvas.error.cannot_self_connect"))
+
+        # Guard UI connect flows from accidentally overwriting protects:
+        # when user starts from a signal that already protects another node,
+        # treat the action as adding an approach link (node -> signal).
+        source_signal = self.topology.signals.get(source_id)
+        if source_signal is not None and target_id in self.topology.graph.nodes:
+            protected = source_signal.protects.strip()
+            if protected and protected != target_id:
+                source_id, target_id = target_id, source_id
+
         source = self.nodes.get(source_id)
         target = self.nodes.get(target_id)
         if source is None or target is None:
             raise KeyError(self._t("canvas.error.connection_requires_existing_nodes"))
-        if source_id == target_id:
-            raise ValueError(self._t("canvas.error.cannot_self_connect"))
 
         if self._is_signal_type_name(source.element_type):
             signal = self.topology.signals.get(source_id)
@@ -1311,24 +1333,17 @@ class CanvasEditor(QGraphicsView):
             occupied.addItem(self._t("state.free"), False)
             occupied.addItem(self._t("state.occupied"), True)
             occupied.setCurrentIndex(1 if node.payload.get("occupied", False) else 0)
-            locked_by = QLineEdit(str(node.payload.get("locked_by") or ""), dialog)
             controls["length"] = length
             controls["occupied"] = occupied
-            controls["locked_by"] = locked_by
             form.addRow(self._t("field.length"), length)
             form.addRow(self._t("field.state"), occupied)
-            form.addRow(self._t("field.locked_by"), locked_by)
             if self._layout_edit_locked:
                 length.setEnabled(False)
                 length.setToolTip(layout_lock_hint)
-                locked_by.setEnabled(False)
-                locked_by.setToolTip(layout_lock_hint)
             if self._runtime_edit_locked:
                 occupied.setEnabled(False)
-                locked_by.setEnabled(False)
                 hint = self._runtime_edit_lock_reason or self._t("canvas.lock.runtime_lock_active")
                 occupied.setToolTip(hint)
-                locked_by.setToolTip(hint)
         elif node.element_type == "Point":
             position = QComboBox(dialog)
             position.addItem(self._t("point_position.normal"), PointPosition.NORMAL.value)
@@ -1346,31 +1361,21 @@ class CanvasEditor(QGraphicsView):
             symbol_orientation.setCurrentIndex(symbol_index if symbol_index >= 0 else 0)
             normal = QLineEdit(str(node.payload.get("normal_target", "")), dialog)
             reverse = QLineEdit(str(node.payload.get("reverse_target", "")), dialog)
-            locked_by = QLineEdit(str(node.payload.get("locked_by") or ""), dialog)
             controls["position"] = position
             controls["symbol_orientation"] = symbol_orientation
             controls["normal_target"] = normal
             controls["reverse_target"] = reverse
-            controls["locked_by"] = locked_by
             form.addRow(self._t("field.position"), position)
             form.addRow(self._t("field.symbol"), symbol_orientation)
             form.addRow(self._t("field.normal_to"), normal)
             form.addRow(self._t("field.reverse_to"), reverse)
-            form.addRow(self._t("field.locked_by"), locked_by)
             if self._layout_edit_locked:
                 symbol_orientation.setEnabled(False)
                 normal.setEnabled(False)
                 reverse.setEnabled(False)
-                locked_by.setEnabled(False)
                 symbol_orientation.setToolTip(layout_lock_hint)
                 normal.setToolTip(layout_lock_hint)
                 reverse.setToolTip(layout_lock_hint)
-                locked_by.setToolTip(layout_lock_hint)
-            if self._runtime_edit_locked:
-                locked_by.setEnabled(False)
-                locked_by.setToolTip(
-                    self._runtime_edit_lock_reason or self._t("canvas.lock.runtime_lock_active")
-                )
         else:
             protects = QLineEdit(str(node.payload.get("protects", "")), dialog)
             approach_section = QLineEdit(str(node.payload.get("approach_section", "")), dialog)

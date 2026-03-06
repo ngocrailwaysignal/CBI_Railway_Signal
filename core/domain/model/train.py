@@ -43,14 +43,24 @@ class Train:
         self._active_path = self._rebuild_active_path(route)
 
         if self.current_section not in self._active_path:
-            self.current_section = route.path[0]
+            rear_nodes = set(topology.signal_approach_nodes(route.entry_signal_id))
+            if self.current_section in rear_nodes:
+                self._active_path = [self.current_section, *self._active_path]
+            else:
+                self.current_section = route.path[0]
         self._cursor = self._active_path.index(self.current_section)
+        current_element = topology.get_element(self.current_section)
+        allow_preoccupied_start = (
+            isinstance(current_element, TrackSection) and current_element.occupied
+        )
         locking_engine.enter_train_section(
             route.id,
             self.current_section,
-            allow_preoccupied=bool(approach_section and self.current_section == approach_section),
+            allow_preoccupied=bool(
+                (approach_section and self.current_section == approach_section)
+                or allow_preoccupied_start
+            ),
         )
-        current_element = topology.get_element(self.current_section)
         self._occupied_track_section = (
             self.current_section if isinstance(current_element, TrackSection) else ""
         )

@@ -60,3 +60,32 @@ def connection_pairs(
             pairs.append((source_id, target_id))
     return pairs
 
+
+def resolve_connection_direction(
+    *,
+    topology: RailwayTopology,
+    source_id: str,
+    target_id: str,
+) -> tuple[str, str]:
+    """Resolve connection direction for one pair with signal-safe heuristics.
+
+    When one side is a signal and the other is a track/point node:
+    - If signal has no protects yet, keep Signal -> Node (set protects).
+    - If signal already protects a node, prefer Node -> Signal (add approach link).
+    """
+    source_is_signal = source_id in topology.signals
+    target_is_signal = target_id in topology.signals
+    if source_is_signal == target_is_signal:
+        return source_id, target_id
+
+    signal_id = source_id if source_is_signal else target_id
+    node_id = target_id if source_is_signal else source_id
+    signal = topology.signals.get(signal_id)
+    if signal is None:
+        return source_id, target_id
+
+    protected = signal.protects.strip()
+    if not protected:
+        return signal_id, node_id
+    return node_id, signal_id
+

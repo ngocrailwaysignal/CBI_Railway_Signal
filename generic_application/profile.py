@@ -26,6 +26,7 @@ class GenericApplicationProfile:
     smart_io_auto_connect: bool = True
     smart_io_reconnect_enabled: bool = True
     smart_io_reconnect_max_seconds: float = 30.0
+    emergency_release_password: str = "cbi123"
 
     def to_product_rules(self) -> ProductRules:
         """Map application profile options into product-kernel rules."""

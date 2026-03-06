@@ -20,3 +20,6 @@ class MainWindowController:
     def cancel_active_routes(self, simulation):
         return self.application_service.cancel_active_routes(simulation)
 
+    def emergency_release_active_routes(self, simulation):
+        return self.application_service.emergency_release_active_routes(simulation)
+

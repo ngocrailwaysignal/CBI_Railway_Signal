@@ -229,6 +229,8 @@ class InterlockingTableGenerator:
                 flank_result = self.route_engine.compute_flank_requirements(
                     [*path, *overlap_path],
                     required_points,
+                    entry_signal_id=entry_signal_id,
+                    route_start_node=(path[0] if path else None),
                 )
             except ValueError:
                 continue

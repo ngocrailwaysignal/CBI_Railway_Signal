@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from core.domain.model.elements import ApproachSection
-from core.application.runtime_helpers import find_train_for_route, next_train_id
+from core.domain.model.elements import TrackSection
+from core.application.runtime_helpers import (
+    find_idle_train_on_section,
+    find_train_for_route,
+    next_train_id,
+)
 from core.domain.model.route import Route
 from core.runtime.simulation import Simulation
 from core.domain.model.topology import RailwayTopology
@@ -22,12 +26,26 @@ class StartRouteSimulationUseCase:
 
     @staticmethod
     def _resolve_simulation_start_section(topology: RailwayTopology, route: Route) -> str:
-        approach_section = route.approach_locking_section.strip() if route.approach_locking_section else ""
-        if approach_section:
-            approach_element = topology.get_element(approach_section)
-            if isinstance(approach_element, ApproachSection) and approach_element.occupied:
-                return approach_section
-        return route.path[0]
+        # Start must be outside the route, on a rear-side section connected to entry signal.
+        rear_track_sections: list[str] = []
+        for node_id in topology.signal_approach_nodes(route.entry_signal_id):
+            element = topology.get_element(node_id)
+            if isinstance(element, TrackSection) and node_id not in route.full_path:
+                rear_track_sections.append(node_id)
+
+        if rear_track_sections:
+            occupied_rear = [
+                node_id
+                for node_id in rear_track_sections
+                if isinstance(topology.get_element(node_id), TrackSection)
+                and bool(topology.get_element(node_id).occupied)
+            ]
+            if occupied_rear:
+                return sorted(occupied_rear)[0]
+            return sorted(rear_track_sections)[0]
+        raise ValueError(
+            "Entry signal must have a rear-side track section outside route for train start"
+        )
 
     def execute(
         self,
@@ -57,14 +75,21 @@ class StartRouteSimulationUseCase:
         simulation_start_section = self._resolve_simulation_start_section(topology, route)
         created_train = False
         if train is None:
-            train = Train(
-                id=next_train_id(active_simulation),
-                current_section=simulation_start_section,
-                speed=float(train_speed),
-                traverse_overlap=False,
-            )
-            active_simulation.add_train(train, route)
-            created_train = True
+            idle_train = find_idle_train_on_section(active_simulation, simulation_start_section)
+            if idle_train is not None:
+                train = idle_train
+                train.traverse_overlap = False
+                train.speed = float(train_speed)
+                train.assign_route(route, topology, active_simulation.locking_engine)
+            else:
+                train = Train(
+                    id=next_train_id(active_simulation),
+                    current_section=simulation_start_section,
+                    speed=float(train_speed),
+                    traverse_overlap=False,
+                )
+                active_simulation.add_train(train, route)
+                created_train = True
         else:
             train.traverse_overlap = False
             train.relocate_on_route(

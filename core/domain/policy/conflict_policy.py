@@ -18,11 +18,17 @@ class ConflictPolicy:
         required_points: dict[str, PointPosition],
         monitored_flank_sections: Iterable[str] | None = None,
         requesting_route_id: str | None = None,
+        allow_occupied_sections: Iterable[str] | None = None,
     ) -> tuple[bool, str]:
+        allowed_preoccupied = {
+            str(section_id).strip()
+            for section_id in (allow_occupied_sections or [])
+            if str(section_id).strip()
+        }
         for node_id in node_path:
             element = topology.get_element(node_id)
             if isinstance(element, TrackSection):
-                if element.occupied:
+                if element.occupied and element.id not in allowed_preoccupied:
                     return False, f"Section {element.id} is occupied"
                 if element.locked_by and element.locked_by != requesting_route_id:
                     return False, f"Section {element.id} is locked by {element.locked_by}"

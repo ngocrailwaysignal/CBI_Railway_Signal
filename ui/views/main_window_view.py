@@ -15,7 +15,9 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -191,6 +193,7 @@ class MainWindow(QMainWindow):
         self.connect_mode_action.setText(self._t("toolbar.connect_mode"))
         self.set_route_action.setText(self._t("toolbar.set_route"))
         self.cancel_route_action.setText(self._t("toolbar.cancel_route"))
+        self.emergency_release_action.setText(self._t("toolbar.emergency_release"))
         self.language_label.setText(self._t("language.label"))
         self._populate_language_selector()
 
@@ -220,6 +223,7 @@ class MainWindow(QMainWindow):
         self.find_route_button.setText(self._t("button.find_route"))
         self.set_route_button.setText(self._t("button.set_route"))
         self.cancel_route_button.setText(self._t("button.cancel_route"))
+        self.emergency_release_button.setText(self._t("button.emergency_release"))
         self.search_log.setPlaceholderText(self._t("route_finder.placeholder"))
 
         self.table_group.setTitle(self._t("interlocking_table.group"))
@@ -325,6 +329,19 @@ class MainWindow(QMainWindow):
                 border: 1px solid #afbfcc;
                 color: #f4f7fa;
             }
+            QPushButton#emergencyReleaseButton {
+                background: #c62828;
+                border: 1px solid #8e1b1b;
+                color: #ffffff;
+            }
+            QPushButton#emergencyReleaseButton:hover {
+                background: #d63a3a;
+            }
+            QPushButton#emergencyReleaseButton:disabled {
+                background: #d9a6a6;
+                border: 1px solid #c58e8e;
+                color: #fff5f5;
+            }
             QPlainTextEdit, QTableWidget, QComboBox, QDoubleSpinBox, QSpinBox {
                 background: #fbfdff;
                 border: 1px solid #c9d4df;
@@ -355,6 +372,11 @@ class MainWindow(QMainWindow):
 
         self.cancel_route_action = self.toolbar.addAction(self._t("toolbar.cancel_route"))
         self.cancel_route_action.triggered.connect(lambda: self._cancel_active_routes())
+
+        self.emergency_release_action = self.toolbar.addAction(self._t("toolbar.emergency_release"))
+        self.emergency_release_action.triggered.connect(
+            lambda: self._emergency_release_routes()
+        )
 
         self.simulation_action = self.toolbar.addAction(self._t("toolbar.start_simulation"))
         self.simulation_action.triggered.connect(self._start_simulation)
@@ -533,6 +555,16 @@ class MainWindow(QMainWindow):
         self.search_log.setReadOnly(True)
         self.search_log.setPlaceholderText(self._t("route_finder.placeholder"))
         route_layout.addWidget(self.search_log)
+
+        emergency_row = QHBoxLayout()
+        emergency_row.addStretch(1)
+        self.emergency_release_button = QPushButton(self._t("button.emergency_release"))
+        self.emergency_release_button.setObjectName("emergencyReleaseButton")
+        self.emergency_release_button.clicked.connect(
+            lambda: self._emergency_release_routes()
+        )
+        emergency_row.addWidget(self.emergency_release_button)
+        route_layout.addLayout(emergency_row)
 
         self.table_group = QGroupBox(self._t("interlocking_table.group"))
         table_layout = QVBoxLayout(self.table_group)
@@ -1584,6 +1616,64 @@ class MainWindow(QMainWindow):
             self._sync_ui_state()
             self.status.showMessage(self._t("status.simulation_complete"))
 
+    def _emergency_release_routes(self, show_message: bool = True) -> None:
+        if not self.mode_policy.capabilities(self._operating_mode).can_cancel_route:
+            if show_message:
+                self.status.showMessage(self._t("status.emergency_release_disabled"))
+            return
+        if self.simulation is None:
+            if show_message:
+                self.status.showMessage(self._t("status.no_active_simulation_routes"))
+            return
+        if not self.application_service.has_active_routes(self.simulation):
+            if show_message:
+                self.status.showMessage(self._t("status.no_active_routes"))
+            return
+
+        password, ok = QInputDialog.getText(
+            self,
+            self._t("dialog.emergency_release.title"),
+            self._t("dialog.emergency_release.password_prompt"),
+            QLineEdit.EchoMode.Password,
+        )
+        if not ok:
+            return
+
+        expected_password = str(
+            getattr(self.application_profile, "emergency_release_password", "")
+        )
+        if str(password) != expected_password:
+            QMessageBox.warning(
+                self,
+                self._t("dialog.emergency_release.title"),
+                self._t("dialog.emergency_release.password_invalid"),
+            )
+            return
+
+        emergency_result = self.controller.emergency_release_active_routes(self.simulation)
+        self.canvas.clear_route_visualization()
+        self.canvas.refresh_visual_state()
+        self._refresh_interlocking_table()
+        self._send_smartio_runtime_snapshot()
+        if self._simulation_timer.isActive():
+            self._simulation_timer.stop()
+        self._sync_ui_state()
+
+        if emergency_result.failures:
+            QMessageBox.warning(
+                self,
+                self._t("dialog.emergency_release.title"),
+                self._t(
+                    "dialog.emergency_release.some_failed",
+                    details="\n".join(emergency_result.failures),
+                ),
+            )
+            return
+        if show_message:
+            self.status.showMessage(
+                self._t("status.emergency_released_all_active_routes")
+            )
+
     def _cancel_active_routes(self, show_message: bool = True) -> None:
         if not self.mode_policy.capabilities(self._operating_mode).can_cancel_route:
             if show_message:
@@ -1673,6 +1763,8 @@ class MainWindow(QMainWindow):
         self.set_route_action.setEnabled(workspace_state.set_route_enabled)
         self.cancel_route_button.setEnabled(workspace_state.cancel_route_enabled)
         self.cancel_route_action.setEnabled(workspace_state.cancel_route_enabled)
+        self.emergency_release_button.setEnabled(workspace_state.cancel_route_enabled)
+        self.emergency_release_action.setEnabled(workspace_state.cancel_route_enabled)
         self.approach_time_spin.setEnabled(workspace_state.route_timing_enabled)
         self.overlap_release_spin.setEnabled(workspace_state.route_timing_enabled)
 
