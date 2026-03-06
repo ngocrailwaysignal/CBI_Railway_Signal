@@ -106,6 +106,70 @@ class LockingEngine:
             raise RuntimeError(f"Point {point.id} is locked by {point.locked_by}")
         point.position = new_position
 
+    def set_section_occupied(
+        self,
+        section_id: str,
+        occupied: bool,
+        *,
+        route_id_hint: str | None = None,
+    ) -> str | None:
+        """Apply one runtime occupancy mutation and trigger release/lifecycle side-effects."""
+        section = self.topology.get_element(section_id)
+        if not isinstance(section, TrackSection):
+            raise KeyError(f"Unknown section: {section_id}")
+
+        target = bool(occupied)
+        if target:
+            if not section.occupied:
+                section.occupied = True
+            resolved_route_id = self._resolve_route_for_section(
+                section_id,
+                route_id_hint=route_id_hint,
+            )
+            if resolved_route_id:
+                self.notify_train_entered(resolved_route_id, section_id)
+            return resolved_route_id
+
+        if section.occupied:
+            section.occupied = False
+        resolved_route_id = self._resolve_route_for_section(
+            section_id,
+            route_id_hint=route_id_hint,
+        )
+        if resolved_route_id:
+            self.sectional_release(resolved_route_id, section_id)
+        return resolved_route_id
+
+    def enter_train_section(
+        self,
+        route_id: str,
+        section_id: str,
+        *,
+        allow_preoccupied: bool = False,
+    ) -> None:
+        """Mark one train section entry via runtime mutator."""
+        section = self.topology.get_element(section_id)
+        if isinstance(section, TrackSection):
+            if section.occupied and not allow_preoccupied:
+                raise RuntimeError(f"Unsafe move: section {section.id} already occupied")
+            if not section.occupied:
+                section.occupied = True
+        self.notify_train_entered(route_id, section_id)
+
+    def vacate_train_section(self, route_id: str, section_id: str) -> None:
+        """Mark one train section vacate via runtime mutator."""
+        section = self.topology.get_element(section_id)
+        if isinstance(section, TrackSection):
+            section.occupied = False
+        self.sectional_release(route_id, section_id)
+
+    def reset_runtime_state(self, *, keep_occupancy: bool = False) -> None:
+        """Reset runtime state controlled by locking engine."""
+        self.topology.clear_runtime_state(keep_occupancy=keep_occupancy)
+        self.active_routes.clear()
+        self._pending_overlap_releases.clear()
+        self.approach_locking.clear_all()
+
     def cancel_route(self, route_id: str) -> None:
         """Cancel a route unless blocked by approach locking."""
         route = self.active_routes.get(route_id)
@@ -373,3 +437,42 @@ class LockingEngine:
             if isinstance(section, TrackSection) and section.occupied:
                 occupied.append(section.id)
         return occupied
+
+    def _resolve_route_for_section(
+        self,
+        section_id: str,
+        *,
+        route_id_hint: str | None = None,
+    ) -> str | None:
+        hint = str(route_id_hint or "").strip()
+        candidates = self._candidate_routes_for_section(section_id)
+        if hint:
+            if hint in candidates:
+                return hint
+            if hint in self.active_routes:
+                raise RuntimeError(
+                    f"Section {section_id} is not associated with hinted route {hint}"
+                )
+
+        section = self.topology.get_element(section_id)
+        if isinstance(section, TrackSection):
+            locked_by = str(section.locked_by or "").strip()
+            if locked_by and locked_by in self.active_routes:
+                return locked_by
+
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        joined = ", ".join(candidates)
+        raise RuntimeError(f"Section {section_id} belongs to multiple active routes: {joined}")
+
+    def _candidate_routes_for_section(self, section_id: str) -> list[str]:
+        candidates: list[str] = []
+        for route_id, route in self.active_routes.items():
+            if section_id in route.full_path:
+                candidates.append(route_id)
+                continue
+            if route.approach_locking_section and section_id == route.approach_locking_section:
+                candidates.append(route_id)
+        return sorted(candidates)

@@ -35,12 +35,18 @@ class ManualOverrideUseCase:
             raise KeyError(f"Unknown section {section_id}")
 
         occupied_before = bool(section.occupied)
-        section.occupied = bool(occupied)
-        removed_trains: list[str] = []
-        # Reconcile whenever final state is FREE to handle cases where
-        # occupancy was already changed externally before this use-case runs.
-        if not section.occupied:
-            removed_trains = simulation.reconcile_manual_free_section(section_id)
+        command_result = simulation.apply_runtime_command(
+            "set_section_occupied",
+            {
+                "section_id": section_id,
+                "occupied": bool(occupied),
+            },
+        )
+        removed_trains = (
+            list(command_result.get("removed_trains", []))
+            if isinstance(command_result, dict)
+            else []
+        )
         return ManualOverrideResult(
             section_id=section_id,
             occupied_before=occupied_before,

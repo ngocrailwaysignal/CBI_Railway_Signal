@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from core.domain.model.elements import TrackSection
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
-from core.runtime.locking_engine import LockingEngine
+
+if TYPE_CHECKING:
+    from core.runtime.locking_engine import LockingEngine
 
 
 @dataclass(slots=True)
@@ -23,7 +25,7 @@ class Train:
     _active_path: list[str] = field(default_factory=list, init=False, repr=False)
 
     def assign_route(
-        self, route: Route, topology: RailwayTopology, locking_engine: LockingEngine
+        self, route: Route, topology: RailwayTopology, locking_engine: "LockingEngine"
     ) -> None:
         """Bind this train to a route and initialize occupancy."""
         self.route_id = route.id
@@ -37,17 +39,11 @@ class Train:
         if self.current_section not in self._active_path:
             self.current_section = route.path[0]
         self._cursor = self._active_path.index(self.current_section)
-
-        section = topology.get_element(self.current_section)
-        if isinstance(section, TrackSection):
-            if section.occupied:
-                if not (approach_section and self.current_section == approach_section):
-                    raise RuntimeError(
-                        f"Train {self.id} cannot enter occupied section {self.current_section}"
-                    )
-            else:
-                section.occupied = True
-        locking_engine.notify_train_entered(route.id, self.current_section)
+        locking_engine.enter_train_section(
+            route.id,
+            self.current_section,
+            allow_preoccupied=bool(approach_section and self.current_section == approach_section),
+        )
 
     def step(self, route: Route, topology: RailwayTopology, locking_engine: LockingEngine) -> bool:
         """Advance according to speed; return True if movement occurred."""
@@ -66,18 +62,8 @@ class Train:
             prev_node = active_path[self._cursor]
             next_node = active_path[self._cursor + 1]
 
-            next_element = topology.get_element(next_node)
-            if isinstance(next_element, TrackSection):
-                if next_element.occupied:
-                    raise RuntimeError(f"Unsafe move: section {next_element.id} already occupied")
-                next_element.occupied = True
-
-            locking_engine.notify_train_entered(route.id, next_node)
-
-            prev_element = topology.get_element(prev_node)
-            if isinstance(prev_element, TrackSection):
-                prev_element.occupied = False
-                locking_engine.sectional_release(route.id, prev_node)
+            locking_engine.enter_train_section(route.id, next_node)
+            locking_engine.vacate_train_section(route.id, prev_node)
 
             self.current_section = next_node
             self._cursor += 1

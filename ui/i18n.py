@@ -468,6 +468,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Simulation failed",
         "vi": "Mô phỏng thất bại",
     },
+    "dialog.runtime_requires_smartio.title": {
+        "en": "Runtime unavailable",
+        "vi": "Không thể vào Runtime",
+    },
+    "dialog.runtime_requires_smartio.message": {
+        "en": "Runtime workspace requires SmartIO connection.\nURL: {url}\nCurrent state: {state}",
+        "vi": "Workspace Runtime yêu cầu kết nối SmartIO.\nURL: {url}\nTrạng thái hiện tại: {state}",
+    },
     "dialog.fail_safe_stop.title": {
         "en": "Fail-safe STOP",
         "vi": "Dừng an toàn",
@@ -559,6 +567,42 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "status.cancelled_all_active_routes": {
         "en": "Cancelled all active routes",
         "vi": "Đã hủy tất cả hành trình đang hoạt động",
+    },
+    "status.smartio_error": {
+        "en": "SmartIO error: {message}",
+        "vi": "SmartIO error: {message}",
+    },
+    "status.runtime_requires_smartio": {
+        "en": "Runtime requires SmartIO connected (current: {state})",
+        "vi": "Runtime yêu cầu SmartIO đã kết nối (hiện tại: {state})",
+    },
+    "runtime.smartio.status": {
+        "en": "SmartIO ({url}): {state}",
+        "vi": "SmartIO ({url}): {state}",
+    },
+    "smartio.state.connected": {
+        "en": "connected",
+        "vi": "connected",
+    },
+    "smartio.state.connecting": {
+        "en": "connecting",
+        "vi": "connecting",
+    },
+    "smartio.state.disconnected": {
+        "en": "disconnected",
+        "vi": "disconnected",
+    },
+    "smartio.state.reconnecting": {
+        "en": "reconnecting in {seconds}s",
+        "vi": "reconnecting in {seconds}s",
+    },
+    "smartio.state.error": {
+        "en": "error",
+        "vi": "error",
+    },
+    "smartio.state.disabled": {
+        "en": "disabled (missing URL)",
+        "vi": "disabled (missing URL)",
     },
     "main.lock.layout_edit_reason": {
         "en": "Switch to Design Layout workspace to modify topology and static properties.",
@@ -900,5 +944,3 @@ class UITranslator:
             return template.format(**kwargs)
         except Exception:
             return template
-
-

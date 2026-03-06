@@ -108,3 +108,7 @@ class ApproachLockingStateMachine:
     def clear(self, route_id: str) -> None:
         """Drop any approach-locking state for a released route."""
         self._records.pop(route_id, None)
+
+    def clear_all(self) -> None:
+        """Drop approach-locking state for all routes."""
+        self._records.clear()

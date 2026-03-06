@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from core.domain.model.elements import TrackSection
 from core.domain.model.topology import RailwayTopology
-from core.domain.model.train import Train
+
+if TYPE_CHECKING:
+    from core.domain.model.train import Train
 
 
 class OccupancyReconciler:
@@ -14,7 +18,7 @@ class OccupancyReconciler:
     def reconcile_manual_free_section(
         *,
         topology: RailwayTopology,
-        trains: dict[str, Train],
+        trains: dict[str, "Train"],
         section_id: str,
     ) -> list[str]:
         section = topology.get_element(section_id)

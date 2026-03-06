@@ -1316,6 +1316,8 @@ class CanvasEditor(QGraphicsView):
             if self._layout_edit_locked:
                 length.setEnabled(False)
                 length.setToolTip(layout_lock_hint)
+                locked_by.setEnabled(False)
+                locked_by.setToolTip(layout_lock_hint)
             if self._runtime_edit_locked:
                 occupied.setEnabled(False)
                 locked_by.setEnabled(False)
@@ -1354,9 +1356,11 @@ class CanvasEditor(QGraphicsView):
                 symbol_orientation.setEnabled(False)
                 normal.setEnabled(False)
                 reverse.setEnabled(False)
+                locked_by.setEnabled(False)
                 symbol_orientation.setToolTip(layout_lock_hint)
                 normal.setToolTip(layout_lock_hint)
                 reverse.setToolTip(layout_lock_hint)
+                locked_by.setToolTip(layout_lock_hint)
             if self._runtime_edit_locked:
                 locked_by.setEnabled(False)
                 locked_by.setToolTip(
@@ -1389,9 +1393,11 @@ class CanvasEditor(QGraphicsView):
                 protects.setEnabled(False)
                 approach_section.setEnabled(False)
                 direction.setEnabled(False)
+                aspect.setEnabled(False)
                 protects.setToolTip(layout_lock_hint)
                 approach_section.setToolTip(layout_lock_hint)
                 direction.setToolTip(layout_lock_hint)
+                aspect.setToolTip(layout_lock_hint)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, parent=dialog
@@ -1445,22 +1451,33 @@ class CanvasEditor(QGraphicsView):
         if isinstance(element, TrackSection):
             if "length" in updates:
                 element.length = float(updates["length"])
+            next_occupied = bool(element.occupied)
             if "occupied" in updates:
                 occupied_value = updates["occupied"]
                 if isinstance(occupied_value, str):
                     occupied_token = occupied_value.strip().upper()
                     localized_occupied = self._t("state.occupied").strip().upper()
-                    element.occupied = occupied_token in {"OCCUPIED", localized_occupied}
+                    next_occupied = occupied_token in {"OCCUPIED", localized_occupied}
                 else:
-                    element.occupied = bool(occupied_value)
-            if "locked_by" in updates:
+                    next_occupied = bool(occupied_value)
+
+                if self._layout_edit_locked:
+                    self._reconcile_manual_free_section(
+                        section_id=element.id,
+                        occupied_before=bool(track_occupied_before),
+                        occupied_after=next_occupied,
+                    )
+                else:
+                    element.occupied = next_occupied
+            if "locked_by" in updates and not self._layout_edit_locked:
                 locked_by_text = str(updates["locked_by"]).strip()
                 element.locked_by = locked_by_text or None
-            self._reconcile_manual_free_section(
-                section_id=element.id,
-                occupied_before=bool(track_occupied_before),
-                occupied_after=bool(element.occupied),
-            )
+            if (not self._layout_edit_locked) and ("occupied" in updates):
+                self._reconcile_manual_free_section(
+                    section_id=element.id,
+                    occupied_before=bool(track_occupied_before),
+                    occupied_after=bool(element.occupied),
+                )
 
         elif isinstance(element, Point):
             target_locked_by = element.locked_by
@@ -1496,7 +1513,7 @@ class CanvasEditor(QGraphicsView):
             elif PointPosition.REVERSE in element.facing_connections:
                 element.facing_connections.pop(PointPosition.REVERSE, None)
                 emit_topology_change = True
-            if "locked_by" in updates:
+            if "locked_by" in updates and not self._layout_edit_locked:
                 element.locked_by = target_locked_by
 
         elif isinstance(element, Signal):
@@ -1543,7 +1560,7 @@ class CanvasEditor(QGraphicsView):
         occupied_before: bool,
         occupied_after: bool,
     ) -> None:
-        if occupied_before == occupied_after or occupied_after:
+        if occupied_before == occupied_after:
             return
 
         removed_train_ids: list[str] = []
@@ -1555,23 +1572,29 @@ class CanvasEditor(QGraphicsView):
             except Exception:
                 removed_train_ids = []
         elif self._simulation is not None:
-            reconcile_fn = getattr(self._simulation, "reconcile_manual_free_section", None)
-            if callable(reconcile_fn):
+            command_fn = getattr(self._simulation, "apply_runtime_command", None)
+            if callable(command_fn):
                 try:
-                    removed_train_ids = list(reconcile_fn(section_id))
+                    command_result = command_fn(
+                        "set_section_occupied",
+                        {
+                            "section_id": section_id,
+                            "occupied": occupied_after,
+                        },
+                    )
+                    if isinstance(command_result, dict):
+                        removed_train_ids = list(command_result.get("removed_trains", []))
                 except Exception:
                     removed_train_ids = []
             else:
-                trains = getattr(self._simulation, "trains", None)
-                if isinstance(trains, dict):
-                    for train_id, train in list(trains.items()):
-                        if getattr(train, "current_section", "") != section_id:
-                            continue
-                        setattr(train, "route_id", None)
-                        trains.pop(train_id, None)
-                        removed_train_ids.append(str(train_id))
+                reconcile_fn = getattr(self._simulation, "reconcile_manual_free_section", None)
+                if callable(reconcile_fn) and not occupied_after:
+                    try:
+                        removed_train_ids = list(reconcile_fn(section_id))
+                    except Exception:
+                        removed_train_ids = []
 
-        if removed_train_ids:
+        if removed_train_ids and not occupied_after:
             joined = ", ".join(sorted(removed_train_ids))
             self.editor_message.emit(
                 self._t(
@@ -1656,12 +1679,13 @@ class CanvasEditor(QGraphicsView):
                     )
 
     def _validate_runtime_state_updates(self, element: Any, updates: dict[str, Any]) -> None:
-        if not self._runtime_edit_locked or not updates:
+        if not updates:
             return
-        reason = self._runtime_edit_lock_reason or self._t("canvas.lock.runtime_lock_active")
+        runtime_reason = self._runtime_edit_lock_reason or self._t("canvas.lock.runtime_lock_active")
+        layout_reason = self._layout_edit_lock_reason or self._t("main.lock.layout_edit_reason")
 
         if isinstance(element, TrackSection):
-            if "occupied" in updates:
+            if "occupied" in updates and self._runtime_edit_locked:
                 incoming = updates["occupied"]
                 if isinstance(incoming, str):
                     incoming_token = incoming.strip().upper()
@@ -1673,28 +1697,46 @@ class CanvasEditor(QGraphicsView):
                     raise RuntimeError(
                         self._t(
                             "canvas.error.cannot_edit_occupied_runtime",
-                            reason=reason,
+                            reason=runtime_reason,
                         )
                     )
             if "locked_by" in updates:
                 next_locked_by = str(updates["locked_by"]).strip() or None
-                if next_locked_by != element.locked_by:
+                if next_locked_by != element.locked_by and (
+                    self._runtime_edit_locked or self._layout_edit_locked
+                ):
                     raise RuntimeError(
                         self._t(
                             "canvas.error.cannot_edit_locked_by_runtime",
-                            reason=reason,
+                            reason=(runtime_reason if self._runtime_edit_locked else layout_reason),
                         )
                     )
 
         if isinstance(element, Point) and "locked_by" in updates:
             next_locked_by = str(updates["locked_by"]).strip() or None
-            if next_locked_by != element.locked_by:
+            if next_locked_by != element.locked_by and (
+                self._runtime_edit_locked or self._layout_edit_locked
+            ):
                 raise RuntimeError(
                     self._t(
                         "canvas.error.cannot_edit_locked_by_runtime",
-                        reason=reason,
+                        reason=(runtime_reason if self._runtime_edit_locked else layout_reason),
                     )
                 )
+
+        if isinstance(element, Signal) and self._layout_edit_locked:
+            if "aspect" in updates:
+                next_aspect = SignalAspect(str(updates["aspect"]))
+                if next_aspect != element.aspect:
+                    raise RuntimeError(
+                        f"Manual signal aspect editing is blocked outside Design Layout workspace ({layout_reason})."
+                    )
+            if "route_id" in updates:
+                next_route_id = str(updates["route_id"]).strip() or None
+                if next_route_id != element.route_id:
+                    raise RuntimeError(
+                        f"Manual signal route editing is blocked outside Design Layout workspace ({layout_reason})."
+                    )
 
     def handle_node_moved(self, node: NodeItem) -> None:
         """Persist node position and update connected edges."""

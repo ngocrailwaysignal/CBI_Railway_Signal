@@ -14,14 +14,18 @@ class GenericApplicationProfile:
     """Country/operator-specific behavior without station-specific data."""
 
     name: str = "Default"
-    time_lock_seconds: float = 30.0
-    default_overlap_length: int = 0
-    overlap_release_seconds: float = 30.0
+    time_lock_seconds: float = 2.0
+    default_overlap_length: int = 1
+    overlap_release_seconds: float = 2.0
     load_runtime_state: bool = False
     load_occupancy: bool = True
     include_runtime_state: bool = False
     include_occupancy: bool = True
     ui_language: str = "en"
+    smart_io_ws_url: str = "ws://127.0.0.1:8765/smartio"
+    smart_io_auto_connect: bool = True
+    smart_io_reconnect_enabled: bool = True
+    smart_io_reconnect_max_seconds: float = 30.0
 
     def to_product_rules(self) -> ProductRules:
         """Map application profile options into product-kernel rules."""

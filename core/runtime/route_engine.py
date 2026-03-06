@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+import hashlib
 
 import networkx as nx
 
@@ -137,7 +137,12 @@ class RouteEngine:
                             required_points,
                         )
                         route = Route(
-                            id=f"R_{entry_signal_id}_{exit_signal_id}_{uuid4().hex[:8]}",
+                            id=self._build_route_id(
+                                entry_signal_id=entry_signal_id,
+                                exit_signal_id=exit_signal_id,
+                                path=path,
+                                overlap_path=overlap_path,
+                            ),
                             entry_signal_id=entry_signal_id,
                             exit_signal_id=exit_signal_id,
                             path=path,
@@ -356,3 +361,15 @@ class RouteEngine:
             if isinstance(element, ApproachSection):
                 return node_id
         return None
+
+    @staticmethod
+    def _build_route_id(
+        *,
+        entry_signal_id: str,
+        exit_signal_id: str,
+        path: list[str],
+        overlap_path: list[str],
+    ) -> str:
+        payload = "|".join([entry_signal_id, exit_signal_id, *path, "#", *overlap_path])
+        digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:8]
+        return f"R_{entry_signal_id}_{exit_signal_id}_{digest}"
