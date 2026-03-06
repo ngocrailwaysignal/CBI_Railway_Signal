@@ -89,7 +89,21 @@ Persistence adapters:
 - compile/load/save interlocking spec
 - build/load/save runtime snapshot
 
-## Compatibility Notes
+## Runtime Decomposition Notes
 
-- Root UI modules (`ui/main_window.py`, `ui/canvas_editor.py`, `ui/components_palette.py`) are compatibility wrappers to new `ui/views/*` modules.
-- Legacy core modules remain available and are used as compatibility shims while logic is progressively moved into bounded-context modules.
+- `core/runtime/simulation.py` remains the public runtime orchestration API.
+- Internal collaborators are split into focused modules:
+  - `core/runtime/command_handler.py`
+  - `core/runtime/train_lifecycle.py`
+  - `core/runtime/snapshot_hydrator.py`
+- `core/runtime/locking_engine.py` keeps public behavior while delegating internals to:
+  - `core/runtime/sequence_locking.py`
+  - `core/runtime/timed_release.py`
+
+## Dependency Direction Rules
+
+- `ui/*` may depend on `specific_application/*`, `generic_application/*`, and `core/application/*`.
+- `core/application/*` may depend on `core/domain/*`, `core/runtime/*`, `core/compiler/*`, and `core/infrastructure/*`.
+- `core/domain/*` must not depend on `ui/*` or `specific_application/*`.
+- `core/infrastructure/*` must not depend on `ui/*`.
+- `generic_product/*` should remain UI-agnostic and station-agnostic.

@@ -22,7 +22,7 @@ class GenericApplicationProfile:
     include_runtime_state: bool = False
     include_occupancy: bool = True
     ui_language: str = "en"
-    smart_io_ws_url: str = "ws://127.0.0.1:8765/smartio"
+    smart_io_ws_url: str = "wss://cbi-smartio.onrender.com/smartio"
     smart_io_auto_connect: bool = True
     smart_io_reconnect_enabled: bool = True
     smart_io_reconnect_max_seconds: float = 30.0

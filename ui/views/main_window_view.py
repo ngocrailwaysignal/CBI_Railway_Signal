@@ -43,7 +43,11 @@ from core.infrastructure.smartio import (
 from core.runtime.simulation import Simulation
 from generic_application import GenericApplicationProfile, GenericApplicationService
 from specific_application import SpecificLayoutEditorService, StationLayout
-from ui.controllers import MainWindowController
+from ui.controllers import (
+    MainWindowController,
+    SmartIOSessionAdapter,
+    WorkspaceStateCoordinator,
+)
 from ui.i18n import SUPPORTED_LANGUAGES, UITranslator, normalize_language
 from ui.presenters import RoutePresenter
 from ui.views.canvas_editor_view import CanvasEditor
@@ -64,6 +68,7 @@ class MainWindow(QMainWindow):
         self._translator = UITranslator(getattr(self.application_profile, "ui_language", "en"))
         self.application_service = GenericApplicationService(profile=self.application_profile)
         self.controller = MainWindowController(self.application_service)
+        self.workspace_state_coordinator = WorkspaceStateCoordinator()
         self.route_presenter = RoutePresenter(self._translator)
         self.mode_policy = self.application_service.mode_policy
         self.layout_editor_service = SpecificLayoutEditorService(self.application_service)
@@ -679,19 +684,15 @@ class MainWindow(QMainWindow):
 
     def _smartio_state_text(self) -> str:
         token = str(self._smartio_status_token or "").strip().lower()
-        if token.startswith("reconnecting_in_") and token.endswith("s"):
+        presentation = SmartIOSessionAdapter.presentation(
+            operating_mode=self._operating_mode,
+            status_token=token,
+        )
+        if presentation.state_key == "smartio.state.reconnecting" and token.endswith("s"):
             delay = token.removeprefix("reconnecting_in_").removesuffix("s")
             if delay.isdigit():
                 return self._t("smartio.state.reconnecting", seconds=int(delay))
-        if token == "connected":
-            return self._t("smartio.state.connected")
-        if token == "connecting":
-            return self._t("smartio.state.connecting")
-        if token == "error":
-            return self._t("smartio.state.error")
-        if token == "disabled":
-            return self._t("smartio.state.disabled")
-        return self._t("smartio.state.disconnected")
+        return self._t(presentation.state_key)
 
     def _update_runtime_connection_label(self) -> None:
         if not hasattr(self, "runtime_connection_label") or not hasattr(
@@ -699,27 +700,18 @@ class MainWindow(QMainWindow):
             "runtime_connection_badge",
         ):
             return
-        show_runtime_status = self._operating_mode is OperatingMode.RUNTIME
-        self.runtime_connection_badge.setVisible(show_runtime_status)
-        self.runtime_connection_label.setVisible(show_runtime_status)
-        if not show_runtime_status:
+        presentation = SmartIOSessionAdapter.presentation(
+            operating_mode=self._operating_mode,
+            status_token=self._smartio_status_token,
+        )
+        self.runtime_connection_badge.setVisible(presentation.visible)
+        self.runtime_connection_label.setVisible(presentation.visible)
+        if not presentation.visible:
             return
-        raw_token = str(self._smartio_status_token or "").strip().lower()
-        normalized_token = raw_token
-        if raw_token.startswith("reconnecting_in_"):
-            normalized_token = "reconnecting"
-        badge_style = {
-            "connected": "background:#23a55a; border:1px solid #1b7f46;",
-            "connecting": "background:#2f6feb; border:1px solid #2456b7;",
-            "reconnecting": "background:#d29922; border:1px solid #9f7218;",
-            "error": "background:#da3633; border:1px solid #a92c2a;",
-            "disabled": "background:#8b949e; border:1px solid #6e7781;",
-            "disconnected": "background:#8b949e; border:1px solid #6e7781;",
-        }.get(normalized_token, "background:#8b949e; border:1px solid #6e7781;")
         self.runtime_connection_badge.setToolTip(self._smartio_state_text())
         self.runtime_connection_badge.setStyleSheet(
             f"border-radius: 6px; min-width: 12px; max-width: 12px; "
-            f"min-height: 12px; max-height: 12px; {badge_style}"
+            f"min-height: 12px; max-height: 12px; {presentation.badge_style}"
         )
         self.runtime_connection_label.setText(
             self._t(
@@ -1652,6 +1644,14 @@ class MainWindow(QMainWindow):
         )
         capabilities = self.mode_policy.capabilities(self._operating_mode)
         simulation_running = self._simulation_timer.isActive()
+        workspace_state = self.workspace_state_coordinator.evaluate(
+            capabilities=capabilities,
+            has_signals=has_signals,
+            selected_pair_defined=selected_pair_defined,
+            selected_pair_ready=selected_pair_ready,
+            has_active_routes=has_active_routes,
+            simulation_running=simulation_running,
+        )
         runtime_edit_lock_reason = self._t("main.lock.runtime_edit_reason")
         self.canvas.set_runtime_edit_lock(
             self.mode_policy.runtime_edit_locked(self._operating_mode),
@@ -1663,45 +1663,31 @@ class MainWindow(QMainWindow):
                 mode=self._mode_text(self._operating_mode),
             )
         )
-        self.new_layout_action.setEnabled(capabilities.can_edit_layout)
-        self.save_layout_action.setEnabled(capabilities.can_edit_layout)
-        self.load_layout_action.setEnabled(capabilities.can_edit_layout)
-        self.connect_mode_action.setEnabled(capabilities.can_edit_layout)
+        self.new_layout_action.setEnabled(workspace_state.layout_edit_enabled)
+        self.save_layout_action.setEnabled(workspace_state.layout_edit_enabled)
+        self.load_layout_action.setEnabled(workspace_state.layout_edit_enabled)
+        self.connect_mode_action.setEnabled(workspace_state.connect_mode_enabled)
 
-        self.find_route_button.setEnabled(has_signals and selected_pair_defined)
-        self.set_route_button.setEnabled(
-            capabilities.can_set_route
-            and has_signals
-            and selected_pair_defined
-            and not simulation_running
-        )
-        self.set_route_action.setEnabled(
-            capabilities.can_set_route
-            and has_signals
-            and selected_pair_defined
-            and not simulation_running
-        )
-        self.cancel_route_button.setEnabled(capabilities.can_cancel_route and has_active_routes)
-        self.cancel_route_action.setEnabled(capabilities.can_cancel_route and has_active_routes)
-        self.approach_time_spin.setEnabled(capabilities.can_set_route)
-        self.overlap_release_spin.setEnabled(capabilities.can_set_route)
+        self.find_route_button.setEnabled(workspace_state.find_route_enabled)
+        self.set_route_button.setEnabled(workspace_state.set_route_enabled)
+        self.set_route_action.setEnabled(workspace_state.set_route_enabled)
+        self.cancel_route_button.setEnabled(workspace_state.cancel_route_enabled)
+        self.cancel_route_action.setEnabled(workspace_state.cancel_route_enabled)
+        self.approach_time_spin.setEnabled(workspace_state.route_timing_enabled)
+        self.overlap_release_spin.setEnabled(workspace_state.route_timing_enabled)
 
         self.simulation_action.setText(
             self._t("toolbar.stop_simulation")
-            if simulation_running
+            if workspace_state.simulation_running
             else self._t("toolbar.start_simulation")
         )
-        self.simulation_action.setEnabled(
-            capabilities.can_start_simulation and (simulation_running or selected_pair_ready)
-        )
+        self.simulation_action.setEnabled(workspace_state.simulation_enabled)
         self.simulate_button.setText(
             self._t("button.stop_sim_short")
-            if simulation_running
+            if workspace_state.simulation_running
             else self._t("button.start_simulation")
         )
-        self.simulate_button.setEnabled(
-            capabilities.can_start_simulation and (simulation_running or selected_pair_ready)
-        )
+        self.simulate_button.setEnabled(workspace_state.simulation_enabled)
         self._update_runtime_connection_label()
 
     def closeEvent(self, event: QCloseEvent) -> None:

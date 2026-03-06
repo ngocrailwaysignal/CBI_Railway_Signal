@@ -47,6 +47,11 @@ from core.domain.model.elements import (
 )
 from core.domain.model.topology import RailwayTopology
 from ui.i18n import UITranslator
+from ui.views.canvas_view_helpers import (
+    connection_pairs,
+    is_train_renderable,
+    node_scene_anchor,
+)
 from ui.views.components_palette_view import PaletteListWidget
 
 POINT_SYMBOL_CHOICES: tuple[tuple[str, PointSymbolOrientation], ...] = (
@@ -1803,13 +1808,10 @@ class CanvasEditor(QGraphicsView):
         return {}
 
     def _node_scene_anchor(self, node_id: str) -> QPointF | None:
-        node = self.nodes.get(node_id)
-        if node is None:
-            return None
-        center = node.sceneBoundingRect().center()
-        return QPointF(
-            center.x() - (TrainSpriteItem.WIDTH / 2.0),
-            center.y() - (TrainSpriteItem.HEIGHT / 2.0) - 3.0,
+        return node_scene_anchor(
+            node=self.nodes.get(node_id),
+            sprite_width=TrainSpriteItem.WIDTH,
+            sprite_height=TrainSpriteItem.HEIGHT,
         )
 
     def _clear_train_visuals(self) -> None:
@@ -1850,14 +1852,7 @@ class CanvasEditor(QGraphicsView):
         animation.start()
 
     def _is_train_renderable(self, train: Any) -> bool:
-        current_section = str(getattr(train, "current_section", "")).strip()
-        if not current_section or current_section not in self.nodes:
-            return False
-        section_element = self.topology.get_element(current_section)
-        if isinstance(section_element, TrackSection):
-            # If a section is no longer occupied, hide the train sprite as requested.
-            return bool(section_element.occupied)
-        return True
+        return is_train_renderable(train, nodes=self.nodes, topology=self.topology)
 
     def _sync_train_visuals(self) -> None:
         if self._simulation is None:
@@ -1912,21 +1907,11 @@ class CanvasEditor(QGraphicsView):
 
     def _connection_pairs(self) -> list[tuple[str, str]]:
         """Return visualized connections in deterministic order."""
-        pairs: list[tuple[str, str]] = []
-        for source_id, target_id in sorted(self.topology.graph.edges):
-            if (source_id, target_id) in self.topology._signal_virtual_edges:
-                continue
-            pairs.append((source_id, target_id))
-
-        for signal in sorted(self.topology.signals.values(), key=lambda item: item.id):
-            protected = signal.protects.strip()
-            if protected and protected in self.nodes:
-                pairs.append((signal.id, protected))
-
-        for source_id, target_id in sorted(self.signal_links):
-            if source_id in self.nodes and target_id in self.nodes:
-                pairs.append((source_id, target_id))
-        return pairs
+        return connection_pairs(
+            topology=self.topology,
+            nodes=self.nodes,
+            signal_links=self.signal_links,
+        )
 
     def _rebuild_edge_items(self) -> None:
         """Recreate all edge graphics from current topology links."""

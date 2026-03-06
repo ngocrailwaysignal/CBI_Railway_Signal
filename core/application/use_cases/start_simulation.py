@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from core.domain.model.elements import ApproachSection
+from core.application.runtime_helpers import find_train_for_route, next_train_id
 from core.domain.model.route import Route
 from core.runtime.simulation import Simulation
 from core.domain.model.topology import RailwayTopology
@@ -28,20 +29,6 @@ class StartRouteSimulationUseCase:
                 return approach_section
         return route.path[0]
 
-    @staticmethod
-    def _find_train_for_route(simulation: Simulation, route_id: str) -> Train | None:
-        for train in simulation.trains.values():
-            if train.route_id == route_id:
-                return train
-        return None
-
-    @staticmethod
-    def _next_train_id(simulation: Simulation, prefix: str = "T") -> str:
-        index = 1
-        while f"{prefix}{index}" in simulation.trains:
-            index += 1
-        return f"{prefix}{index}"
-
     def execute(
         self,
         *,
@@ -66,12 +53,12 @@ class StartRouteSimulationUseCase:
         active_simulation = route_result.simulation
         route = route_result.route
 
-        train = self._find_train_for_route(active_simulation, route.id)
+        train = find_train_for_route(active_simulation, route.id)
         simulation_start_section = self._resolve_simulation_start_section(topology, route)
         created_train = False
         if train is None:
             train = Train(
-                id=self._next_train_id(active_simulation),
+                id=next_train_id(active_simulation),
                 current_section=simulation_start_section,
                 speed=float(train_speed),
                 traverse_overlap=False,

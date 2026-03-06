@@ -5,6 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.application import ModePolicy
+from core.application.runtime_helpers import (
+    cancel_all_active_routes,
+    find_train_for_route,
+    get_active_route_for_pair,
+    has_active_routes,
+    next_train_id,
+)
+from core.application.serialization import build_layout_payload, build_runtime_snapshot
 from core.application.use_cases import (
     CancelActiveRoutesUseCase,
     CancelRoutesResult,
@@ -160,18 +168,12 @@ class GenericApplicationService:
         exit_signal_id: str,
     ) -> Route | None:
         """Return active route for one entry/exit pair, if present."""
-        for active_route in simulation.locking_engine.active_routes.values():
-            if (
-                active_route.entry_signal_id == entry_signal_id
-                and active_route.exit_signal_id == exit_signal_id
-            ):
-                return active_route
-        return None
+        return get_active_route_for_pair(simulation, entry_signal_id, exit_signal_id)
 
     @staticmethod
     def has_active_routes(simulation: Simulation) -> bool:
         """Check whether simulation currently has active locked routes."""
-        return bool(simulation.locking_engine.active_routes)
+        return has_active_routes(simulation)
 
     @staticmethod
     def update_time_locking(simulation: Simulation) -> None:
@@ -181,30 +183,17 @@ class GenericApplicationService:
     @staticmethod
     def cancel_all_active_routes(simulation: Simulation) -> list[str]:
         """Try to cancel all active routes; return per-route failures."""
-        failures: list[str] = []
-        for route_id in list(simulation.locking_engine.active_routes.keys()):
-            try:
-                simulation.locking_engine.cancel_route(route_id)
-            except Exception as exc:
-                failures.append(f"{route_id}: {exc}")
-        simulation.locking_engine.update_time_locking()
-        return failures
+        return cancel_all_active_routes(simulation)
 
     @staticmethod
     def find_train_for_route(simulation: Simulation, route_id: str) -> Train | None:
         """Return train assigned to one route id, if present."""
-        for train in simulation.trains.values():
-            if train.route_id == route_id:
-                return train
-        return None
+        return find_train_for_route(simulation, route_id)
 
     @staticmethod
     def next_train_id(simulation: Simulation, prefix: str = "T") -> str:
         """Generate the next free train id for one simulation."""
-        index = 1
-        while f"{prefix}{index}" in simulation.trains:
-            index += 1
-        return f"{prefix}{index}"
+        return next_train_id(simulation, prefix=prefix)
 
     @staticmethod
     def configure_simulation_timing(
@@ -320,141 +309,9 @@ class GenericApplicationService:
     @staticmethod
     def build_runtime_snapshot(simulation: Simulation | None) -> dict:
         """Serialize runtime-only state for snapshot persistence."""
-        if simulation is None:
-            return {"routes": [], "trains": [], "occupancy": [], "signal_state": []}
-
-        topology = simulation.topology
-        occupancy: list[dict] = []
-        for node_id in topology.graph.nodes:
-            element = topology.get_element(node_id)
-            if element is None:
-                continue
-            record = {"id": node_id, "locked_by": getattr(element, "locked_by", None)}
-            if hasattr(element, "occupied"):
-                record["occupied"] = bool(getattr(element, "occupied", False))
-            if hasattr(element, "position"):
-                position = getattr(element, "position", None)
-                record["position"] = getattr(position, "value", position)
-            occupancy.append(record)
-
-        routes = [
-            {
-                "id": route.id,
-                "entry_signal_id": route.entry_signal_id,
-                "exit_signal_id": route.exit_signal_id,
-                "path": list(route.path),
-                "overlap_path": list(route.overlap_path),
-                "lifecycle_state": route.lifecycle_state.value,
-            }
-            for route in simulation.locking_engine.active_routes.values()
-        ]
-        trains = [
-            {
-                "id": train.id,
-                "current_section": train.current_section,
-                "speed": float(train.speed),
-                "route_id": train.route_id,
-            }
-            for train in simulation.trains.values()
-        ]
-        signal_state = [
-            {
-                "id": signal.id,
-                "aspect": signal.aspect.value,
-                "route_id": signal.route_id,
-            }
-            for signal in topology.signals.values()
-        ]
-        return {
-            "tick": simulation.tick,
-            "routes": routes,
-            "trains": trains,
-            "occupancy": occupancy,
-            "signal_state": signal_state,
-        }
+        return build_runtime_snapshot(simulation)
 
     @staticmethod
     def build_layout_payload(topology: RailwayTopology) -> dict:
         """Serialize current topology to one web/runtime-compatible layout payload."""
-        payload: dict = {
-            "sections": [],
-            "points": [],
-            "signals": [],
-            "edges": [],
-            "signal_links": [],
-            "clearance_conflict_groups": [],
-            "ui_positions": {},
-        }
-
-        for node_id in topology.graph.nodes:
-            element = topology.get_element(node_id)
-            if element is None:
-                continue
-            if hasattr(element, "length") and hasattr(element, "occupied"):
-                payload["sections"].append(
-                    {
-                        "id": str(getattr(element, "id", node_id)),
-                        "kind": (
-                            "approach"
-                            if element.__class__.__name__.lower() == "approachsection"
-                            else "track"
-                        ),
-                        "occupied": bool(getattr(element, "occupied", False)),
-                        "locked_by": getattr(element, "locked_by", None),
-                        "length": float(getattr(element, "length", 100.0)),
-                    }
-                )
-                continue
-            if hasattr(element, "position") and hasattr(element, "facing_connections"):
-                facing_connections = {}
-                for key, value in dict(getattr(element, "facing_connections", {})).items():
-                    key_token = getattr(key, "value", key)
-                    if value:
-                        facing_connections[str(key_token)] = str(value)
-                payload["points"].append(
-                    {
-                        "id": str(getattr(element, "id", node_id)),
-                        "position": str(getattr(getattr(element, "position", None), "value", "NORMAL")),
-                        "symbol_orientation": str(
-                            getattr(getattr(element, "symbol_orientation", None), "value", "RIGHT")
-                        ),
-                        "locked_by": getattr(element, "locked_by", None),
-                        "facing_connections": facing_connections,
-                    }
-                )
-
-        for signal in topology.signals.values():
-            payload["signals"].append(
-                {
-                    "id": signal.id,
-                    "aspect": signal.aspect.value,
-                    "direction": signal.direction.value,
-                    "protects": signal.protects,
-                    "approach_section": signal.approach_section,
-                    "route_id": signal.route_id,
-                }
-            )
-
-        virtual_edges = set(getattr(topology, "_signal_virtual_edges", set()))
-        payload["edges"] = [
-            [src, dst]
-            for src, dst in topology.graph.edges
-            if (src, dst) not in virtual_edges
-        ]
-        payload["signal_links"] = [
-            [src, dst]
-            for src, dst in sorted(topology.signal_links)
-            if src in topology.graph.nodes and dst in topology.signals
-        ]
-        payload["clearance_conflict_groups"] = [
-            sorted(group)
-            for group in sorted(
-                (set(group) for group in topology.clearance_conflict_groups if len(group) >= 2),
-                key=lambda item: tuple(sorted(item)),
-            )
-        ]
-        payload["ui_positions"] = {
-            key: [float(value[0]), float(value[1])]
-            for key, value in topology.ui_positions.items()
-        }
-        return payload
+        return build_layout_payload(topology)
