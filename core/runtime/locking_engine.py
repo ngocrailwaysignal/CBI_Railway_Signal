@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from threading import RLock
 from typing import Dict
 
 from core.domain.lifecycle import (
@@ -16,6 +17,10 @@ from core.domain.model.topology import RailwayTopology
 from core.domain.policy import ConflictPolicy
 from core.infrastructure.clocks import Clock, MonotonicClock
 from core.runtime.sequence_locking import SequenceLockingTracker
+from core.runtime.release_update_scheduler import (
+    ReleaseUpdateScheduler,
+    ThreadedReleaseUpdateScheduler,
+)
 from core.runtime.timed_release import TimedReleaseScheduler
 
 
@@ -28,12 +33,15 @@ class LockingEngine:
         time_lock_seconds: float = 30.0,
         overlap_release_seconds: float = 0.0,
         clock: Clock | None = None,
+        release_update_scheduler: ReleaseUpdateScheduler | None = None,
     ) -> None:
         self.topology = topology
         self.active_routes: Dict[str, Route] = {}
         self.approach_locking = ApproachLockingStateMachine(time_lock_seconds=time_lock_seconds)
         self.overlap_release_seconds = max(0.0, float(overlap_release_seconds))
         self.clock: Clock = clock or MonotonicClock()
+        self._lock = RLock()
+        self._release_update_scheduler = release_update_scheduler or ThreadedReleaseUpdateScheduler()
         self._timed_release = TimedReleaseScheduler(
             overlap_release_seconds=self.overlap_release_seconds
         )
@@ -46,72 +54,75 @@ class LockingEngine:
         overlap_release_seconds: float | None = None,
     ) -> None:
         """Update runtime timing values used by locking release logic."""
-        if approach_time_lock_seconds is not None:
-            self.approach_locking.time_lock_seconds = max(0.0, float(approach_time_lock_seconds))
-        self._timed_release.configure_overlap_release(overlap_release_seconds)
-        self.overlap_release_seconds = self._timed_release.overlap_release_seconds
+        with self._lock:
+            if approach_time_lock_seconds is not None:
+                self.approach_locking.time_lock_seconds = max(0.0, float(approach_time_lock_seconds))
+            self._timed_release.configure_overlap_release(overlap_release_seconds)
+            self.overlap_release_seconds = self._timed_release.overlap_release_seconds
 
     def lock_route(self, route: Route) -> None:
         """Lock sections, points, and clear entry signal only when fully secured."""
-        if route.id in self.active_routes:
-            raise ValueError(f"Route {route.id} is already active")
-        try:
-            all_points = route.all_required_point_positions
-        except ValueError as exc:
-            raise ValueError(f"Cannot lock route: {exc}") from exc
+        with self._lock:
+            if route.id in self.active_routes:
+                raise ValueError(f"Route {route.id} is already active")
+            try:
+                all_points = route.all_required_point_positions
+            except ValueError as exc:
+                raise ValueError(f"Cannot lock route: {exc}") from exc
 
-        ok, reason = ConflictPolicy.route_elements_available(
-            self.topology,
-            route.full_path,
-            all_points,
-            monitored_flank_sections=route.monitored_flank_sections,
-            allow_occupied_sections=[route.path[0]] if route.path else None,
-        )
-        if not ok:
-            raise ValueError(f"Cannot lock route: {reason}")
+            ok, reason = ConflictPolicy.route_elements_available(
+                self.topology,
+                route.full_path,
+                all_points,
+                monitored_flank_sections=route.monitored_flank_sections,
+                allow_occupied_sections=[route.path[0]] if route.path else None,
+            )
+            if not ok:
+                raise ValueError(f"Cannot lock route: {reason}")
 
-        for point_id, required_position in all_points.items():
-            point = self.topology.get_element(point_id)
-            if not isinstance(point, Point):
-                raise ValueError(f"Route refers to unknown point {point_id}")
-            if point.locked_by and point.locked_by != route.id:
-                raise ValueError(f"Point {point_id} locked by {point.locked_by}")
-            point.position = required_position
-            point.locked_by = route.id
+            for point_id, required_position in all_points.items():
+                point = self.topology.get_element(point_id)
+                if not isinstance(point, Point):
+                    raise ValueError(f"Route refers to unknown point {point_id}")
+                if point.locked_by and point.locked_by != route.id:
+                    raise ValueError(f"Point {point_id} locked by {point.locked_by}")
+                point.position = required_position
+                point.locked_by = route.id
 
-        for node_id in route.full_path:
-            element = self.topology.get_element(node_id)
-            if isinstance(element, TrackSection):
-                if element.locked_by and element.locked_by != route.id:
-                    raise ValueError(f"Section {node_id} already locked by {element.locked_by}")
-                element.locked_by = route.id
-            elif isinstance(element, Point):
-                if element.locked_by and element.locked_by != route.id:
-                    raise ValueError(f"Point {node_id} already locked by {element.locked_by}")
-                element.locked_by = route.id
+            for node_id in route.full_path:
+                element = self.topology.get_element(node_id)
+                if isinstance(element, TrackSection):
+                    if element.locked_by and element.locked_by != route.id:
+                        raise ValueError(f"Section {node_id} already locked by {element.locked_by}")
+                    element.locked_by = route.id
+                elif isinstance(element, Point):
+                    if element.locked_by and element.locked_by != route.id:
+                        raise ValueError(f"Point {node_id} already locked by {element.locked_by}")
+                    element.locked_by = route.id
 
-        entry_signal = self.topology.signals[route.entry_signal_id]
-        entry_signal.route_id = route.id
-        entry_signal.aspect = SignalAspect.PROCEED
-        self._transition_route_state(route, RouteLifecycleState.CLEARED_REVERSIBLE)
-        self.active_routes[route.id] = route
-        route.approach_locking_section = self._resolve_route_approach_section(route)
-        self.approach_locking.register_route(
-            route_id=route.id,
-            entry_signal_id=route.entry_signal_id,
-            approach_section_id=route.approach_locking_section,
-        )
-        self._initialize_sequence_locking_state(route)
-        self._timed_release.clear_route(route.id)
+            entry_signal = self.topology.signals[route.entry_signal_id]
+            entry_signal.route_id = route.id
+            entry_signal.aspect = SignalAspect.PROCEED
+            self._transition_route_state(route, RouteLifecycleState.CLEARED_REVERSIBLE)
+            self.active_routes[route.id] = route
+            route.approach_locking_section = self._resolve_route_approach_section(route)
+            self.approach_locking.register_route(
+                route_id=route.id,
+                entry_signal_id=route.entry_signal_id,
+                approach_section_id=route.approach_locking_section,
+            )
+            self._initialize_sequence_locking_state(route)
+            self._clear_pending_timed_release(route.id)
 
     def set_point_position(self, point_id: str, new_position: PointPosition) -> None:
         """Move a point only if not locked."""
-        point = self.topology.get_element(point_id)
-        if not isinstance(point, Point):
-            raise KeyError(f"Unknown point: {point_id}")
-        if point.locked_by:
-            raise RuntimeError(f"Point {point.id} is locked by {point.locked_by}")
-        point.position = new_position
+        with self._lock:
+            point = self.topology.get_element(point_id)
+            if not isinstance(point, Point):
+                raise KeyError(f"Unknown point: {point_id}")
+            if point.locked_by:
+                raise RuntimeError(f"Point {point.id} is locked by {point.locked_by}")
+            point.position = new_position
 
     def set_section_occupied(
         self,
@@ -121,31 +132,33 @@ class LockingEngine:
         route_id_hint: str | None = None,
     ) -> str | None:
         """Apply one runtime occupancy mutation and trigger release/lifecycle side-effects."""
-        section = self.topology.get_element(section_id)
-        if not isinstance(section, TrackSection):
-            raise KeyError(f"Unknown section: {section_id}")
+        with self._lock:
+            section = self.topology.get_element(section_id)
+            if not isinstance(section, TrackSection):
+                raise KeyError(f"Unknown section: {section_id}")
 
-        target = bool(occupied)
-        if target:
-            if not section.occupied:
-                section.occupied = True
+            target = bool(occupied)
+            if target:
+                if not section.occupied:
+                    section.occupied = True
+                resolved_route_id = self._resolve_route_for_section(
+                    section_id,
+                    route_id_hint=route_id_hint,
+                )
+                if resolved_route_id:
+                    self.notify_train_entered(resolved_route_id, section_id)
+                    self._cleanup_route_if_complete(resolved_route_id)
+                return resolved_route_id
+
+            if section.occupied:
+                section.occupied = False
             resolved_route_id = self._resolve_route_for_section(
                 section_id,
                 route_id_hint=route_id_hint,
             )
             if resolved_route_id:
-                self.notify_train_entered(resolved_route_id, section_id)
+                self.sectional_release(resolved_route_id, section_id)
             return resolved_route_id
-
-        if section.occupied:
-            section.occupied = False
-        resolved_route_id = self._resolve_route_for_section(
-            section_id,
-            route_id_hint=route_id_hint,
-        )
-        if resolved_route_id:
-            self.sectional_release(resolved_route_id, section_id)
-        return resolved_route_id
 
     def enter_train_section(
         self,
@@ -155,95 +168,104 @@ class LockingEngine:
         allow_preoccupied: bool = False,
     ) -> None:
         """Mark one train section entry via runtime mutator."""
-        section = self.topology.get_element(section_id)
-        if isinstance(section, TrackSection):
-            if section.occupied and not allow_preoccupied:
-                raise RuntimeError(f"Unsafe move: section {section.id} already occupied")
-            if not section.occupied:
-                section.occupied = True
-        self.notify_train_entered(route_id, section_id)
+        with self._lock:
+            section = self.topology.get_element(section_id)
+            if isinstance(section, TrackSection):
+                if section.occupied and not allow_preoccupied:
+                    raise RuntimeError(f"Unsafe move: section {section.id} already occupied")
+                if not section.occupied:
+                    section.occupied = True
+            self.notify_train_entered(route_id, section_id)
+            self._cleanup_route_if_complete(route_id)
 
     def vacate_train_section(self, route_id: str, section_id: str) -> None:
         """Mark one train section vacate via runtime mutator."""
-        section = self.topology.get_element(section_id)
-        if isinstance(section, TrackSection):
-            section.occupied = False
-        self.sectional_release(route_id, section_id)
+        with self._lock:
+            section = self.topology.get_element(section_id)
+            if isinstance(section, TrackSection):
+                section.occupied = False
+            self.sectional_release(route_id, section_id)
 
     def reset_runtime_state(self, *, keep_occupancy: bool = False) -> None:
         """Reset runtime state controlled by locking engine."""
-        self.topology.clear_runtime_state(keep_occupancy=keep_occupancy)
-        self.active_routes.clear()
-        self._timed_release.clear_all()
-        self._sequence_locking.clear_all()
-        self.approach_locking.clear_all()
+        with self._lock:
+            self.topology.clear_runtime_state(keep_occupancy=keep_occupancy)
+            self.active_routes.clear()
+            self._timed_release.clear_all()
+            self._release_update_scheduler.clear_all()
+            self._sequence_locking.clear_all()
+            self.approach_locking.clear_all()
 
     def cancel_route(self, route_id: str) -> None:
         """Cancel a route unless blocked by approach locking."""
-        route = self.active_routes.get(route_id)
-        if route is None:
-            return
+        with self._lock:
+            route = self.active_routes.get(route_id)
+            if route is None:
+                return
 
-        approach_occupied = self._is_approach_occupied(route)
-        can_cancel, reason = self.approach_locking.request_cancellation(
-            route_id=route_id,
-            approach_occupied=approach_occupied,
-        )
-        if not can_cancel:
-            if route.lifecycle_state in {
-                RouteLifecycleState.CLEARED_REVERSIBLE,
-                RouteLifecycleState.APPROACH_LOCKED,
-            }:
-                self._transition_route_state(route, RouteLifecycleState.APPROACH_LOCKED)
-            raise RuntimeError(reason)
-        occupied_sections = self._occupied_route_sections(route)
-        if occupied_sections:
-            joined = ", ".join(occupied_sections)
-            raise RuntimeError(
-                f"Route {route_id} is occupied by train on sections: {joined}"
+            approach_occupied = self._is_approach_occupied(route)
+            can_cancel, reason = self.approach_locking.request_cancellation(
+                route_id=route_id,
+                approach_occupied=approach_occupied,
             )
-        self._transition_route_state(route, RouteLifecycleState.RELEASING)
-        self._unlock_route(route_id)
+            if not can_cancel:
+                if route.lifecycle_state in {
+                    RouteLifecycleState.CLEARED_REVERSIBLE,
+                    RouteLifecycleState.APPROACH_LOCKED,
+                }:
+                    self._transition_route_state(route, RouteLifecycleState.APPROACH_LOCKED)
+                raise RuntimeError(reason)
+            occupied_sections = self._occupied_route_sections(route)
+            if occupied_sections:
+                joined = ", ".join(occupied_sections)
+                raise RuntimeError(
+                    f"Route {route_id} is occupied by train on sections: {joined}"
+                )
+            self._transition_route_state(route, RouteLifecycleState.RELEASING)
+            self._unlock_route(route_id)
 
     def emergency_release_route(self, route_id: str) -> None:
         """Force-release one route, bypassing occupancy/approach-lock checks."""
-        route = self.active_routes.get(route_id)
-        if route is None:
-            return
-        self._transition_route_state(route, RouteLifecycleState.RELEASING)
-        force_unlock_sections = {
-            node_id
-            for node_id in route.full_path
-            if isinstance(self.topology.get_element(node_id), TrackSection)
-        }
-        self._unlock_route(
-            route_id,
-            force_unlock_sections=(force_unlock_sections or None),
-        )
+        with self._lock:
+            route = self.active_routes.get(route_id)
+            if route is None:
+                return
+            self._transition_route_state(route, RouteLifecycleState.RELEASING)
+            force_unlock_sections = {
+                node_id
+                for node_id in route.full_path
+                if isinstance(self.topology.get_element(node_id), TrackSection)
+            }
+            self._unlock_route(
+                route_id,
+                force_unlock_sections=(force_unlock_sections or None),
+            )
 
     def notify_train_entered(self, route_id: str, node_id: str) -> None:
         """React to train progression for approach locking behavior."""
-        route = self.active_routes.get(route_id)
-        if route is None:
-            return
-        self._mark_sequence_section_occupied(route_id, node_id)
-        if route.approach_locking_section and node_id == route.approach_locking_section:
-            self.approach_locking.mark_approach_locked(route_id)
-            if route.lifecycle_state == RouteLifecycleState.CLEARED_REVERSIBLE:
-                self._transition_route_state(route, RouteLifecycleState.APPROACH_LOCKED)
-        if node_id == route.path[0]:
-            entry_signal = self.topology.signals[route.entry_signal_id]
-            entry_signal.aspect = SignalAspect.STOP
-            self.approach_locking.mark_approach_locked(route_id)
-            self._transition_route_state(route, RouteLifecycleState.TRAIN_IN_ROUTE)
+        with self._lock:
+            route = self.active_routes.get(route_id)
+            if route is None:
+                return
+            self._mark_sequence_section_occupied(route_id, node_id)
+            if route.approach_locking_section and node_id == route.approach_locking_section:
+                self.approach_locking.mark_approach_locked(route_id)
+                if route.lifecycle_state == RouteLifecycleState.CLEARED_REVERSIBLE:
+                    self._transition_route_state(route, RouteLifecycleState.APPROACH_LOCKED)
+            if node_id == route.path[0]:
+                entry_signal = self.topology.signals[route.entry_signal_id]
+                entry_signal.aspect = SignalAspect.STOP
+                self.approach_locking.mark_approach_locked(route_id)
+                self._transition_route_state(route, RouteLifecycleState.TRAIN_IN_ROUTE)
 
     def sectional_release(self, route_id: str, section_id: str) -> None:
         """Release a section once a train has vacated it."""
-        route = self.active_routes.get(route_id)
-        if route is None:
-            return
-        self._try_sequence_section_release(route_id, section_id)
-        self._cleanup_route_if_complete(route_id)
+        with self._lock:
+            route = self.active_routes.get(route_id)
+            if route is None:
+                return
+            self._try_sequence_section_release(route_id, section_id)
+            self._cleanup_route_if_complete(route_id)
 
     def force_all_signals_stop(self) -> None:
         """Force fail-safe STOP on every signal."""
@@ -253,54 +275,51 @@ class LockingEngine:
 
     def update_time_locking(self) -> None:
         """Release routes whose time locking has elapsed."""
-        current_time = self.clock.now()
-        for route_id in self.approach_locking.releasable_routes(now=current_time):
-            route = self.active_routes.get(route_id)
-            if route is None:
-                continue
-            if self._is_approach_occupied(route):
-                continue
-            if self._occupied_route_sections(route):
-                continue
-            self._transition_route_state(route, RouteLifecycleState.RELEASING)
-            self._unlock_route(route_id)
-
-        for route_id in self._timed_release.due_routes(current_time):
-            route = self.active_routes.get(route_id)
-            if route is None:
-                self._timed_release.clear_route(route_id)
-                continue
-            force_unlock_sections = self._destination_force_unlock_sections(route) or set()
-            occupied_sections = set(self._occupied_route_sections(route))
-            if occupied_sections.difference(force_unlock_sections):
-                continue
-            self._transition_route_state(route, RouteLifecycleState.RELEASING)
-            self._unlock_route(
-                route_id,
-                force_unlock_sections=(force_unlock_sections or None),
-            )
+        with self._lock:
+            current_time = self.clock.now()
+            for route_id in self.approach_locking.releasable_routes(now=current_time):
+                route = self.active_routes.get(route_id)
+                if route is None:
+                    continue
+                if self._is_approach_occupied(route):
+                    continue
+                if self._occupied_route_sections(route):
+                    continue
+                self._transition_route_state(route, RouteLifecycleState.RELEASING)
+                self._unlock_route(route_id)
+            self._release_due_overlap_routes(current_time)
+            self._reschedule_pending_overlap_checks(current_time)
 
     def approach_lock_state(self, route_id: str) -> ApproachLockState | None:
         """Expose current approach-lock state for UI/logging."""
-        return self.approach_locking.state(route_id)
+        with self._lock:
+            return self.approach_locking.state(route_id)
 
     def route_state(self, route_id: str) -> RouteLifecycleState | None:
         """Return current route lifecycle state for active routes."""
-        route = self.active_routes.get(route_id)
-        if route is None:
-            return None
-        return route.lifecycle_state
+        with self._lock:
+            route = self.active_routes.get(route_id)
+            if route is None:
+                return None
+            return route.lifecycle_state
 
     def _initialize_sequence_locking_state(self, route: Route) -> None:
+        # Sequence locking applies to route body only; overlap remains out of scope.
         self._sequence_locking.initialize_route(route.id, list(route.path))
 
     def _clear_sequence_locking_state(self, route_id: str) -> None:
         self._sequence_locking.clear_route(route_id)
 
     def _mark_sequence_section_occupied(self, route_id: str, node_id: str) -> None:
+        route = self.active_routes.get(route_id)
+        if route is None or node_id not in route.path:
+            return
         self._sequence_locking.mark_section_occupied(route_id, node_id)
 
     def _try_sequence_section_release(self, route_id: str, section_id: str) -> bool:
+        route = self.active_routes.get(route_id)
+        if route is None or section_id not in route.path:
+            return False
         return self._sequence_locking.try_section_release(route_id, section_id)
 
     @staticmethod
@@ -322,21 +341,30 @@ class LockingEngine:
             return
 
         destination_section = body_track_sections[-1]
-        destination_occupied = False
+        destination = self.topology.get_element(destination_section)
+        destination_occupied = (
+            isinstance(destination, TrackSection) and bool(destination.occupied)
+        )
+        if isinstance(destination, TrackSection):
+            if destination.locked_by == route_id and not destination_occupied:
+                # Train has not yet reached destination section.
+                return
+
         for section_id in body_track_sections:
             section = self.topology.get_element(section_id)
             if not isinstance(section, TrackSection):
                 continue
             if section_id == destination_section:
-                destination_occupied = section.occupied
-                if section.locked_by == route_id and not section.occupied:
-                    # Train has not yet reached destination section.
-                    return
                 continue
             if section.occupied:
                 return
             if section.locked_by == route_id:
-                return
+                if destination_occupied:
+                    # Once destination is occupied, allow releasing body sections
+                    # without waiting for additional sequence-lock evidence.
+                    section.locked_by = None
+                else:
+                    return
 
         force_unlock = {destination_section} if destination_occupied else None
         if self.overlap_release_seconds <= 0.0:
@@ -344,7 +372,9 @@ class LockingEngine:
             self._unlock_route(route_id, force_unlock_sections=force_unlock)
             return
         self._transition_route_state(route, RouteLifecycleState.RELEASING)
-        self._timed_release.schedule_route_release(route_id, self.clock.now())
+        now = self.clock.now()
+        due_time = self._timed_release.schedule_route_release(route_id, now)
+        self._schedule_overlap_release_check(route_id, due_time=due_time, now=now)
 
     def _unlock_route(
         self,
@@ -381,10 +411,46 @@ class LockingEngine:
         ):
             self._transition_route_state(route, RouteLifecycleState.RELEASING)
         self._transition_route_state(route, RouteLifecycleState.RELEASED)
-        self._timed_release.clear_route(route_id)
+        self._clear_pending_timed_release(route_id)
         self.approach_locking.clear(route_id)
         self._clear_sequence_locking_state(route_id)
         self.active_routes.pop(route_id, None)
+
+    def _release_due_overlap_routes(self, current_time: float) -> None:
+        for route_id in self._timed_release.due_routes(current_time):
+            route = self.active_routes.get(route_id)
+            if route is None:
+                self._clear_pending_timed_release(route_id)
+                continue
+            force_unlock_sections = self._destination_force_unlock_sections(route) or set()
+            occupied_sections = set(self._occupied_route_sections(route))
+            if occupied_sections.difference(force_unlock_sections):
+                continue
+            self._transition_route_state(route, RouteLifecycleState.RELEASING)
+            self._unlock_route(
+                route_id,
+                force_unlock_sections=(force_unlock_sections or None),
+            )
+
+    def _schedule_overlap_release_check(self, route_id: str, *, due_time: float, now: float) -> None:
+        # Add a small cushion so callback does not fire slightly before due_time.
+        delay_seconds = max(0.05, due_time - now + 0.05)
+        self._release_update_scheduler.schedule(
+            route_id,
+            delay_seconds,
+            self.update_time_locking,
+        )
+
+    def _clear_pending_timed_release(self, route_id: str) -> None:
+        self._timed_release.clear_route(route_id)
+        self._release_update_scheduler.cancel(route_id)
+
+    def _reschedule_pending_overlap_checks(self, now: float) -> None:
+        for route_id, due_time in self._timed_release.pending_due_times().items():
+            if route_id not in self.active_routes:
+                self._clear_pending_timed_release(route_id)
+                continue
+            self._schedule_overlap_release_check(route_id, due_time=due_time, now=now)
 
     @staticmethod
     def _transition_route_state(route: Route, target: RouteLifecycleState) -> None:

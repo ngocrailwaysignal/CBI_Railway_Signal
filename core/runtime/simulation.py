@@ -155,6 +155,8 @@ class Simulation:
                 train.route_id = None
                 continue
             train.step(route, self.topology, self.locking_engine)
+        # Re-evaluate timed releases after train movement in the same tick.
+        self.route_dispatcher.update_time_locking()
 
         issues = self.safety_monitor.detect_unsafe_conditions(self.topology, self.trains.values())
         if issues:

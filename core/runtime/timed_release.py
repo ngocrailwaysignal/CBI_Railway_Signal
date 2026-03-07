@@ -23,10 +23,11 @@ class TimedReleaseScheduler:
     def clear_route(self, route_id: str) -> None:
         self.pending_overlap_releases.pop(route_id, None)
 
-    def schedule_route_release(self, route_id: str, now: float) -> None:
-        """Schedule route release if not already pending."""
+    def schedule_route_release(self, route_id: str, now: float) -> float:
+        """Schedule route release and return due timestamp."""
         if route_id not in self.pending_overlap_releases:
             self.pending_overlap_releases[route_id] = now + self.overlap_release_seconds
+        return self.pending_overlap_releases[route_id]
 
     def due_routes(self, now: float) -> list[str]:
         """Return route ids whose overlap-release timer has elapsed."""
@@ -35,4 +36,8 @@ class TimedReleaseScheduler:
             for route_id, due_time in list(self.pending_overlap_releases.items())
             if now >= due_time
         ]
+
+    def pending_due_times(self) -> dict[str, float]:
+        """Return a shallow copy of all pending overlap-release deadlines."""
+        return dict(self.pending_overlap_releases)
 

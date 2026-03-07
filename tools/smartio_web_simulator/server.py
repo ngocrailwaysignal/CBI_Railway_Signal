@@ -397,7 +397,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Smart IO Web Simulator")
     parser.add_argument(
         "--layout",
-        default="data/sample_layout.json",
+        default="data/main_layout.json",
         help="Path to layout JSON used by simulator",
     )
     parser.add_argument(

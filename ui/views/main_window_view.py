@@ -116,7 +116,7 @@ class MainWindow(QMainWindow):
         self._simulation_ticks_remaining = 0
         self._initialize_smartio_client()
 
-        sample_path = Path("data/sample_layout.json")
+        sample_path = Path("data/main_layout.json")
         if sample_path.exists():
             self._load_layout_into_canvas(
                 self.layout_editor_service.load_layout(
@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):
             )
         else:
             self.canvas.load_topology(self.current_layout.topology)
-        self._set_operating_mode(OperatingMode.DESIGN_LAYOUT, announce=False)
+        self._set_operating_mode(OperatingMode.RUNTIME, announce=False)
         self._sync_ui_state()
         self._retranslate_ui()
 
@@ -652,11 +652,21 @@ class MainWindow(QMainWindow):
     def _on_smartio_event_received(self, event: dict) -> None:
         event_type = str(event.get("type", "")).strip().lower()
         payload = event.get("payload", {})
-        if event_type == "state_update" and isinstance(payload, dict):
-            self._apply_smartio_state_update(payload)
+        smartio_connected = self._smartio_client is not None and self._smartio_client.is_connected
+        if not self._should_apply_smartio_event(
+            operating_mode=self._operating_mode,
+            smartio_connected=smartio_connected,
+            event_type=event_type,
+            payload=payload,
+        ):
+            self._update_runtime_connection_label()
+            return
+        self._apply_smartio_state_update(payload)
         self._update_runtime_connection_label()
 
     def _apply_smartio_state_update(self, payload: dict) -> None:
+        if self._operating_mode is not OperatingMode.RUNTIME:
+            return
         if self.simulation is None:
             self.simulation = self.application_service.create_simulation(self.canvas.topology)
             self.canvas.set_simulation(self.simulation)
@@ -704,7 +714,11 @@ class MainWindow(QMainWindow):
             return
 
     def _send_smartio_runtime_snapshot(self) -> None:
-        if self._smartio_client is None or not self._smartio_client.is_connected:
+        smartio_connected = self._smartio_client is not None and self._smartio_client.is_connected
+        if not self._should_emit_runtime_snapshot(
+            operating_mode=self._operating_mode,
+            smartio_connected=smartio_connected,
+        ):
             return
         try:
             snapshot = self.application_service.build_runtime_snapshot(self.simulation)
@@ -713,6 +727,28 @@ class MainWindow(QMainWindow):
             self._smartio_client.send_event(envelope)
         except Exception:
             return
+
+    @staticmethod
+    def _should_apply_smartio_event(
+        *,
+        operating_mode: OperatingMode,
+        smartio_connected: bool,
+        event_type: str,
+        payload: object,
+    ) -> bool:
+        if not smartio_connected:
+            return False
+        if operating_mode is not OperatingMode.RUNTIME:
+            return False
+        return event_type == "state_update" and isinstance(payload, dict)
+
+    @staticmethod
+    def _should_emit_runtime_snapshot(
+        *,
+        operating_mode: OperatingMode,
+        smartio_connected: bool,
+    ) -> bool:
+        return operating_mode is OperatingMode.RUNTIME and smartio_connected
 
     def _smartio_state_text(self) -> str:
         token = str(self._smartio_status_token or "").strip().lower()
@@ -755,20 +791,25 @@ class MainWindow(QMainWindow):
         )
 
     def _sync_smartio_connection_for_mode(self, mode: OperatingMode) -> None:
-        _ = mode
-        self._ensure_smartio_connection()
-
-    def _ensure_smartio_connection(self) -> None:
         if self._smartio_client is None:
+            return
+        if mode is OperatingMode.RUNTIME:
+            self._ensure_smartio_connection()
+            return
+        self._smartio_client.disconnect()
+
+    def _ensure_smartio_connection(self, *, force: bool = False) -> None:
+        if self._smartio_client is None:
+            return
+        if not force and self._operating_mode is not OperatingMode.RUNTIME:
             return
         if not self._smartio_client.is_connected:
             self._smartio_client.connect()
 
     def _allow_runtime_workspace(self) -> bool:
-        if self._smartio_client is None:
-            return False
-        self._ensure_smartio_connection()
-        return bool(self._smartio_client.is_connected)
+        if self._smartio_client is not None:
+            self._ensure_smartio_connection(force=True)
+        return True
 
     def _set_operating_mode(self, mode: OperatingMode, *, announce: bool = True) -> None:
         previous_mode = self._operating_mode
@@ -828,8 +869,8 @@ class MainWindow(QMainWindow):
                 self._t("main.tooltip.component_insertion_disabled")
             )
 
-        self._sync_ui_state()
         self._sync_smartio_connection_for_mode(mode)
+        self._sync_ui_state()
         self._update_runtime_connection_label()
         if announce and previous_mode is not mode:
             self.status.showMessage(
@@ -864,6 +905,12 @@ class MainWindow(QMainWindow):
         _occupied_before: bool,
         occupied_after: bool,
     ) -> list[str]:
+        if not self.mode_policy.capabilities(self._operating_mode).can_manual_state_override:
+            self.status.showMessage(
+                self._t("status.workspace_mode", mode=self._mode_text(self._operating_mode)),
+                2500,
+            )
+            return []
         if not self.canvas.is_layout_edit_locked():
             return []
         if self.simulation is None:
@@ -874,9 +921,31 @@ class MainWindow(QMainWindow):
             section_id=section_id,
             occupied=occupied_after,
         )
+        # Ensure timed/overlap release is evaluated immediately after manual occupancy.
+        self.application_service.update_time_locking(self.simulation)
+        self.canvas.refresh_visual_state()
+        self._schedule_manual_followup_refresh()
         self._refresh_route_log_for_section(section_id)
         self._send_smartio_runtime_snapshot()
         return list(result.removed_trains)
+
+    def _schedule_manual_followup_refresh(self) -> None:
+        """Refresh UI after overlap-release delay so background unlock is rendered."""
+        delay_seconds = max(0.0, float(self.overlap_release_spin.value()))
+        if delay_seconds <= 0.0:
+            return
+        QTimer.singleShot(
+            int(delay_seconds * 1000) + 120,
+            self._manual_followup_refresh,
+        )
+
+    def _manual_followup_refresh(self) -> None:
+        if self.simulation is None:
+            return
+        self.application_service.update_time_locking(self.simulation)
+        self.canvas.refresh_visual_state()
+        self._sync_ui_state()
+        self._send_smartio_runtime_snapshot()
 
     def _refresh_route_log_for_section(self, section_id: str) -> None:
         """Refresh route log so lifecycle text tracks manual occupancy clicks."""
@@ -1158,6 +1227,10 @@ class MainWindow(QMainWindow):
 
     def _set_selected_route(self) -> None:
         if not self.mode_policy.capabilities(self._operating_mode).can_set_route:
+            self.status.showMessage(
+                self._t("status.workspace_mode", mode=self._mode_text(self._operating_mode)),
+                2500,
+            )
             QMessageBox.information(
                 self,
                 self._t("dialog.set_route.title"),
@@ -1457,6 +1530,10 @@ class MainWindow(QMainWindow):
 
     def _start_simulation(self) -> None:
         if not self.mode_policy.capabilities(self._operating_mode).can_start_simulation:
+            self.status.showMessage(
+                self._t("status.workspace_mode", mode=self._mode_text(self._operating_mode)),
+                2500,
+            )
             QMessageBox.information(
                 self,
                 self._t("dialog.simulation.title"),
@@ -1780,7 +1857,42 @@ class MainWindow(QMainWindow):
             else self._t("button.start_simulation")
         )
         self.simulate_button.setEnabled(workspace_state.simulation_enabled)
+        self._apply_workspace_visibility_profile()
         self._update_runtime_connection_label()
+
+    def _apply_workspace_visibility_profile(self) -> None:
+        """Apply per-workspace visibility profile for toolbar and action buttons."""
+        runtime_mode = self._operating_mode is OperatingMode.RUNTIME
+        design_mode = self._operating_mode is OperatingMode.DESIGN_LAYOUT
+        simulation_mode = self._operating_mode is OperatingMode.SIMULATION
+        # Left editor workspace is not used in Runtime operations.
+        self.palette.setVisible(not runtime_mode )
+        # Toolbar profile by workspace.
+        self.new_layout_action.setVisible(not runtime_mode and not simulation_mode)
+        self.save_layout_action.setVisible(not runtime_mode and not simulation_mode)
+        self.load_layout_action.setVisible(not runtime_mode and not simulation_mode)
+        self.connect_mode_action.setVisible(not runtime_mode and not simulation_mode)
+        self.set_route_action.setVisible(not design_mode)
+        self.cancel_route_action.setVisible(not design_mode)
+        self.emergency_release_action.setVisible(not design_mode)
+        self.simulation_action.setVisible(not runtime_mode and not design_mode)
+
+        # Button/profile in right panel.
+        self.set_route_button.setVisible(not design_mode)
+        self.cancel_route_button.setVisible(not design_mode)
+        self.emergency_release_button.setVisible(not design_mode)
+        self.find_route_button.setVisible(not runtime_mode and not design_mode)
+        self.simulate_button.setVisible(not runtime_mode and not design_mode)
+
+        # Runtime keeps monitoring/summary widgets visible, while hiding local search/timing controls.
+        self.route_help_label.setVisible(not runtime_mode)
+        self.overlap_label.setVisible(not runtime_mode)
+        self.overlap_spin.setVisible(not runtime_mode)
+
+        self.approach_release_label.setVisible(not runtime_mode)
+        self.approach_time_spin.setVisible(not runtime_mode)
+        self.overlap_release_label.setVisible(not runtime_mode)
+        self.overlap_release_spin.setVisible(not runtime_mode)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._smartio_client is not None:

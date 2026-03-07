@@ -21,6 +21,7 @@ class SequenceLockingTracker:
         self.seen_occupied_sections.clear()
 
     def initialize_route(self, route_id: str, route_path: list[str]) -> None:
+        """Initialize sequence scope from route body path only (excluding overlap)."""
         track_sections = [
             node_id
             for node_id in route_path
@@ -34,12 +35,14 @@ class SequenceLockingTracker:
         self.seen_occupied_sections.pop(route_id, None)
 
     def mark_section_occupied(self, route_id: str, node_id: str) -> None:
+        """Record occupancy evidence only for sections inside sequence scope."""
         track_sections = self.route_track_sections.get(route_id)
         if not track_sections or node_id not in track_sections:
             return
         self.seen_occupied_sections.setdefault(route_id, set()).add(node_id)
 
     def try_section_release(self, route_id: str, section_id: str) -> bool:
+        """Apply sequence rule only to route-body sections; overlap is out of scope."""
         section = self.topology.get_element(section_id)
         if not self.is_sequence_track_section(section):
             return False
