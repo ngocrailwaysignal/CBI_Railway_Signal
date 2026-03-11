@@ -26,7 +26,11 @@ class GenericApplicationProfile:
     smart_io_auto_connect: bool = True
     smart_io_reconnect_enabled: bool = True
     smart_io_reconnect_max_seconds: float = 30.0
+    smart_io_snapshot_heartbeat_seconds: float = 5.0
+    smart_io_runtime_stale_seconds: float = 15.0
     emergency_release_password: str = "cbi123"
+    runtime_journal_dir: str = "data/runtime_journal"
+    runtime_snapshot_checkpoint_interval: int = 1
 
     def to_product_rules(self) -> ProductRules:
         """Map application profile options into product-kernel rules."""

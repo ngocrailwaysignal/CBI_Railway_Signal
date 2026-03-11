@@ -132,12 +132,17 @@ class RuntimeSnapshotHydrator:
             self.simulation.remove_train(train_id)
 
         for section_id, occupied in sorted(desired_occupancy.items(), key=lambda item: item[1]):
-            route_hint = section_route_hints.get(section_id)
-            self.simulation.locking_engine.set_section_occupied(
-                section_id,
-                occupied,
-                route_id_hint=route_hint,
-            )
+            if occupied:
+                route_hint = section_route_hints.get(section_id)
+                self.simulation.locking_engine.set_section_occupied(
+                    section_id,
+                    occupied,
+                    route_id_hint=route_hint,
+                )
+                continue
+            element = self.simulation.topology.get_element(section_id)
+            if isinstance(element, TrackSection):
+                element.occupied = False
 
         self.assert_snapshot_consistent(
             snapshot=snapshot,
@@ -242,5 +247,5 @@ class RuntimeSnapshotHydrator:
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.runtime.simulation import Simulation
+    from simulation.session import Simulation
 

@@ -1,9 +1,9 @@
-﻿"""Use case for setting a route while preserving existing active route when possible."""
+"""Use case for setting a route while preserving existing active route when possible."""
 
 from __future__ import annotations
 
+from core.application.runtime_session_port import RuntimeSessionPort
 from core.domain.model.route import Route
-from core.runtime.simulation import Simulation
 from core.domain.model.topology import RailwayTopology
 from generic_product import GenericProductKernel
 
@@ -18,7 +18,7 @@ class SetOrReuseRouteUseCase:
 
     @staticmethod
     def _get_active_route_for_pair(
-        simulation: Simulation,
+        simulation: RuntimeSessionPort,
         entry_signal_id: str,
         exit_signal_id: str,
     ) -> Route | None:
@@ -34,32 +34,30 @@ class SetOrReuseRouteUseCase:
         self,
         *,
         topology: RailwayTopology,
-        simulation: Simulation | None,
+        simulation: RuntimeSessionPort,
         entry_signal_id: str,
         exit_signal_id: str,
         overlap_length: int,
         approach_time_lock_seconds: float,
         overlap_release_seconds: float,
     ) -> SetRouteResult:
-        active_simulation = simulation or self.kernel.create_simulation(topology)
-        active_simulation.locking_engine.configure_release_timing(
+        simulation.locking_engine.configure_release_timing(
             approach_time_lock_seconds=approach_time_lock_seconds,
             overlap_release_seconds=overlap_release_seconds,
         )
 
         existing = self._get_active_route_for_pair(
-            active_simulation,
+            simulation,
             entry_signal_id=entry_signal_id,
             exit_signal_id=exit_signal_id,
         )
         if existing is not None:
-            return SetRouteResult(simulation=active_simulation, route=existing, created=False)
+            return SetRouteResult(route=existing, created=False)
 
         route = self.kernel.set_route(
-            simulation=active_simulation,
+            runtime_session=simulation,
             entry_signal_id=entry_signal_id,
             exit_signal_id=exit_signal_id,
             overlap_length=overlap_length,
         )
-        return SetRouteResult(simulation=active_simulation, route=route, created=True)
-
+        return SetRouteResult(route=route, created=True)

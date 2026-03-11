@@ -1,4 +1,4 @@
-﻿"""Use case for preparing and starting train simulation on a selected route."""
+"""Use case for preparing and starting train simulation on a selected route."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from core.application.runtime_helpers import (
     find_train_for_route,
     next_train_id,
 )
+from core.application.runtime_session_port import RuntimeSessionPort
 from core.domain.model.route import Route
-from core.runtime.simulation import Simulation
 from core.domain.model.topology import RailwayTopology
 from core.domain.model.train import Train
 from generic_product import GenericProductKernel
@@ -26,7 +26,6 @@ class StartRouteSimulationUseCase:
 
     @staticmethod
     def _resolve_simulation_start_section(topology: RailwayTopology, route: Route) -> str:
-        # Start must be outside the route, on a rear-side section connected to entry signal.
         rear_track_sections: list[str] = []
         for node_id in topology.signal_approach_nodes(route.entry_signal_id):
             element = topology.get_element(node_id)
@@ -51,7 +50,7 @@ class StartRouteSimulationUseCase:
         self,
         *,
         topology: RailwayTopology,
-        simulation: Simulation | None,
+        simulation: RuntimeSessionPort,
         entry_signal_id: str,
         exit_signal_id: str,
         overlap_length: int,
@@ -68,7 +67,7 @@ class StartRouteSimulationUseCase:
             approach_time_lock_seconds=approach_time_lock_seconds,
             overlap_release_seconds=overlap_release_seconds,
         )
-        active_simulation = route_result.simulation
+        active_simulation = simulation
         route = route_result.route
 
         train = find_train_for_route(active_simulation, route.id)
@@ -108,7 +107,6 @@ class StartRouteSimulationUseCase:
         suggested_ticks = max(3, len(route.path) + extra_steps + 2)
 
         return StartSimulationResult(
-            simulation=active_simulation,
             route=route,
             train=train,
             created_route=route_result.created,
@@ -117,4 +115,3 @@ class StartRouteSimulationUseCase:
             visual_route_path=visual_route_path,
             suggested_ticks=suggested_ticks,
         )
-

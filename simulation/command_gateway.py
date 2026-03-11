@@ -69,5 +69,5 @@ class RuntimeCommandHandler:
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.runtime.simulation import Simulation
+    from simulation.session import Simulation
 

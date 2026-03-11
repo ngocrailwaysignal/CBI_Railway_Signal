@@ -1,21 +1,20 @@
-﻿"""DTOs for route/simulation use-case responses."""
+"""DTOs for route/simulation use-case responses."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.domain.model.route import Route
-    from core.runtime.simulation import Simulation
     from core.domain.model.train import Train
 
 
 @dataclass(slots=True)
 class SetRouteResult:
-    simulation: "Simulation"
     route: "Route"
     created: bool
+    view_state: Any | None = None
 
 
 @dataclass(slots=True)
@@ -31,7 +30,6 @@ class CancelRoutesResult:
 
 @dataclass(slots=True)
 class StartSimulationResult:
-    simulation: "Simulation"
     route: "Route"
     train: "Train"
     created_route: bool
@@ -39,5 +37,4 @@ class StartSimulationResult:
     simulation_start_section: str
     visual_route_path: list[str]
     suggested_ticks: int
-
-
+    view_state: Any | None = None

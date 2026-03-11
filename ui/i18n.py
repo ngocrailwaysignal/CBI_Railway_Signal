@@ -64,6 +64,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Stop Simulation",
         "vi": "Dừng mô phỏng",
     },
+    "toolbar.open_smartio_local": {
+        "en": "Open SmartIO Local",
+        "vi": "M? SmartIO Local",
+    },
     "button.find_route": {
         "en": "Find Route",
         "vi": "Tìm hành trình",
@@ -87,6 +91,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "button.stop_sim_short": {
         "en": "Stop Sim",
         "vi": "Dừng mô phỏng",
+    },
+    "button.open_smartio_local": {
+        "en": "Open SmartIO Local",
+        "vi": "M? SmartIO Local",
     },
     "button.apply": {
         "en": "Apply",
@@ -484,6 +492,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Runtime workspace requires SmartIO connection.\nURL: {url}\nCurrent state: {state}",
         "vi": "Workspace Runtime yêu cầu kết nối SmartIO.\nURL: {url}\nTrạng thái hiện tại: {state}",
     },
+    "dialog.smartio_local_failed.title": {
+        "en": "SmartIO Local failed",
+        "vi": "SmartIO Local kh?ng kh?i ??ng ???c",
+    },
     "dialog.fail_safe_stop.title": {
         "en": "Fail-safe STOP",
         "vi": "Dừng an toàn",
@@ -603,6 +615,18 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "status.smartio_error": {
         "en": "SmartIO error: {message}",
         "vi": "SmartIO error: {message}",
+    },
+    "status.smartio_local_started": {
+        "en": "SmartIO Local started with {path} at {url}",
+        "vi": "SmartIO Local ?? kh?i ??ng v?i {path} t?i {url}",
+    },
+    "status.smartio_local_opened": {
+        "en": "Opened SmartIO Local at {url}",
+        "vi": "?? m? SmartIO Local t?i {url}",
+    },
+    "status.smartio_local_failed": {
+        "en": "SmartIO Local failed to start",
+        "vi": "SmartIO Local kh?ng kh?i ??ng ???c",
     },
     "status.runtime_requires_smartio": {
         "en": "Runtime requires SmartIO connected (current: {state})",

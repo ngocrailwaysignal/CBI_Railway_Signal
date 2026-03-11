@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 from core.domain.model.topology import RailwayTopology
 
 
@@ -89,4 +92,11 @@ def build_layout_payload(topology: RailwayTopology) -> dict:
         for key, value in topology.ui_positions.items()
     }
     return payload
+
+
+def build_topology_revision(topology: RailwayTopology) -> str:
+    """Build one stable topology revision token from canonical layout payload."""
+    payload = build_layout_payload(topology)
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 

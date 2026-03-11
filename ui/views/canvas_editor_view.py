@@ -503,7 +503,7 @@ class CanvasEditor(QGraphicsView):
         self._runtime_edit_lock_reason = ""
         self._layout_edit_locked = False
         self._layout_edit_lock_reason = ""
-        self._simulation: Any | None = None
+        self._runtime_view_state: Any | None = None
         self._manual_override_handler: Callable[[str, bool, bool], list[str]] | None = None
         self._train_items: dict[str, TrainSpriteItem] = {}
         self._train_animations: dict[str, QPropertyAnimation] = {}
@@ -919,10 +919,10 @@ class CanvasEditor(QGraphicsView):
             )
         )
 
-    def set_simulation(self, simulation: Any | None) -> None:
-        """Attach simulation state to render animated train sprites."""
-        self._simulation = simulation
-        if simulation is None:
+    def set_runtime_view_state(self, runtime_view_state: Any | None) -> None:
+        """Attach read-only runtime state to render animated train sprites."""
+        self._runtime_view_state = runtime_view_state
+        if runtime_view_state is None:
             self._clear_train_visuals()
             return
         self._sync_train_visuals()
@@ -1588,36 +1588,6 @@ class CanvasEditor(QGraphicsView):
                         message,
                     )
                 removed_train_ids = []
-        elif self._simulation is not None:
-            command_fn = getattr(self._simulation, "apply_runtime_command", None)
-            if callable(command_fn):
-                try:
-                    command_result = command_fn(
-                        "set_section_occupied",
-                        {
-                            "section_id": section_id,
-                            "occupied": occupied_after,
-                        },
-                    )
-                    if isinstance(command_result, dict):
-                        removed_train_ids = list(command_result.get("removed_trains", []))
-                except Exception as exc:
-                    message = str(exc)
-                    if "Sequence locking violation" in message:
-                        QMessageBox.warning(
-                            self,
-                            self._t("dialog.property_update_failed.title"),
-                            message,
-                        )
-                    removed_train_ids = []
-            else:
-                reconcile_fn = getattr(self._simulation, "reconcile_manual_free_section", None)
-                if callable(reconcile_fn) and not occupied_after:
-                    try:
-                        removed_train_ids = list(reconcile_fn(section_id))
-                    except Exception:
-                        removed_train_ids = []
-
         if removed_train_ids and not occupied_after:
             joined = ", ".join(sorted(removed_train_ids))
             self.editor_message.emit(
@@ -1860,13 +1830,13 @@ class CanvasEditor(QGraphicsView):
         return is_train_renderable(train, nodes=self.nodes, topology=self.topology)
 
     def _sync_train_visuals(self) -> None:
-        if self._simulation is None:
+        if self._runtime_view_state is None:
             self._clear_train_visuals()
             return
-        trains = getattr(self._simulation, "trains", {}) or {}
+        trains_by_id = getattr(self._runtime_view_state, "trains_by_id", {}) or {}
         visible_trains = {
             train_id: train
-            for train_id, train in trains.items()
+            for train_id, train in trains_by_id.items()
             if self._is_train_renderable(train)
         }
         active_ids = set(visible_trains.keys())

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from collections import deque
 from pathlib import Path
+import sys
 from typing import Optional
 
-from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtGui import QCloseEvent
+from PyQt6.QtCore import QProcess, QTimer, Qt, QUrl
+from PyQt6.QtGui import QCloseEvent, QDesktopServices
 from PyQt6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -37,16 +38,15 @@ from core.application import AppMode
 from core.domain.model.elements import PointPosition, TrackSection
 from core.compiler.interlocking_table import InterlockingTableRow
 from core.domain.model.route import Route
-from core.infrastructure.smartio import (
-    SmartIOProtocolError,
-    SmartIORuntimeAdapter,
-    SmartIOWebSocketClient,
+from generic_application import (
+    GenericApplicationProfile,
+    GenericApplicationService,
+    RuntimeWorkspaceService,
 )
-from core.runtime.simulation import Simulation
-from generic_application import GenericApplicationProfile, GenericApplicationService
 from specific_application import SpecificLayoutEditorService, StationLayout
 from ui.controllers import (
     MainWindowController,
+    SmartIORuntimeCoordinator,
     SmartIOSessionAdapter,
     WorkspaceStateCoordinator,
 )
@@ -69,15 +69,24 @@ class MainWindow(QMainWindow):
         self.application_profile = application_profile or GenericApplicationProfile()
         self._translator = UITranslator(getattr(self.application_profile, "ui_language", "en"))
         self.application_service = GenericApplicationService(profile=self.application_profile)
-        self.controller = MainWindowController(self.application_service)
+        self.runtime_workspace_service = RuntimeWorkspaceService(
+            profile=self.application_profile,
+            kernel=self.application_service.kernel,
+        )
+        self.controller = MainWindowController(
+            self.application_service,
+            self.runtime_workspace_service,
+        )
         self.workspace_state_coordinator = WorkspaceStateCoordinator()
         self.route_presenter = RoutePresenter(self._translator)
         self.mode_policy = self.application_service.mode_policy
         self.layout_editor_service = SpecificLayoutEditorService(self.application_service)
         self.current_layout = self.layout_editor_service.new_layout(station_id="UNNAMED")
         self._operating_mode = OperatingMode.DESIGN_LAYOUT
-        self._smartio_client: SmartIOWebSocketClient | None = None
-        self._smartio_status_token = "disconnected"
+        self._smartio_status_token = "disabled"
+        self._runtime_transport_health: dict[str, object] = {}
+        self._smartio_local_process: QProcess | None = None
+        self._simulation_uses_local_smartio = False
 
         self.palette = ComponentsPalette(self._translator, self)
         self.canvas = CanvasEditor(self, translator=self._translator)
@@ -106,8 +115,7 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self._apply_visual_theme()
 
-        self.simulation: Optional[Simulation] = None
-        self.canvas.set_simulation(None)
+        self.canvas.set_runtime_view_state(None)
         self.preview_route: Optional[Route] = None
         self.interlocking_rows: list[InterlockingTableRow] = []
         self.valid_route_pairs: set[tuple[str, str]] = set()
@@ -194,6 +202,7 @@ class MainWindow(QMainWindow):
         self.set_route_action.setText(self._t("toolbar.set_route"))
         self.cancel_route_action.setText(self._t("toolbar.cancel_route"))
         self.emergency_release_action.setText(self._t("toolbar.emergency_release"))
+        self.open_smartio_local_action.setText(self._t("toolbar.open_smartio_local"))
         self.language_label.setText(self._t("language.label"))
         self._populate_language_selector()
 
@@ -214,6 +223,7 @@ class MainWindow(QMainWindow):
 
         self.route_group.setTitle(self._t("route_finder.group"))
         self.route_help_label.setText(self._t("route_finder.instructions"))
+        self.open_smartio_local_button.setText(self._t("button.open_smartio_local"))
         self.entry_label.setText(self._t("field.entry"))
         self.exit_label.setText(self._t("field.exit"))
         self.overlap_label.setText(self._t("field.overlap"))
@@ -381,6 +391,9 @@ class MainWindow(QMainWindow):
         self.simulation_action = self.toolbar.addAction(self._t("toolbar.start_simulation"))
         self.simulation_action.triggered.connect(self._start_simulation)
 
+        self.open_smartio_local_action = self.toolbar.addAction(self._t("toolbar.open_smartio_local"))
+        self.open_smartio_local_action.triggered.connect(self._open_smartio_local)
+
         self.toolbar.addSeparator()
         self.language_label = QLabel(self._t("language.label"), self.toolbar)
         self.language_combo = QComboBox(self.toolbar)
@@ -485,6 +498,9 @@ class MainWindow(QMainWindow):
         self.runtime_connection_label.setWordWrap(True)
         self.runtime_connection_label.setStyleSheet("font-weight: 600; color: #12415a;")
         runtime_status_row.addWidget(self.runtime_connection_label, stretch=1)
+        self.open_smartio_local_button = QPushButton(self._t("button.open_smartio_local"))
+        self.open_smartio_local_button.clicked.connect(self._open_smartio_local)
+        runtime_status_row.addWidget(self.open_smartio_local_button)
         mode_layout.addLayout(runtime_status_row)
 
         self.route_group = QGroupBox(self._t("route_finder.group"))
@@ -617,30 +633,23 @@ class MainWindow(QMainWindow):
         self._set_operating_mode(self._mode_for_tab_index(index))
 
     def _initialize_smartio_client(self) -> None:
-        ws_url = str(getattr(self.application_profile, "smart_io_ws_url", "")).strip()
-        if not ws_url:
-            self._smartio_status_token = "disabled"
-            return
-        self._smartio_client = SmartIOWebSocketClient(
-            ws_url=ws_url,
-            reconnect_enabled=bool(
-                getattr(self.application_profile, "smart_io_reconnect_enabled", True)
-            ),
-            reconnect_max_seconds=float(
-                getattr(self.application_profile, "smart_io_reconnect_max_seconds", 30.0)
-            ),
+        self.smartio_coordinator = SmartIORuntimeCoordinator(
+            profile=self.application_profile,
+            application_service=self.application_service,
+            runtime_workspace_service=self.runtime_workspace_service,
+            topology_provider=lambda: self.canvas.topology,
+            operating_mode_provider=lambda: self._operating_mode,
             parent=self,
         )
-        self._smartio_client.status_changed.connect(self._on_smartio_status_changed)
-        self._smartio_client.error_occurred.connect(self._on_smartio_error)
-        self._smartio_client.event_received.connect(self._on_smartio_event_received)
-        self._ensure_smartio_connection()
+        self.smartio_coordinator.smartio_status_changed.connect(self._on_smartio_status_changed)
+        self.smartio_coordinator.smartio_error.connect(self._on_smartio_error)
+        self.smartio_coordinator.runtime_state_changed.connect(self._on_runtime_state_changed)
+        self.smartio_coordinator.runtime_health_changed.connect(self._on_runtime_health_changed)
+        self._smartio_status_token = self.smartio_coordinator.smartio_status_token
+        self._runtime_transport_health = dict(self.smartio_coordinator.runtime_health)
 
     def _on_smartio_status_changed(self, status: str) -> None:
         self._smartio_status_token = str(status).strip() or "disconnected"
-        if self._smartio_status_token == "connected":
-            self._send_smartio_hello()
-            self._send_smartio_runtime_snapshot()
         self._update_runtime_connection_label()
 
     def _on_smartio_error(self, message: str) -> None:
@@ -649,106 +658,22 @@ class MainWindow(QMainWindow):
             self.status.showMessage(self._t("status.smartio_error", message=text), 5000)
         self._update_runtime_connection_label()
 
-    def _on_smartio_event_received(self, event: dict) -> None:
-        event_type = str(event.get("type", "")).strip().lower()
-        payload = event.get("payload", {})
-        smartio_connected = self._smartio_client is not None and self._smartio_client.is_connected
-        if not self._should_apply_smartio_event(
-            operating_mode=self._operating_mode,
-            smartio_connected=smartio_connected,
-            event_type=event_type,
-            payload=payload,
-        ):
-            self._update_runtime_connection_label()
-            return
-        self._apply_smartio_state_update(payload)
-        self._update_runtime_connection_label()
-
-    def _apply_smartio_state_update(self, payload: dict) -> None:
-        if self._operating_mode is not OperatingMode.RUNTIME:
-            return
-        if self.simulation is None:
-            self.simulation = self.application_service.create_simulation(self.canvas.topology)
-            self.canvas.set_simulation(self.simulation)
-        try:
-            adapter = SmartIORuntimeAdapter(
-                self.simulation,
-                default_overlap_length=int(self.application_profile.default_overlap_length),
-            )
-            adapter.apply_state_update(payload)
-        except SmartIOProtocolError as exc:
-            self.status.showMessage(
-                self._t("status.smartio_error", message=f"{exc.code}: {exc}"),
-                5000,
-            )
-            return
-        except Exception as exc:
-            message = str(exc)
-            self.status.showMessage(self._t("status.smartio_error", message=message), 5000)
-            if "Sequence locking violation" in message:
-                QMessageBox.warning(
-                    self,
-                    self._t("dialog.property_update_failed.title"),
-                    message,
-                )
-            return
-
-        for section_item in payload.get("sections", []):
-            if not isinstance(section_item, dict):
-                continue
-            section_id = str(section_item.get("id", "")).strip()
+    def _on_runtime_state_changed(self, payload: object) -> None:
+        data = payload if isinstance(payload, dict) else {}
+        for section_id in data.get("sections", []):
             if section_id:
-                self._refresh_route_log_for_section(section_id)
+                self._refresh_route_log_for_section(str(section_id))
         self.canvas.refresh_visual_state()
         self._sync_ui_state()
         self._refresh_interlocking_table()
-        self._send_smartio_runtime_snapshot()
 
-    def _send_smartio_hello(self) -> None:
-        if self._smartio_client is None or not self._smartio_client.is_connected:
-            return
-        try:
-            envelope = self._smartio_client.build_envelope("hello", {"role": "cbi"})
-            self._smartio_client.send_event(envelope)
-        except Exception:
-            return
+    def _on_runtime_health_changed(self, payload: object) -> None:
+        self._runtime_transport_health = payload if isinstance(payload, dict) else {}
+        self._update_runtime_connection_label()
+        self._sync_ui_state()
 
     def _send_smartio_runtime_snapshot(self) -> None:
-        smartio_connected = self._smartio_client is not None and self._smartio_client.is_connected
-        if not self._should_emit_runtime_snapshot(
-            operating_mode=self._operating_mode,
-            smartio_connected=smartio_connected,
-        ):
-            return
-        try:
-            snapshot = self.application_service.build_runtime_snapshot(self.simulation)
-            snapshot["layout"] = self.application_service.build_layout_payload(self.canvas.topology)
-            envelope = self._smartio_client.build_envelope("runtime_snapshot", snapshot)
-            self._smartio_client.send_event(envelope)
-        except Exception:
-            return
-
-    @staticmethod
-    def _should_apply_smartio_event(
-        *,
-        operating_mode: OperatingMode,
-        smartio_connected: bool,
-        event_type: str,
-        payload: object,
-    ) -> bool:
-        if not smartio_connected:
-            return False
-        if operating_mode is not OperatingMode.RUNTIME:
-            return False
-        return event_type == "state_update" and isinstance(payload, dict)
-
-    @staticmethod
-    def _should_emit_runtime_snapshot(
-        *,
-        operating_mode: OperatingMode,
-        smartio_connected: bool,
-    ) -> bool:
-        return operating_mode is OperatingMode.RUNTIME and smartio_connected
+        self.smartio_coordinator.publish_runtime_snapshot()
 
     def _smartio_state_text(self) -> str:
         token = str(self._smartio_status_token or "").strip().lower()
@@ -782,34 +707,172 @@ class MainWindow(QMainWindow):
             f"min-height: 12px; max-height: 12px; {presentation.badge_style}"
         )
         self.runtime_connection_label.setText(
-            self._t(
+            (
+                self._t(
                 "runtime.smartio.status",
                 state=self._smartio_state_text(),
-                url=str(getattr(self.application_profile, "smart_io_ws_url", "")).strip()
-                or "-",
+                url=self._current_smartio_ws_url() or "-",
+            )
+                + self._runtime_health_text_suffix()
             )
         )
 
+    def _runtime_health_text_suffix(self) -> str:
+        health = self._runtime_transport_health if isinstance(self._runtime_transport_health, dict) else {}
+        stream_seq = int(health.get("stream_seq", 0) or 0)
+        snapshot_age = health.get("snapshot_age_seconds")
+        command_age = health.get("command_age_seconds")
+        degraded = bool(health.get("degraded"))
+        degraded_reason = str(health.get("degraded_reason", "")).strip()
+        details = [f"seq={stream_seq}"]
+        if snapshot_age is not None:
+            details.append(f"snap={float(snapshot_age):.1f}s")
+        if command_age is not None:
+            details.append(f"cmd={float(command_age):.1f}s")
+        suffix = " | ".join(details)
+        if degraded and degraded_reason:
+            return f"\nDEGRADED: {degraded_reason}\n{suffix}"
+        return f"\n{suffix}" if suffix else ""
+
     def _sync_smartio_connection_for_mode(self, mode: OperatingMode) -> None:
-        if self._smartio_client is None:
-            return
-        if mode is OperatingMode.RUNTIME:
-            self._ensure_smartio_connection()
-            return
-        self._smartio_client.disconnect()
+        self._apply_smartio_url_for_mode(mode)
+        self.smartio_coordinator.sync_connection_for_mode(mode)
 
     def _ensure_smartio_connection(self, *, force: bool = False) -> None:
-        if self._smartio_client is None:
+        self.smartio_coordinator.ensure_connection(force=force)
+
+    def _current_smartio_ws_url(self) -> str:
+        return str(getattr(self.smartio_coordinator, "current_ws_url", "")).strip()
+
+    def _remote_smartio_ws_url(self) -> str:
+        return str(getattr(self.application_profile, "smart_io_ws_url", "")).strip()
+
+    def _preferred_smartio_ws_url_for_mode(self, mode: OperatingMode) -> str:
+        if mode is OperatingMode.RUNTIME:
+            return self._remote_smartio_ws_url()
+        if (
+            mode is OperatingMode.SIMULATION
+            and self._simulation_uses_local_smartio
+            and self._is_smartio_local_running()
+        ):
+            return self._smartio_local_ws_url()
+        return self._remote_smartio_ws_url()
+
+    def _apply_smartio_url_for_mode(self, mode: OperatingMode) -> None:
+        desired_ws_url = self._preferred_smartio_ws_url_for_mode(mode)
+        if desired_ws_url and desired_ws_url != self._current_smartio_ws_url():
+            self.smartio_coordinator.set_ws_url(desired_ws_url)
+            self._smartio_status_token = self.smartio_coordinator.smartio_status_token
+            self._update_runtime_connection_label()
+
+    @staticmethod
+    def _smartio_local_http_url() -> str:
+        return "http://127.0.0.1:8088/"
+
+    @staticmethod
+    def _smartio_local_ws_url() -> str:
+        return "ws://127.0.0.1:8088/smartio"
+
+    @staticmethod
+    def _repo_root() -> Path:
+        return Path(__file__).resolve().parents[2]
+
+    def _smartio_local_layout_path(self) -> Path:
+        target_dir = self._repo_root() / "data" / "_smartio_local"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        layout_name = (
+            self.current_layout.source_path.stem
+            if self.current_layout is not None and self.current_layout.source_path is not None
+            else (self.current_layout.station_id if self.current_layout is not None else "layout")
+        )
+        return target_dir / f"{layout_name or 'layout'}_smartio_local.json"
+
+    def _export_smartio_local_layout(self) -> Path:
+        layout_path = self._smartio_local_layout_path()
+        if self.current_layout is not None:
+            self.current_layout.topology = self.canvas.topology
+        self.application_service.save_topology(
+            self.canvas.topology,
+            layout_path,
+            include_runtime_state=False,
+            include_occupancy=True,
+        )
+        return layout_path
+
+    def _is_smartio_local_running(self) -> bool:
+        return (
+            self._smartio_local_process is not None
+            and self._smartio_local_process.state() is not QProcess.ProcessState.NotRunning
+        )
+
+    def _stop_smartio_local_process(self) -> None:
+        self._simulation_uses_local_smartio = False
+        if self._smartio_local_process is None:
             return
-        if not force and self._operating_mode is not OperatingMode.RUNTIME:
+        if self._smartio_local_process.state() is not QProcess.ProcessState.NotRunning:
+            self._smartio_local_process.terminate()
+            if not self._smartio_local_process.waitForFinished(1500):
+                self._smartio_local_process.kill()
+                self._smartio_local_process.waitForFinished(1500)
+        self._smartio_local_process.deleteLater()
+        self._smartio_local_process = None
+
+    def _open_smartio_local(self) -> None:
+        if self._operating_mode is not OperatingMode.SIMULATION:
             return
-        if not self._smartio_client.is_connected:
-            self._smartio_client.connect()
+        layout_path = self._export_smartio_local_layout()
+        http_url = self._smartio_local_http_url()
+        ws_url = self._smartio_local_ws_url()
+
+        if not self._is_smartio_local_running():
+            process = QProcess(self)
+            process.setProgram(sys.executable)
+            process.setArguments(
+                [
+                    str(self._repo_root() / "tools" / "CBI_SmartIO" / "run_local_host.py"),
+                    "--layout",
+                    str(layout_path),
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    "8088",
+                    "--no-browser",
+                ]
+            )
+            process.setWorkingDirectory(str(self._repo_root()))
+            process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            process.start()
+            if not process.waitForStarted(3000):
+                error_text = str(process.errorString()).strip() or self._t("status.smartio_local_failed")
+                QMessageBox.critical(
+                    self,
+                    self._t("dialog.smartio_local_failed.title"),
+                    error_text,
+                )
+                process.deleteLater()
+                return
+            self._smartio_local_process = process
+            self.status.showMessage(
+                self._t("status.smartio_local_started", path=layout_path, url=http_url),
+                5000,
+            )
+        else:
+            self.status.showMessage(
+                self._t("status.smartio_local_opened", url=http_url),
+                4000,
+            )
+
+        self._simulation_uses_local_smartio = True
+        self.smartio_coordinator.set_ws_url(ws_url)
+        self._smartio_status_token = self.smartio_coordinator.smartio_status_token
+        self._update_runtime_connection_label()
+        self._ensure_smartio_connection(force=True)
+        QDesktopServices.openUrl(QUrl(http_url))
 
     def _allow_runtime_workspace(self) -> bool:
-        if self._smartio_client is not None:
-            self._ensure_smartio_connection(force=True)
-        return True
+        self._apply_smartio_url_for_mode(OperatingMode.RUNTIME)
+        self._ensure_smartio_connection(force=True)
+        return self.smartio_coordinator.is_connected
 
     def _set_operating_mode(self, mode: OperatingMode, *, announce: bool = True) -> None:
         previous_mode = self._operating_mode
@@ -818,15 +881,16 @@ class MainWindow(QMainWindow):
                 self.mode_tabs.blockSignals(True)
                 self.mode_tabs.setCurrentIndex(self._tab_index_for_mode(previous_mode))
                 self.mode_tabs.blockSignals(False)
-            QMessageBox.warning(
-                self,
-                self._t("dialog.runtime_requires_smartio.title"),
-                self._t(
-                    "dialog.runtime_requires_smartio.message",
-                    url=str(getattr(self.application_profile, "smart_io_ws_url", "")).strip() or "-",
-                    state=self._smartio_state_text(),
-                ),
-            )
+            if announce:
+                QMessageBox.warning(
+                    self,
+                    self._t("dialog.runtime_requires_smartio.title"),
+                    self._t(
+                        "dialog.runtime_requires_smartio.message",
+                        url=self._current_smartio_ws_url() or "-",
+                        state=self._smartio_state_text(),
+                    ),
+                )
             self.status.showMessage(
                 self._t(
                     "status.runtime_requires_smartio",
@@ -913,16 +977,12 @@ class MainWindow(QMainWindow):
             return []
         if not self.canvas.is_layout_edit_locked():
             return []
-        if self.simulation is None:
-            self.simulation = self.application_service.create_simulation(self.canvas.topology)
-            self.canvas.set_simulation(self.simulation)
-        result = self.application_service.manual_set_section_occupied(
-            simulation=self.simulation,
+        result = self.controller.manual_set_section_occupied(
+            topology=self.canvas.topology,
             section_id=section_id,
             occupied=occupied_after,
         )
-        # Ensure timed/overlap release is evaluated immediately after manual occupancy.
-        self.application_service.update_time_locking(self.simulation)
+        self.controller.update_time_locking()
         self.canvas.refresh_visual_state()
         self._schedule_manual_followup_refresh()
         self._refresh_route_log_for_section(section_id)
@@ -940,9 +1000,9 @@ class MainWindow(QMainWindow):
         )
 
     def _manual_followup_refresh(self) -> None:
-        if self.simulation is None:
+        if not self.controller.has_runtime_session:
             return
-        self.application_service.update_time_locking(self.simulation)
+        self.controller.update_time_locking()
         self.canvas.refresh_visual_state()
         self._sync_ui_state()
         self._send_smartio_runtime_snapshot()
@@ -952,15 +1012,7 @@ class MainWindow(QMainWindow):
         route_for_log: Route | None = None
         normalized_section = str(section_id).strip()
 
-        if self.simulation is not None:
-            for active_route in self.simulation.locking_engine.active_routes.values():
-                if normalized_section in active_route.full_path:
-                    route_for_log = active_route
-                    break
-                approach_section = (active_route.approach_locking_section or "").strip()
-                if approach_section and approach_section == normalized_section:
-                    route_for_log = active_route
-                    break
+        route_for_log = self.controller.active_route_for_section(normalized_section)
 
         if route_for_log is None and self.preview_route is not None:
             preview = self.preview_route
@@ -1047,12 +1099,14 @@ class MainWindow(QMainWindow):
     def _load_layout_into_canvas(self, layout: StationLayout) -> None:
         self.current_layout = layout
         self.canvas.load_topology(layout.topology)
+        self.runtime_workspace_service.invalidate_runtime_journal()
+        self.controller.clear_runtime_session()
+        self.canvas.set_runtime_view_state(None)
         self._send_smartio_runtime_snapshot()
 
     def _on_timing_controls_changed(self, _value: float) -> None:
-        if self.simulation is not None:
-            self.application_service.configure_simulation_timing(
-                self.simulation,
+        if self.controller.has_runtime_session:
+            self.controller.configure_timing(
                 approach_time_lock_seconds=float(self.approach_time_spin.value()),
                 overlap_release_seconds=float(self.overlap_release_spin.value()),
             )
@@ -1064,8 +1118,9 @@ class MainWindow(QMainWindow):
             self.current_layout.topology = self.canvas.topology
         if self._simulation_timer.isActive():
             self._simulation_timer.stop()
-        self.simulation = None
-        self.canvas.set_simulation(None)
+        self.runtime_workspace_service.invalidate_runtime_journal()
+        self.controller.clear_runtime_session()
+        self.canvas.set_runtime_view_state(None)
         self.preview_route = None
         self.canvas.clear_route_visualization()
         self._refresh_signal_selectors()
@@ -1191,12 +1246,11 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            route = self.application_service.find_route(
+            route = self.controller.find_route(
                 topology=self.canvas.topology,
                 entry_signal_id=entry_signal_id,
                 exit_signal_id=exit_signal_id,
                 overlap_length=self.overlap_spin.value(),
-                simulation=self.simulation,
             )
         except Exception as exc:
             QMessageBox.warning(
@@ -1406,14 +1460,7 @@ class MainWindow(QMainWindow):
         exit_signal = self.canvas.topology.signals.get(route.exit_signal_id)
         lifecycle = route.lifecycle_state.value if getattr(route, "lifecycle_state", None) else "-"
 
-        approach_lock_state: str | None = None
-        approach_lock_remaining: float | None = None
-        if self.simulation is not None:
-            locking_engine = self.simulation.locking_engine
-            state = locking_engine.approach_lock_state(route.id)
-            if state is not None:
-                approach_lock_state = state.value
-                approach_lock_remaining = locking_engine.approach_locking.remaining_time_lock(route.id)
+        approach_lock_state, approach_lock_remaining = self.controller.approach_lock_details(route.id)
 
         self.search_log.setPlainText(
             self.route_presenter.build_route_search_log(
@@ -1588,7 +1635,6 @@ class MainWindow(QMainWindow):
         try:
             start_result = self.controller.start_route_simulation(
                 topology=self.canvas.topology,
-                simulation=self.simulation,
                 entry_signal_id=entry_signal_id,
                 exit_signal_id=exit_signal_id,
                 overlap_length=self.overlap_spin.value(),
@@ -1606,7 +1652,6 @@ class MainWindow(QMainWindow):
             self._sync_ui_state()
             return
 
-        self.simulation = start_result.simulation
         route = start_result.route
         train = start_result.train
         simulation_start_section = start_result.simulation_start_section
@@ -1640,13 +1685,7 @@ class MainWindow(QMainWindow):
         entry_signal_id: str,
         exit_signal_id: str,
     ) -> Route | None:
-        if self.simulation is None:
-            return None
-        return self.application_service.get_active_route_for_pair(
-            self.simulation,
-            entry_signal_id,
-            exit_signal_id,
-        )
+        return self.controller.get_active_route_for_pair(entry_signal_id, exit_signal_id)
 
     def _get_or_create_locked_route(
         self,
@@ -1655,24 +1694,22 @@ class MainWindow(QMainWindow):
     ) -> tuple[Route, bool]:
         result = self.controller.set_or_reuse_route(
             topology=self.canvas.topology,
-            simulation=self.simulation,
             entry_signal_id=entry_signal_id,
             exit_signal_id=exit_signal_id,
             overlap_length=self.overlap_spin.value(),
             approach_time_lock_seconds=float(self.approach_time_spin.value()),
             overlap_release_seconds=float(self.overlap_release_spin.value()),
         )
-        self.simulation = result.simulation
-        self.canvas.set_simulation(self.simulation)
         return result.route, result.created
 
     def _simulation_tick(self) -> None:
-        if self.simulation is None:
+        if not self.controller.has_runtime_session:
             self._simulation_timer.stop()
             self._sync_ui_state()
             return
         try:
-            self.simulation.step()
+            step_view_state = self.controller.step_runtime()
+            self.canvas.set_runtime_view_state(step_view_state)
             self.canvas.refresh_visual_state()
             self._send_smartio_runtime_snapshot()
         except Exception as exc:
@@ -1698,11 +1735,11 @@ class MainWindow(QMainWindow):
             if show_message:
                 self.status.showMessage(self._t("status.emergency_release_disabled"))
             return
-        if self.simulation is None:
+        if not self.controller.has_runtime_session:
             if show_message:
                 self.status.showMessage(self._t("status.no_active_simulation_routes"))
             return
-        if not self.application_service.has_active_routes(self.simulation):
+        if not self.controller.has_active_routes():
             if show_message:
                 self.status.showMessage(self._t("status.no_active_routes"))
             return
@@ -1727,7 +1764,7 @@ class MainWindow(QMainWindow):
             )
             return
 
-        emergency_result = self.controller.emergency_release_active_routes(self.simulation)
+        emergency_result = self.controller.emergency_release_active_routes()
         self.canvas.clear_route_visualization()
         self.canvas.refresh_visual_state()
         self._refresh_interlocking_table()
@@ -1756,17 +1793,17 @@ class MainWindow(QMainWindow):
             if show_message:
                 self.status.showMessage(self._t("status.cancel_route_disabled"))
             return
-        if self.simulation is None:
+        if not self.controller.has_runtime_session:
             if show_message:
                 self.status.showMessage(self._t("status.no_active_simulation_routes"))
             return
 
-        if not self.application_service.has_active_routes(self.simulation):
+        if not self.controller.has_active_routes():
             if show_message:
                 self.status.showMessage(self._t("status.no_active_routes"))
             return
 
-        cancel_result = self.controller.cancel_active_routes(self.simulation)
+        cancel_result = self.controller.cancel_active_routes()
         self.canvas.clear_route_visualization()
         self.canvas.refresh_visual_state()
         self._sync_ui_state()
@@ -1786,10 +1823,9 @@ class MainWindow(QMainWindow):
             self.status.showMessage(self._t("status.cancelled_all_active_routes"))
 
     def _sync_ui_state(self) -> None:
-        self.canvas.set_simulation(self.simulation)
+        self.canvas.set_runtime_view_state(self.controller.runtime_view_state())
         has_signals = self.entry_combo.count() > 1 and self.exit_combo.count() > 1
-        if self.simulation is not None:
-            self.application_service.update_time_locking(self.simulation)
+        if self.controller.has_runtime_session:
             self.canvas.refresh_visual_state()
 
         selected_entry = self.entry_combo.currentText().strip()
@@ -1804,11 +1840,7 @@ class MainWindow(QMainWindow):
             and self._get_active_route_for_pair(selected_entry, selected_exit) is not None
         )
 
-        has_active_routes = (
-            self.application_service.has_active_routes(self.simulation)
-            if self.simulation is not None
-            else False
-        )
+        has_active_routes = self.controller.has_active_routes()
         capabilities = self.mode_policy.capabilities(self._operating_mode)
         simulation_running = self._simulation_timer.isActive()
         workspace_state = self.workspace_state_coordinator.evaluate(
@@ -1818,6 +1850,10 @@ class MainWindow(QMainWindow):
             selected_pair_ready=selected_pair_ready,
             has_active_routes=has_active_routes,
             simulation_running=simulation_running,
+        )
+        runtime_degraded = (
+            self._operating_mode is OperatingMode.RUNTIME
+            and bool(self._runtime_transport_health.get("degraded", False))
         )
         runtime_edit_lock_reason = self._t("main.lock.runtime_edit_reason")
         self.canvas.set_runtime_edit_lock(
@@ -1836,12 +1872,19 @@ class MainWindow(QMainWindow):
         self.connect_mode_action.setEnabled(workspace_state.connect_mode_enabled)
 
         self.find_route_button.setEnabled(workspace_state.find_route_enabled)
-        self.set_route_button.setEnabled(workspace_state.set_route_enabled)
-        self.set_route_action.setEnabled(workspace_state.set_route_enabled)
-        self.cancel_route_button.setEnabled(workspace_state.cancel_route_enabled)
-        self.cancel_route_action.setEnabled(workspace_state.cancel_route_enabled)
-        self.emergency_release_button.setEnabled(workspace_state.cancel_route_enabled)
-        self.emergency_release_action.setEnabled(workspace_state.cancel_route_enabled)
+        simulation_workspace = self._operating_mode is OperatingMode.SIMULATION
+        self.open_smartio_local_button.setEnabled(simulation_workspace)
+        self.open_smartio_local_action.setEnabled(simulation_workspace)
+        self.set_route_button.setEnabled(workspace_state.set_route_enabled and not runtime_degraded)
+        self.set_route_action.setEnabled(workspace_state.set_route_enabled and not runtime_degraded)
+        self.cancel_route_button.setEnabled(workspace_state.cancel_route_enabled and not runtime_degraded)
+        self.cancel_route_action.setEnabled(workspace_state.cancel_route_enabled and not runtime_degraded)
+        self.emergency_release_button.setEnabled(
+            workspace_state.cancel_route_enabled and not runtime_degraded
+        )
+        self.emergency_release_action.setEnabled(
+            workspace_state.cancel_route_enabled and not runtime_degraded
+        )
         self.approach_time_spin.setEnabled(workspace_state.route_timing_enabled)
         self.overlap_release_spin.setEnabled(workspace_state.route_timing_enabled)
 
@@ -1850,13 +1893,13 @@ class MainWindow(QMainWindow):
             if workspace_state.simulation_running
             else self._t("toolbar.start_simulation")
         )
-        self.simulation_action.setEnabled(workspace_state.simulation_enabled)
+        self.simulation_action.setEnabled(workspace_state.simulation_enabled and not runtime_degraded)
         self.simulate_button.setText(
             self._t("button.stop_sim_short")
             if workspace_state.simulation_running
             else self._t("button.start_simulation")
         )
-        self.simulate_button.setEnabled(workspace_state.simulation_enabled)
+        self.simulate_button.setEnabled(workspace_state.simulation_enabled and not runtime_degraded)
         self._apply_workspace_visibility_profile()
         self._update_runtime_connection_label()
 
@@ -1867,6 +1910,7 @@ class MainWindow(QMainWindow):
         simulation_mode = self._operating_mode is OperatingMode.SIMULATION
         # Left editor workspace is not used in Runtime operations.
         self.palette.setVisible(not runtime_mode )
+        
         # Toolbar profile by workspace.
         self.new_layout_action.setVisible(not runtime_mode and not simulation_mode)
         self.save_layout_action.setVisible(not runtime_mode and not simulation_mode)
@@ -1876,8 +1920,10 @@ class MainWindow(QMainWindow):
         self.cancel_route_action.setVisible(not design_mode)
         self.emergency_release_action.setVisible(not design_mode)
         self.simulation_action.setVisible(not runtime_mode and not design_mode)
+        self.open_smartio_local_action.setVisible(simulation_mode)
 
         # Button/profile in right panel.
+        self.open_smartio_local_button.setVisible(simulation_mode)
         self.set_route_button.setVisible(not design_mode)
         self.cancel_route_button.setVisible(not design_mode)
         self.emergency_release_button.setVisible(not design_mode)
@@ -1895,7 +1941,7 @@ class MainWindow(QMainWindow):
         self.overlap_release_spin.setVisible(not runtime_mode)
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if self._smartio_client is not None:
-            self._smartio_client.disconnect()
+        self.smartio_coordinator.disconnect()
+        self._stop_smartio_local_process()
         super().closeEvent(event)
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.runtime.simulation import Simulation
+from core.application.runtime_session_port import RuntimeSessionPort
 
 from core.application.dto import CancelRoutesResult
 
@@ -10,7 +10,7 @@ from core.application.dto import CancelRoutesResult
 class EmergencyReleaseRoutesUseCase:
     """Force-release all active routes while preserving per-route error details."""
 
-    def execute(self, simulation: Simulation | None) -> CancelRoutesResult:
+    def execute(self, simulation: RuntimeSessionPort | None) -> CancelRoutesResult:
         if simulation is None:
             return CancelRoutesResult()
 
@@ -22,7 +22,7 @@ class EmergencyReleaseRoutesUseCase:
         for route_id in route_ids:
             try:
                 simulation.locking_engine.emergency_release_route(route_id)
-            except Exception as exc:  # pragma: no cover - defensive path
+            except Exception as exc:
                 failures.append(f"{route_id}: {exc}")
 
         active_after = set(simulation.locking_engine.active_routes.keys())

@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
-from core.runtime.simulation import Simulation
+from core.application.runtime_session_port import RuntimeSessionPort
+from core.application.serialization.layout_payload_serializer import build_topology_revision
 
 
-def build_runtime_snapshot(simulation: Simulation | None) -> dict:
+def build_runtime_snapshot(simulation: RuntimeSessionPort | None) -> dict:
     """Serialize runtime-only state for snapshot persistence."""
     if simulation is None:
-        return {"routes": [], "trains": [], "occupancy": [], "signal_state": []}
+        return {
+            "snapshot_version": 2,
+            "stream_seq": 0,
+            "topology_revision": None,
+            "tick": 0,
+            "routes": [],
+            "trains": [],
+            "occupancy": [],
+            "signal_state": [],
+        }
 
     topology = simulation.topology
     occupancy: list[dict] = []
@@ -31,7 +41,9 @@ def build_runtime_snapshot(simulation: Simulation | None) -> dict:
             "exit_signal_id": route.exit_signal_id,
             "path": list(route.path),
             "overlap_path": list(route.overlap_path),
+            "full_path": list(route.full_path),
             "lifecycle_state": route.lifecycle_state.value,
+            "status": "ACTIVE",
         }
         for route in simulation.locking_engine.active_routes.values()
     ]
@@ -53,10 +65,12 @@ def build_runtime_snapshot(simulation: Simulation | None) -> dict:
         for signal in topology.signals.values()
     ]
     return {
+        "snapshot_version": 2,
+        "stream_seq": 0,
+        "topology_revision": build_topology_revision(topology),
         "tick": simulation.tick,
         "routes": routes,
         "trains": trains,
         "occupancy": occupancy,
         "signal_state": signal_state,
     }
-

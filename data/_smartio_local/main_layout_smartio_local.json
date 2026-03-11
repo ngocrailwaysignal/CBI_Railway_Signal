@@ -1,0 +1,352 @@
+{
+  "sections": [
+    {
+      "id": "S1",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S2",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S4",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "2",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S7",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S8",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S9",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "1",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S10",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S12",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S14",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "AS1",
+      "kind": "approach",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "AS2",
+      "kind": "approach",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    }
+  ],
+  "points": [
+    {
+      "id": "P2",
+      "position": "NORMAL",
+      "symbol_orientation": "LEFT",
+      "locked_by": null,
+      "facing_connections": {
+        "NORMAL": "S14",
+        "REVERSE": "S2"
+      }
+    },
+    {
+      "id": "P1",
+      "position": "NORMAL",
+      "symbol_orientation": "RIGHT",
+      "locked_by": null,
+      "facing_connections": {
+        "NORMAL": "S10",
+        "REVERSE": "S2"
+      }
+    },
+    {
+      "id": "P3",
+      "position": "NORMAL",
+      "symbol_orientation": "UP",
+      "locked_by": null,
+      "facing_connections": {
+        "NORMAL": "S8",
+        "REVERSE": "S7"
+      }
+    }
+  ],
+  "signals": [
+    {
+      "id": "A",
+      "aspect": "STOP",
+      "direction": "RIGHT",
+      "protects": "S1",
+      "approach_section": "AS1",
+      "route_id": null
+    },
+    {
+      "id": "F",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S9",
+      "approach_section": "AS2",
+      "route_id": null
+    },
+    {
+      "id": "N2",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S4",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "G2",
+      "aspect": "STOP",
+      "direction": "RIGHT",
+      "protects": "S7",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "G1",
+      "aspect": "STOP",
+      "direction": "RIGHT",
+      "protects": "S8",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "N1",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S10",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "Y",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S12",
+      "approach_section": "",
+      "route_id": null
+    }
+  ],
+  "edges": [
+    [
+      "S1",
+      "P1"
+    ],
+    [
+      "S2",
+      "P2"
+    ],
+    [
+      "S7",
+      "P3"
+    ],
+    [
+      "S8",
+      "P3"
+    ],
+    [
+      "P2",
+      "S4"
+    ],
+    [
+      "P2",
+      "S14"
+    ],
+    [
+      "P1",
+      "S2"
+    ],
+    [
+      "P1",
+      "S10"
+    ],
+    [
+      "P3",
+      "S9"
+    ]
+  ],
+  "signal_links": [
+    [
+      "1",
+      "G1"
+    ],
+    [
+      "1",
+      "N1"
+    ],
+    [
+      "2",
+      "G2"
+    ],
+    [
+      "2",
+      "N2"
+    ],
+    [
+      "AS1",
+      "A"
+    ],
+    [
+      "AS2",
+      "F"
+    ],
+    [
+      "S10",
+      "N1"
+    ],
+    [
+      "S14",
+      "Y"
+    ]
+  ],
+  "clearance_conflict_groups": [],
+  "ui_positions": {
+    "S1": [
+      -250.0,
+      -175.0
+    ],
+    "S2": [
+      -125.0,
+      -300.0
+    ],
+    "S4": [
+      50.0,
+      -400.0
+    ],
+    "2": [
+      300.0,
+      -400.0
+    ],
+    "S7": [
+      575.0,
+      -400.0
+    ],
+    "S8": [
+      600.0,
+      -175.0
+    ],
+    "S9": [
+      875.0,
+      -175.0
+    ],
+    "1": [
+      300.0,
+      -175.0
+    ],
+    "S10": [
+      25.0,
+      -175.0
+    ],
+    "S12": [
+      -575.0,
+      -400.0
+    ],
+    "S14": [
+      -250.0,
+      -400.0
+    ],
+    "AS1": [
+      -475.0,
+      -175.0
+    ],
+    "AS2": [
+      1025.0,
+      -175.0
+    ],
+    "P2": [
+      -125.0,
+      -400.0
+    ],
+    "P1": [
+      -125.0,
+      -175.0
+    ],
+    "P3": [
+      725.0,
+      -175.0
+    ],
+    "A": [
+      -375.0,
+      -125.0
+    ],
+    "F": [
+      975.0,
+      -275.0
+    ],
+    "N2": [
+      175.0,
+      -525.0
+    ],
+    "G2": [
+      450.0,
+      -275.0
+    ],
+    "G1": [
+      450.0,
+      -125.0
+    ],
+    "N1": [
+      150.0,
+      -250.0
+    ],
+    "Y": [
+      -400.0,
+      -400.0
+    ]
+  }
+}

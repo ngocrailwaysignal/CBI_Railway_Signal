@@ -9,14 +9,14 @@ from core.domain.model.elements import PointPosition
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
 from core.domain.model.train import Train
-from core.runtime.command_handler import RuntimeCommandHandler
 from core.runtime.locking_engine import LockingEngine
 from core.runtime.occupancy_reconciler import OccupancyReconciler
 from core.runtime.route_dispatcher import RouteDispatcher
 from core.runtime.route_engine import RouteEngine
 from core.runtime.safety_monitor import SafetyMonitor
-from core.runtime.snapshot_hydrator import RuntimeSnapshotHydrator
-from core.runtime.train_lifecycle import RuntimeTrainLifecycle
+from simulation.command_gateway import RuntimeCommandHandler
+from simulation.snapshot_hydrator import RuntimeSnapshotHydrator
+from simulation.train_lifecycle import RuntimeTrainLifecycle
 
 
 @dataclass

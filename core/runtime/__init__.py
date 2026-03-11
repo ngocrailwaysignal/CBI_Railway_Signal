@@ -8,7 +8,6 @@ from .release_update_scheduler import (
 )
 from .route_dispatcher import RouteDispatcher
 from .safety_monitor import SafetyMonitor
-from .simulation import Simulation
 
 __all__ = [
     "LockingEngine",
@@ -16,7 +15,6 @@ __all__ = [
     "OccupancyReconciler",
     "ReleaseUpdateScheduler",
     "SafetyMonitor",
-    "Simulation",
     "ThreadedReleaseUpdateScheduler",
 ]
 

@@ -1,0 +1,149 @@
+{
+  "sections": [
+    {
+      "id": "S1",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S2",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S3",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S4",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "S0",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    }
+  ],
+  "points": [],
+  "signals": [
+    {
+      "id": "ENTRY_RIGHT_A",
+      "aspect": "STOP",
+      "direction": "RIGHT",
+      "protects": "S2",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "ENTRY_LEFT_B",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S2",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "EXTI_RIGHT_B",
+      "aspect": "STOP",
+      "direction": "RIGHT",
+      "protects": "S4",
+      "approach_section": "",
+      "route_id": null
+    },
+    {
+      "id": "EXIT_LEFT_A",
+      "aspect": "STOP",
+      "direction": "LEFT",
+      "protects": "S0",
+      "approach_section": "",
+      "route_id": null
+    }
+  ],
+  "edges": [
+    [
+      "S1",
+      "S2"
+    ],
+    [
+      "S2",
+      "S3"
+    ]
+  ],
+  "signal_links": [
+    [
+      "S0",
+      "EXIT_LEFT_A"
+    ],
+    [
+      "S1",
+      "ENTRY_RIGHT_A"
+    ],
+    [
+      "S1",
+      "EXIT_LEFT_A"
+    ],
+    [
+      "S2",
+      "ENTRY_RIGHT_A"
+    ],
+    [
+      "S3",
+      "ENTRY_LEFT_B"
+    ],
+    [
+      "S3",
+      "EXTI_RIGHT_B"
+    ]
+  ],
+  "clearance_conflict_groups": [],
+  "ui_positions": {
+    "S1": [
+      -250.0,
+      -275.0
+    ],
+    "S2": [
+      -75.0,
+      -275.0
+    ],
+    "S3": [
+      125.0,
+      -275.0
+    ],
+    "S4": [
+      225.0,
+      -275.0
+    ],
+    "S0": [
+      -400.0,
+      -275.0
+    ],
+    "ENTRY_RIGHT_A": [
+      -150.0,
+      -375.0
+    ],
+    "ENTRY_LEFT_B": [
+      0.0,
+      -175.0
+    ],
+    "EXTI_RIGHT_B": [
+      150.0,
+      -375.0
+    ],
+    "EXIT_LEFT_A": [
+      -325.0,
+      -150.0
+    ]
+  }
+}

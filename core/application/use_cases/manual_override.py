@@ -1,16 +1,16 @@
-﻿"""Use case for manual occupancy override in Simulation workspace."""
+"""Use case for manual occupancy override as part of Simulation runtime."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from core.application.runtime_session_port import RuntimeSessionPort
 from core.domain.model.elements import TrackSection
-from core.runtime.simulation import Simulation
 
 
 @dataclass(slots=True)
-class ManualOverrideResult:
-    """Result of one manual state override request."""
+class SimulationManualOverrideResult:
+    """Result of one manual simulation state override request."""
 
     section_id: str
     occupied_before: bool
@@ -18,16 +18,16 @@ class ManualOverrideResult:
     removed_trains: list[str] = field(default_factory=list)
 
 
-class ManualOverrideUseCase:
-    """Apply manual section occupancy and reconcile runtime state."""
+class SimulationManualOverrideUseCase:
+    """Apply one manual occupancy override inside simulation runtime."""
 
     def execute_set_section_occupied(
         self,
         *,
-        simulation: Simulation | None,
+        simulation: RuntimeSessionPort | None,
         section_id: str,
         occupied: bool,
-    ) -> ManualOverrideResult:
+    ) -> SimulationManualOverrideResult:
         if simulation is None:
             raise RuntimeError("Simulation is required for manual runtime override")
         section = simulation.topology.get_element(section_id)
@@ -35,19 +35,16 @@ class ManualOverrideUseCase:
             raise KeyError(f"Unknown section {section_id}")
 
         occupied_before = bool(section.occupied)
-        command_result = simulation.apply_runtime_command(
-            "set_section_occupied",
-            {
-                "section_id": section_id,
-                "occupied": bool(occupied),
-            },
+        command_result = simulation.set_section_occupied(
+            section_id=section_id,
+            occupied=bool(occupied),
         )
         removed_trains = (
             list(command_result.get("removed_trains", []))
             if isinstance(command_result, dict)
             else []
         )
-        return ManualOverrideResult(
+        return SimulationManualOverrideResult(
             section_id=section_id,
             occupied_before=occupied_before,
             occupied_after=bool(section.occupied),
@@ -55,3 +52,6 @@ class ManualOverrideUseCase:
         )
 
 
+# Backward-compatible aliases while callers migrate to simulation-focused naming.
+ManualOverrideResult = SimulationManualOverrideResult
+ManualOverrideUseCase = SimulationManualOverrideUseCase
