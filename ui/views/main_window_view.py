@@ -38,12 +38,12 @@ from core.application import AppMode
 from core.domain.model.elements import PointPosition, TrackSection
 from core.compiler.interlocking_table import InterlockingTableRow
 from core.domain.model.route import Route
-from generic_application import (
+from products.generic_application import (
     GenericApplicationProfile,
     GenericApplicationService,
     RuntimeWorkspaceService,
 )
-from specific_application import SpecificLayoutEditorService, StationLayout
+from products.specific_application import SpecificLayoutEditorService, StationLayout
 from ui.controllers import (
     MainWindowController,
     SmartIORuntimeCoordinator,
@@ -711,9 +711,7 @@ class MainWindow(QMainWindow):
                 self._t(
                 "runtime.smartio.status",
                 state=self._smartio_state_text(),
-                url=self._current_smartio_ws_url() or "-",
             )
-                + self._runtime_health_text_suffix()
             )
         )
 
@@ -925,6 +923,7 @@ class MainWindow(QMainWindow):
             self.mode_policy.layout_edit_locked(mode),
             self._t("main.lock.layout_edit_reason"),
         )
+        self.canvas.set_edit_dialog_enabled(mode is not OperatingMode.RUNTIME)
         self.palette.component_list.setEnabled(design_mode)
         if design_mode:
             self.palette.component_list.setToolTip("")
@@ -969,6 +968,12 @@ class MainWindow(QMainWindow):
         _occupied_before: bool,
         occupied_after: bool,
     ) -> list[str]:
+        if self._operating_mode is not OperatingMode.SIMULATION:
+            self.status.showMessage(
+                self._t("status.workspace_mode", mode=self._mode_text(self._operating_mode)),
+                2500,
+            )
+            return []
         if not self.mode_policy.capabilities(self._operating_mode).can_manual_state_override:
             self.status.showMessage(
                 self._t("status.workspace_mode", mode=self._mode_text(self._operating_mode)),
@@ -1070,16 +1075,7 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        keep_occupancy = (
-            QMessageBox.question(
-                self,
-                self._t("dialog.load_occupancy.title"),
-                self._t("dialog.load_occupancy.message"),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes,
-            )
-            == QMessageBox.StandardButton.Yes
-        )
+        keep_occupancy = True
         try:
             loaded = self.layout_editor_service.load_layout(
                 path,
@@ -1909,7 +1905,7 @@ class MainWindow(QMainWindow):
         design_mode = self._operating_mode is OperatingMode.DESIGN_LAYOUT
         simulation_mode = self._operating_mode is OperatingMode.SIMULATION
         # Left editor workspace is not used in Runtime operations.
-        self.palette.setVisible(not runtime_mode )
+        self.palette.setVisible(not runtime_mode and not simulation_mode )
         
         # Toolbar profile by workspace.
         self.new_layout_action.setVisible(not runtime_mode and not simulation_mode)

@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 from core.compiler.spec_models import InterlockingRouteSpec, InterlockingSpec
 from core.domain.model.topology import RailwayTopology
-from generic_product import GenericProductKernel
+from products.generic_product import GenericProductKernel
 
 
 class RouteCompiler:

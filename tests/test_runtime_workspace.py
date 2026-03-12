@@ -6,13 +6,15 @@ from pathlib import Path
 from PyQt6.QtCore import QObject
 
 from core.application import AppMode
-from generic_application import (
+from core.application.runtime_session_port import RuntimeSessionPort
+from products.generic_application import (
     GenericApplicationProfile,
     GenericApplicationService,
     RuntimeWorkspaceService,
 )
 from core.application.serialization import build_runtime_snapshot
 from integrations.smartio.runtime_bridge import SmartIORuntimeBridge
+from runtime_session import RuntimeSession
 from ui.controllers.runtime_workspace_controller import SmartIORuntimeCoordinator
 
 
@@ -94,7 +96,18 @@ def test_runtime_workspace_route_lifecycle_and_view_state() -> None:
     assert second_result.created is False
     assert first_result.view_state is not None
     assert len(first_result.view_state.routes) == 1
+    assert isinstance(runtime_workspace.ensure_session(topology), RuntimeSession)
     assert runtime_workspace.get_active_route_for_pair(entry_signal_id, exit_signal_id) is not None
+
+
+def test_runtime_workspace_uses_runtime_session_port_implementation() -> None:
+    application_service, runtime_workspace = build_services()
+    topology = load_topology(application_service)
+
+    session = runtime_workspace.ensure_session(topology)
+
+    assert isinstance(session, RuntimeSession)
+    assert isinstance(session, RuntimeSessionPort)
 
 
 def test_runtime_workspace_start_manual_override_and_snapshot_roundtrip() -> None:

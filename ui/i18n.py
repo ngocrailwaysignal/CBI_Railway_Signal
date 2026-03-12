@@ -66,7 +66,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "toolbar.open_smartio_local": {
         "en": "Open SmartIO Local",
-        "vi": "M? SmartIO Local",
+        "vi": "Mở SmartIO Local",
     },
     "button.find_route": {
         "en": "Find Route",
@@ -94,7 +94,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "button.open_smartio_local": {
         "en": "Open SmartIO Local",
-        "vi": "M? SmartIO Local",
+        "vi": "Mở SmartIO Local",
     },
     "button.apply": {
         "en": "Apply",
@@ -633,8 +633,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "vi": "Runtime yêu cầu SmartIO đã kết nối (hiện tại: {state})",
     },
     "runtime.smartio.status": {
-        "en": "SmartIO ({url}): {state}",
-        "vi": "SmartIO ({url}): {state}",
+        "en": "SmartIO: {state}",
+        "vi": "SmartIO: {state}",
     },
     "smartio.state.connected": {
         "en": "connected",

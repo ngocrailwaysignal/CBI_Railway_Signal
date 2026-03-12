@@ -1,4 +1,4 @@
-"""Use case for manual occupancy override as part of Simulation runtime."""
+"""Use case for manual occupancy override inside the runtime session."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ class SimulationManualOverrideResult:
 
 
 class SimulationManualOverrideUseCase:
-    """Apply one manual occupancy override inside simulation runtime."""
+    """Apply one manual occupancy override inside the runtime session."""
 
     def execute_set_section_occupied(
         self,
@@ -29,7 +29,7 @@ class SimulationManualOverrideUseCase:
         occupied: bool,
     ) -> SimulationManualOverrideResult:
         if simulation is None:
-            raise RuntimeError("Simulation is required for manual runtime override")
+            raise RuntimeError("Runtime session is required for manual runtime override")
         section = simulation.topology.get_element(section_id)
         if not isinstance(section, TrackSection):
             raise KeyError(f"Unknown section {section_id}")

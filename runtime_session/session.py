@@ -1,4 +1,4 @@
-"""Time-stepped simulation driver."""
+"""Stateful runtime session for one active topology workspace."""
 
 from __future__ import annotations
 
@@ -14,14 +14,15 @@ from core.runtime.occupancy_reconciler import OccupancyReconciler
 from core.runtime.route_dispatcher import RouteDispatcher
 from core.runtime.route_engine import RouteEngine
 from core.runtime.safety_monitor import SafetyMonitor
-from simulation.command_gateway import RuntimeCommandHandler
+from runtime_session.command_gateway import RuntimeCommandHandler
+from simulation.engine import SimulationEngine
 from simulation.snapshot_hydrator import RuntimeSnapshotHydrator
 from simulation.train_lifecycle import RuntimeTrainLifecycle
 
 
 @dataclass
-class Simulation:
-    """Coordinates route setup, train movement, logging, and safety supervision."""
+class RuntimeSession:
+    """Own the mutable runtime state and delegate simulation behavior."""
 
     topology: RailwayTopology
     route_engine: RouteEngine = field(init=False)
@@ -32,6 +33,7 @@ class Simulation:
     command_handler: RuntimeCommandHandler = field(init=False)
     train_lifecycle: RuntimeTrainLifecycle = field(init=False)
     snapshot_hydrator: RuntimeSnapshotHydrator = field(init=False)
+    simulation_engine: SimulationEngine = field(init=False)
     trains: dict[str, Train] = field(default_factory=dict)
     tick: int = 0
 
@@ -44,6 +46,7 @@ class Simulation:
         self.command_handler = RuntimeCommandHandler(self)
         self.train_lifecycle = RuntimeTrainLifecycle(self)
         self.snapshot_hydrator = RuntimeSnapshotHydrator(self)
+        self.simulation_engine = SimulationEngine(self)
 
     def apply_runtime_command(self, op: str, payload: dict[str, Any] | None = None) -> Any:
         """Single runtime command gateway for external/manual integrations."""
@@ -144,48 +147,13 @@ class Simulation:
         )
 
     def step(self) -> None:
-        """Advance the simulation by one tick."""
-        self.tick += 1
-        self.route_dispatcher.update_time_locking()
-        for train in list(self.trains.values()):
-            if not train.route_id:
-                continue
-            route = self.locking_engine.active_routes.get(train.route_id)
-            if route is None:
-                train.route_id = None
-                continue
-            train.step(route, self.topology, self.locking_engine)
-        # Re-evaluate timed releases after train movement in the same tick.
-        self.route_dispatcher.update_time_locking()
-
-        issues = self.safety_monitor.detect_unsafe_conditions(self.topology, self.trains.values())
-        if issues:
-            self.locking_engine.force_all_signals_stop()
-            issue_text = "; ".join(issues)
-            raise RuntimeError(f"Fail-safe STOP triggered: {issue_text}")
-
-        self.log_state()
+        """Advance simulation behavior for the current runtime state."""
+        self.simulation_engine.step()
 
     def run(self, steps: int) -> None:
-        """Run N ticks."""
-        for _ in range(max(0, steps)):
-            self.step()
+        """Run N simulation ticks."""
+        self.simulation_engine.run(steps)
 
     def log_state(self) -> None:
         """Emit concise state logs."""
-        signal_state = ", ".join(
-            f"{s.id}:{s.aspect.value}(route={s.route_id})" for s in self.topology.signals.values()
-        )
-        section_state: list[str] = []
-        for node_id in self.topology.graph.nodes:
-            element = self.topology.graph.nodes[node_id]["element"]
-            if hasattr(element, "occupied"):
-                section_state.append(
-                    f"{element.id}(occ={element.occupied},lock={element.locked_by})"
-                )
-        train_state = ", ".join(f"{t.id}@{t.current_section}" for t in self.trains.values())
-        print(
-            f"[tick={self.tick}] signals[{signal_state}] tracks[{'; '.join(section_state)}] "
-            f"trains[{train_state}]"
-        )
-
+        self.simulation_engine.log_state()

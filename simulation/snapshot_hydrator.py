@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from core.domain.model.elements import Point, PointPosition, TrackSection
+
+if TYPE_CHECKING:
+    from runtime_session.session import RuntimeSession
 
 
 @dataclass(slots=True)
 class RuntimeSnapshotHydrator:
-    """Replays runtime snapshot artifacts through simulation commands."""
+    """Replay runtime snapshot artifacts through runtime-session commands."""
 
-    simulation: "Simulation"
+    runtime_session: "RuntimeSession"
 
     def hydrate_snapshot(
         self,
@@ -24,12 +27,12 @@ class RuntimeSnapshotHydrator:
         if not isinstance(snapshot, dict):
             raise ValueError("runtime snapshot payload must be an object")
 
-        self.simulation.locking_engine.reset_runtime_state(keep_occupancy=False)
-        self.simulation.trains.clear()
+        self.runtime_session.locking_engine.reset_runtime_state(keep_occupancy=False)
+        self.runtime_session.trains.clear()
         try:
-            self.simulation.tick = max(0, int(snapshot.get("tick", 0)))
+            self.runtime_session.tick = max(0, int(snapshot.get("tick", 0)))
         except (TypeError, ValueError):
-            self.simulation.tick = 0
+            self.runtime_session.tick = 0
 
         routes = snapshot.get("routes", [])
         if not isinstance(routes, list):
@@ -48,19 +51,15 @@ class RuntimeSnapshotHydrator:
 
             overlap_path = self._normalize_node_list(route_item.get("overlap_path"))
             expected_path = self._normalize_node_list(route_item.get("path"))
-            route = self.simulation.set_route(
+            route = self.runtime_session.set_route(
                 entry_signal_id=entry_signal_id,
                 exit_signal_id=exit_signal_id,
                 overlap_length=len(overlap_path),
             )
             if expected_path and list(route.path) != expected_path:
-                raise RuntimeError(
-                    f"Route path mismatch for {entry_signal_id}->{exit_signal_id}"
-                )
+                raise RuntimeError(f"Route path mismatch for {entry_signal_id}->{exit_signal_id}")
             if overlap_path and list(route.overlap_path) != overlap_path:
-                raise RuntimeError(
-                    f"Route overlap mismatch for {entry_signal_id}->{exit_signal_id}"
-                )
+                raise RuntimeError(f"Route overlap mismatch for {entry_signal_id}->{exit_signal_id}")
             if strict_route_ids and incoming_route_id and route.id != incoming_route_id:
                 raise RuntimeError(
                     f"Route ID mismatch for {entry_signal_id}->{exit_signal_id}: "
@@ -90,12 +89,12 @@ class RuntimeSnapshotHydrator:
             if "position" in occupancy_item:
                 raw_position = str(occupancy_item.get("position", "")).strip().upper()
                 if raw_position:
-                    point = self.simulation.topology.get_element(node_id)
+                    point = self.runtime_session.topology.get_element(node_id)
                     if not isinstance(point, Point):
                         raise RuntimeError(f"Unknown point {node_id}")
                     incoming_position = PointPosition(raw_position)
                     if point.position != incoming_position:
-                        self.simulation.set_point_position(node_id, incoming_position)
+                        self.runtime_session.set_point_position(node_id, incoming_position)
             if "occupied" in occupancy_item:
                 desired_occupancy[node_id] = bool(occupancy_item.get("occupied", False))
 
@@ -119,28 +118,28 @@ class RuntimeSnapshotHydrator:
             )
             if incoming_route_id and actual_route_id is None:
                 actual_route_id = incoming_route_id
-            self.simulation.upsert_train(
+            self.runtime_session.upsert_train(
                 train_id=train_id,
                 current_section=current_section,
                 route_id=actual_route_id,
                 speed=float(train_item.get("speed", 0.0)),
             )
 
-        for train_id in list(self.simulation.trains.keys()):
+        for train_id in list(self.runtime_session.trains.keys()):
             if train_id in expected_train_ids:
                 continue
-            self.simulation.remove_train(train_id)
+            self.runtime_session.remove_train(train_id)
 
         for section_id, occupied in sorted(desired_occupancy.items(), key=lambda item: item[1]):
             if occupied:
                 route_hint = section_route_hints.get(section_id)
-                self.simulation.locking_engine.set_section_occupied(
+                self.runtime_session.locking_engine.set_section_occupied(
                     section_id,
                     occupied,
                     route_id_hint=route_hint,
                 )
                 continue
-            element = self.simulation.topology.get_element(section_id)
+            element = self.runtime_session.topology.get_element(section_id)
             if isinstance(element, TrackSection):
                 element.occupied = False
 
@@ -161,7 +160,7 @@ class RuntimeSnapshotHydrator:
                 continue
             incoming_route_id = str(route_item.get("id", "")).strip()
             actual_route_id = route_id_map.get(incoming_route_id, incoming_route_id)
-            route = self.simulation.locking_engine.active_routes.get(actual_route_id)
+            route = self.runtime_session.locking_engine.active_routes.get(actual_route_id)
             if route is None:
                 raise RuntimeError(f"Missing route after hydrate: {incoming_route_id or actual_route_id}")
             if list(route.path) != self._normalize_node_list(route_item.get("path")):
@@ -175,7 +174,7 @@ class RuntimeSnapshotHydrator:
             node_id = str(occupancy_item.get("id", "")).strip()
             if not node_id:
                 continue
-            element = self.simulation.topology.get_element(node_id)
+            element = self.runtime_session.topology.get_element(node_id)
             if "occupied" in occupancy_item:
                 if not isinstance(element, TrackSection):
                     raise RuntimeError(f"Unknown section in occupancy check: {node_id}")
@@ -194,7 +193,7 @@ class RuntimeSnapshotHydrator:
             train_id = str(train_item.get("id", "")).strip()
             if not train_id:
                 continue
-            train = self.simulation.trains.get(train_id)
+            train = self.runtime_session.trains.get(train_id)
             if train is None:
                 raise RuntimeError(f"Missing train after hydrate: {train_id}")
             expected_section = str(train_item.get("current_section", "")).strip()
@@ -213,7 +212,7 @@ class RuntimeSnapshotHydrator:
             if not isinstance(signal_item, dict):
                 continue
             signal_id = str(signal_item.get("id", "")).strip()
-            signal = self.simulation.topology.signals.get(signal_id)
+            signal = self.runtime_session.topology.signals.get(signal_id)
             if signal is None:
                 raise RuntimeError(f"Unknown signal in snapshot validation: {signal_id}")
             incoming_aspect = str(signal_item.get("aspect", "")).strip().upper()
@@ -242,10 +241,3 @@ class RuntimeSnapshotHydrator:
         if not token or token.upper() == "NONE":
             return None
         return token
-
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from simulation.session import Simulation
-

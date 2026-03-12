@@ -6,9 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.domain.model.route import Route
-    from core.domain.model.train import Train
-    from simulation.session import Simulation
+    from runtime_session.session import RuntimeSession
 
 
 @dataclass(slots=True, frozen=True)
@@ -60,11 +58,11 @@ class RuntimeViewState:
 _EMPTY_VIEW_STATE = RuntimeViewState()
 
 
-def build_runtime_view_state(simulation: "Simulation | None") -> RuntimeViewState:
-    if simulation is None:
+def build_runtime_view_state(runtime_session: "RuntimeSession | None") -> RuntimeViewState:
+    if runtime_session is None:
         return _EMPTY_VIEW_STATE
 
-    topology = simulation.topology
+    topology = runtime_session.topology
     occupancy: list[RuntimeOccupancyState] = []
     for node_id in topology.graph.nodes:
         element = topology.get_element(node_id)
@@ -90,7 +88,7 @@ def build_runtime_view_state(simulation: "Simulation | None") -> RuntimeViewStat
             overlap_path=tuple(route.overlap_path),
             lifecycle_state=route.lifecycle_state.value,
         )
-        for route in simulation.locking_engine.active_routes.values()
+        for route in runtime_session.locking_engine.active_routes.values()
     )
     trains = tuple(
         RuntimeTrainState(
@@ -99,7 +97,7 @@ def build_runtime_view_state(simulation: "Simulation | None") -> RuntimeViewStat
             speed=float(train.speed),
             route_id=train.route_id,
         )
-        for train in simulation.trains.values()
+        for train in runtime_session.trains.values()
     )
     signal_state = tuple(
         RuntimeSignalState(
@@ -110,7 +108,7 @@ def build_runtime_view_state(simulation: "Simulation | None") -> RuntimeViewStat
         for signal in topology.signals.values()
     )
     return RuntimeViewState(
-        tick=simulation.tick,
+        tick=runtime_session.tick,
         routes=routes,
         trains=trains,
         occupancy=tuple(occupancy),

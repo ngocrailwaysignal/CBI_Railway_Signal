@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
-from generic_application import GenericApplicationService, RuntimeWorkspaceService
-from simulation import RuntimeViewState
+from products.generic_application import GenericApplicationService, RuntimeWorkspaceService
+from runtime_session import RuntimeViewState
 
 
 class MainWindowController:

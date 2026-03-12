@@ -11,7 +11,11 @@ from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 from core.application import AppMode
 from core.domain.model.topology import RailwayTopology
-from generic_application import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
+from products.generic_application import (
+    GenericApplicationProfile,
+    GenericApplicationService,
+    RuntimeWorkspaceService,
+)
 from integrations.smartio import SmartIOProtocolError, SmartIORuntimeBridge, SmartIOWebSocketClient
 
 
@@ -119,9 +123,7 @@ class SmartIORuntimeCoordinator(QObject):
         return host in {"127.0.0.1", "localhost"}
 
     def _should_keep_connection_for_mode(self, mode: AppMode) -> bool:
-        if mode is AppMode.RUNTIME:
-            return True
-        return mode is AppMode.SIMULATION and self._is_local_endpoint()
+        return bool(str(self._ws_url or "").strip())
 
     def _can_publish_snapshot_for_mode(self, mode: AppMode) -> bool:
         return self._should_keep_connection_for_mode(mode)
@@ -158,9 +160,7 @@ class SmartIORuntimeCoordinator(QObject):
             parsed = urlparse(normalized_url)
             next_is_local = str(parsed.hostname or "").strip().lower() in {"127.0.0.1", "localhost"}
         current_mode = self._operating_mode_provider()
-        should_reconnect = current_mode is AppMode.RUNTIME or (
-            current_mode is AppMode.SIMULATION and next_is_local
-        )
+        should_reconnect = bool(normalized_url)
         self.disconnect()
         if self._smartio_client is not None:
             self._smartio_client.deleteLater()

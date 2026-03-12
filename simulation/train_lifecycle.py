@@ -1,18 +1,22 @@
-"""Internal train lifecycle operations for runtime simulation."""
+"""Internal train lifecycle operations for pure simulation behavior."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from core.domain.model.elements import TrackSection
 from core.domain.model.train import Train
 
+if TYPE_CHECKING:
+    from runtime_session.session import RuntimeSession
+
 
 @dataclass(slots=True)
 class RuntimeTrainLifecycle:
-    """Handles train upsert/remove operations via locking-aware mutations."""
+    """Handle train upsert/remove operations against runtime state."""
 
-    simulation: "Simulation"
+    runtime_session: "RuntimeSession"
 
     def upsert_train(
         self,
@@ -28,20 +32,20 @@ class RuntimeTrainLifecycle:
         normalized_section = str(current_section).strip()
         if not normalized_section:
             raise ValueError("current_section is required")
-        section = self.simulation.topology.get_element(normalized_section)
+        section = self.runtime_session.topology.get_element(normalized_section)
         if not isinstance(section, TrackSection):
             raise KeyError(f"Unknown section {normalized_section}")
         normalized_speed = max(0.0, float(speed))
         normalized_route_id = str(route_id or "").strip() or None
 
-        train = self.simulation.trains.get(normalized_train_id)
+        train = self.runtime_session.trains.get(normalized_train_id)
         normalized_route_id = self._resolve_route_id(
             train=train,
             requested_route_id=normalized_route_id,
             current_section=normalized_section,
         )
         if normalized_route_id:
-            route = self.simulation.locking_engine.active_routes.get(normalized_route_id)
+            route = self.runtime_session.locking_engine.active_routes.get(normalized_route_id)
             if route is None:
                 raise RuntimeError(f"Route {normalized_route_id} is not active")
             if train is None:
@@ -50,21 +54,18 @@ class RuntimeTrainLifecycle:
                     current_section=normalized_section,
                     speed=normalized_speed,
                 )
-                self.simulation.add_train(train, route)
+                self.runtime_session.add_train(train, route)
                 return train
 
-            if (
-                train.route_id == normalized_route_id
-                and train.current_section == normalized_section
-            ):
+            if train.route_id == normalized_route_id and train.current_section == normalized_section:
                 train.speed = normalized_speed
                 return train
 
             if train.route_id == normalized_route_id:
                 train.relocate_on_route(
                     route,
-                    self.simulation.topology,
-                    self.simulation.locking_engine,
+                    self.runtime_session.topology,
+                    self.runtime_session.locking_engine,
                     new_section=normalized_section,
                     speed=normalized_speed,
                 )
@@ -74,7 +75,11 @@ class RuntimeTrainLifecycle:
             previous_route_id = str(getattr(train, "route_id", "")).strip() or None
             train.current_section = normalized_section
             train.speed = normalized_speed
-            train.assign_route(route, self.simulation.topology, self.simulation.locking_engine)
+            train.assign_route(
+                route,
+                self.runtime_session.topology,
+                self.runtime_session.locking_engine,
+            )
             self._release_previous_section_after_reassignment(
                 previous_section=previous_section,
                 previous_route_id=previous_route_id,
@@ -90,7 +95,7 @@ class RuntimeTrainLifecycle:
                 speed=normalized_speed,
                 route_id=None,
             )
-            self.simulation.trains[normalized_train_id] = train
+            self.runtime_session.trains[normalized_train_id] = train
         else:
             if train.current_section != normalized_section or train.route_id:
                 self.vacate_train_current_section(train)
@@ -98,13 +103,13 @@ class RuntimeTrainLifecycle:
             train.speed = normalized_speed
             train.route_id = None
 
-        self.simulation.locking_engine.set_section_occupied(normalized_section, True)
+        self.runtime_session.locking_engine.set_section_occupied(normalized_section, True)
         return train
 
     def remove_train(self, train_id: str) -> bool:
         """Remove one train and vacate its section occupancy."""
         normalized_train_id = str(train_id).strip()
-        train = self.simulation.trains.pop(normalized_train_id, None)
+        train = self.runtime_session.trains.pop(normalized_train_id, None)
         if train is None:
             return False
         self.vacate_train_current_section(train)
@@ -117,7 +122,7 @@ class RuntimeTrainLifecycle:
         if not section_id:
             return
         try:
-            self.simulation.locking_engine.set_section_occupied(
+            self.runtime_session.locking_engine.set_section_occupied(
                 section_id,
                 False,
                 route_id_hint=str(getattr(train, "route_id", "")).strip() or None,
@@ -132,7 +137,7 @@ class RuntimeTrainLifecycle:
         requested_route_id: str | None,
         current_section: str,
     ) -> str | None:
-        active_routes = self.simulation.locking_engine.active_routes
+        active_routes = self.runtime_session.locking_engine.active_routes
         requested_token = str(requested_route_id or "").strip() or None
         if requested_token and requested_token in active_routes:
             return requested_token
@@ -176,25 +181,21 @@ class RuntimeTrainLifecycle:
             return
 
         release_route_id = previous_route_id
-        new_route = self.simulation.locking_engine.active_routes.get(str(new_route_id).strip())
+        new_route = self.runtime_session.locking_engine.active_routes.get(str(new_route_id).strip())
         if new_route is not None:
             if previous_token in new_route.full_path:
                 release_route_id = new_route.id
-            elif new_route.approach_locking_section and previous_token == new_route.approach_locking_section:
+            elif (
+                new_route.approach_locking_section
+                and previous_token == new_route.approach_locking_section
+            ):
                 release_route_id = new_route.id
 
         try:
-            self.simulation.locking_engine.set_section_occupied(
+            self.runtime_session.locking_engine.set_section_occupied(
                 previous_token,
                 False,
                 route_id_hint=release_route_id,
             )
         except KeyError:
             return
-
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from simulation.session import Simulation
-

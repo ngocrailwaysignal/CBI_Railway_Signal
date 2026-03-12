@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from generic_product import ProductRules
+    from products.generic_product import ProductRules
 
 
 @dataclass(slots=True, frozen=True)
@@ -34,7 +34,7 @@ class GenericApplicationProfile:
 
     def to_product_rules(self) -> ProductRules:
         """Map application profile options into product-kernel rules."""
-        from generic_product import ProductRules
+        from products.generic_product import ProductRules
 
         return ProductRules(
             time_lock_seconds=self.time_lock_seconds,

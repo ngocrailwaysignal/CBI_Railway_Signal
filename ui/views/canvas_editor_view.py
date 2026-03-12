@@ -338,20 +338,35 @@ class EdgeItem(QGraphicsLineItem):
         dx = end.x() - start.x()
         dy = end.y() - start.y()
         distance = hypot(dx, dy)
-        if distance > 18.0:
-            inset = min(10.0, distance * 0.35)
+        if distance > 12.0:
+            inset = min(4.0, distance * 0.2)
             end = QPointF(end.x() - (dx / distance) * inset, end.y() - (dy / distance) * inset)
         self.setLine(start.x(), start.y(), end.x(), end.y())
 
     @staticmethod
     def _edge_anchor(node: NodeItem, toward: QPointF) -> QPointF:
         rect = node.sceneBoundingRect()
+        if node.element_type == "Point":
+            panel_side = max(26.0, min(rect.width(), rect.height()) - 8.0)
+            rect = QRectF(
+                rect.center().x() - panel_side / 2.0,
+                rect.center().y() - panel_side / 2.0,
+                panel_side,
+                panel_side,
+            )
         center = rect.center()
         dx = toward.x() - center.x()
         dy = toward.y() - center.y()
+        inset = 2.5
         if abs(dx) >= abs(dy):
-            return QPointF(rect.right() if dx >= 0 else rect.left(), center.y())
-        return QPointF(center.x(), rect.bottom() if dy >= 0 else rect.top())
+            return QPointF(
+                (rect.right() - inset) if dx >= 0 else (rect.left() + inset),
+                center.y(),
+            )
+        return QPointF(
+            center.x(),
+            (rect.bottom() - inset) if dy >= 0 else (rect.top() + inset),
+        )
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         line = self.line()
@@ -513,6 +528,7 @@ class CanvasEditor(QGraphicsView):
         self._pan_last_pos: Any = None
         self._pan_has_moved = False
         self._suppress_context_menu_once = False
+        self._edit_dialog_enabled = True
 
     def _t(self, key: str, **kwargs: object) -> str:
         return self._translator.t(key, **kwargs)
@@ -520,6 +536,9 @@ class CanvasEditor(QGraphicsView):
     def set_translator(self, translator: UITranslator) -> None:
         self._translator = translator
         self.refresh_visual_state()
+
+    def set_edit_dialog_enabled(self, enabled: bool) -> None:
+        self._edit_dialog_enabled = bool(enabled)
 
     def state_label(self, occupied: bool) -> str:
         return self._t("state.occupied" if occupied else "state.free")
@@ -577,13 +596,16 @@ class CanvasEditor(QGraphicsView):
         )
 
     def mousePressEvent(self, event: Any) -> None:
-        if event.button() == Qt.MouseButton.RightButton:
-            self._is_panning = True
-            self._pan_last_pos = event.position().toPoint()
-            self._pan_has_moved = False
-            self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
-            event.accept()
-            return
+        if event.button() == Qt.MouseButton.LeftButton and not self._connect_mode:
+            scene_pos = self.mapToScene(event.position().toPoint())
+            item = self.scene_ref.itemAt(scene_pos, self.transform())
+            if self._extract_node_item(item) is None and not isinstance(item, EdgeItem):
+                self._is_panning = True
+                self._pan_last_pos = event.position().toPoint()
+                self._pan_has_moved = False
+                self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
+                event.accept()
+                return
 
         if (
             self._connect_mode
@@ -684,7 +706,7 @@ class CanvasEditor(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: Any) -> None:
-        if event.button() == Qt.MouseButton.RightButton and self._is_panning:
+        if event.button() == Qt.MouseButton.LeftButton and self._is_panning:
             self._is_panning = False
             self._pan_last_pos = None
             self._suppress_context_menu_once = self._pan_has_moved
@@ -764,6 +786,8 @@ class CanvasEditor(QGraphicsView):
 
         menu = QMenu(self)
         if node is not None:
+            event.accept()
+            return
             edit_action = menu.addAction(self._t("canvas.menu.edit_properties"))
             rename_action = menu.addAction(self._t("canvas.menu.rename"))
             delete_action = menu.addAction(self._t("canvas.menu.delete"))
@@ -828,6 +852,8 @@ class CanvasEditor(QGraphicsView):
             return
 
         if edge is not None:
+            event.accept()
+            return
             delete_edge_action = menu.addAction(self._t("canvas.menu.delete_connection"))
             chosen = menu.exec(event.globalPos())
             if chosen == delete_edge_action:
@@ -1312,6 +1338,8 @@ class CanvasEditor(QGraphicsView):
 
     def edit_node_properties_dialog(self, node: NodeItem) -> None:
         """Open a double-click edit dialog for a node."""
+        if not self._edit_dialog_enabled:
+            return
         dialog = QDialog(self)
         dialog.setWindowTitle(
             self._t("canvas.dialog.edit_element.title", element_id=node.element_id)

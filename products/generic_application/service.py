@@ -15,7 +15,7 @@ from core.infrastructure.persistence import (
     InterlockingSpecRepository,
     RuntimeSnapshotRepository,
 )
-from generic_product import GenericProductKernel
+from products.generic_product import GenericProductKernel
 
 from .profile import GenericApplicationProfile
 

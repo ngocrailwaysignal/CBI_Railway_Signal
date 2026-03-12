@@ -21,8 +21,8 @@ from core.application.use_cases import (
 )
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
-from generic_product import GenericProductKernel
-from simulation import RuntimeViewState, Simulation, build_runtime_view_state
+from products.generic_product import GenericProductKernel
+from runtime_session import RuntimeSession, RuntimeViewState, build_runtime_view_state
 
 from .profile import GenericApplicationProfile
 from .runtime_realtime import (
@@ -50,7 +50,7 @@ class RuntimeWorkspaceService:
         self._emergency_release_use_case = EmergencyReleaseRoutesUseCase()
         self._manual_override_use_case = SimulationManualOverrideUseCase()
         self._start_simulation_use_case = StartRouteSimulationUseCase(self.kernel)
-        self._session: Simulation | None = None
+        self._session: RuntimeSession | None = None
         self._journal = RuntimeJournal(self.profile.runtime_journal_dir)
         self._recovery = RuntimeRecoveryService(self._journal)
         self._stream_seq = 0
@@ -86,9 +86,9 @@ class RuntimeWorkspaceService:
         self._last_command_status = None
         self._degraded_reason = None
 
-    def ensure_session(self, topology: RailwayTopology) -> Simulation:
+    def ensure_session(self, topology: RailwayTopology) -> RuntimeSession:
         if self._session is None or self._session.topology is not topology:
-            self._session = Simulation(topology)
+            self._session = RuntimeSession(topology)
             self.configure_timing(
                 approach_time_lock_seconds=float(self.profile.time_lock_seconds),
                 overlap_release_seconds=float(self.profile.overlap_release_seconds),
@@ -423,7 +423,7 @@ class RuntimeWorkspaceService:
 
     def _execute_command(
         self,
-        session: Simulation,
+        session: RuntimeSession,
         topology: RailwayTopology,
         command: RuntimeCommand,
     ) -> dict[str, Any]:
@@ -517,7 +517,7 @@ class RuntimeWorkspaceService:
 
         raise RuntimeError(f"INVALID_COMMAND: Unsupported runtime command {kind}")
 
-    def _apply_state_update_command(self, session: Simulation, payload: dict[str, Any]) -> dict[str, Any]:
+    def _apply_state_update_command(self, session: RuntimeSession, payload: dict[str, Any]) -> dict[str, Any]:
         changed_sections: list[str] = []
         for point_item in payload.get("points", []):
             if not isinstance(point_item, dict):

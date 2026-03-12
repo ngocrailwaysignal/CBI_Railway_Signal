@@ -5,7 +5,7 @@ from __future__ import annotations
 from core.application.runtime_session_port import RuntimeSessionPort
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
-from generic_product import GenericProductKernel
+from products.generic_product import GenericProductKernel
 
 from core.application.dto import SetRouteResult
 
