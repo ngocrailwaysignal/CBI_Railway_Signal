@@ -2,64 +2,69 @@
 
 Desktop application for CBI interlocking simulation, station layout editing, and runtime orchestration.
 
-## What This Project Does
+## Overview
 
-`CBI_Railway_Signal` is a desktop system that combines three concerns in one codebase:
+`CBI_Railway_Signal` combines layout design, interlocking compilation, runtime orchestration, and SmartIO integration into a single PyQt6 desktop application.
 
-- design and validation of a station layout;
-- compilation of that layout into interlocking/runtime artifacts;
-- simulation and operation of the runtime state through a UI and SmartIO integration.
+Core capabilities:
+- Design and validate station layouts (signals, sections, points, topology graph).
+- Compile interlocking rules and route specifications from the layout.
+- Orchestrate a stateful runtime session with journaling and recovery.
+- Simulate train movement and enforce safety constraints.
+- Integrate with SmartIO over WebSocket for external control and telemetry.
 
-At a high level, the project lets you:
+The desktop entrypoint is [main.py](main.py).
 
-- model a railway topology with sections, points, and signals;
-- compute valid routes and interlocking constraints;
-- start and control a simulation session;
-- persist runtime commands, events, and snapshots;
-- expose runtime state to external integrations.
+## Architecture Map
 
-The main desktop entrypoint is [main.py](/Users/Storm/Desktop/CBI_Railway_Signal/main.py).
+The repository is organized into clear layers with explicit responsibilities:
+- `core/` - Pure domain models and compiler logic.
+- `kernel/` - Runtime engines for routing, locking, occupancy, and safety.
+- `runtime/` - Stateful session, application use cases, read models, and workspace orchestration.
+- `simulation/` - Simulation helpers and snapshot hydration.
+- `infrastructure/` - Persistence adapters and clocks.
+- `integration/` - SmartIO protocol handling and runtime bridge.
+- `ui/` - PyQt6 controllers, presenters, and views.
 
-## Architecture Summary
-
-The codebase is split into a small number of architectural areas with fairly clear boundaries:
-
-- `core/`
-  Pure domain logic and compiler logic. This is the most reusable part of the system and should stay free from UI-specific concerns.
-- `kernel/`
-  Runtime engines for locking, routing, safety, and occupancy plus product rules.
-- `runtime/`
-  Stateful runtime session, application use cases, workspace orchestration, and the runtime-facing read model.
-- `simulation/`
-  Simulation helpers such as train lifecycle and snapshot hydration.
-- `infrastructure/`
-  Persistence adapters and clocks.
-- `integration/`
-  External integration code, currently centered around SmartIO communication.
-- `ui/`
-  PyQt6 controllers, presenters, and views.
-
-The main flow is:
+High-level flow (command path):
 
 ```text
 User / SmartIO
-      |
-      v
-UI Controllers / Runtime Coordinator
-      |
-      v
+    |
+    v
+UI Controllers / SmartIO Coordinator
+    |
+    v
 RuntimeWorkspaceService
-      |
-      v
+    |
+    v
 RuntimeSession
-      |
-      v
-SimulationEngine
-      |
-      v
+    |
+    v
 RouteDispatcher / LockingEngine / SafetyMonitor
-      |
-      v
+    |
+    v
+RailwayTopology + Routes + Trains
+```
+
+Simulation tick path (only when `step_runtime` is invoked):
+
+```text
+UI action (step_runtime)
+    |
+    v
+RuntimeWorkspaceService
+    |
+    v
+RuntimeSession
+    |
+    v
+SimulationEngine
+    |
+    v
+RouteDispatcher / LockingEngine / SafetyMonitor
+    |
+    v
 RailwayTopology + Routes + Trains
 ```
 
@@ -79,9 +84,13 @@ kernel/
 runtime/
   application/          Application use cases and serialization helpers
   specific_application/ Station-specific editor and layout logic
+  command_bus.py        Runtime command gateway
+  read_model.py         Runtime-facing view state
   runtime_controller.py Stateful runtime session
   runtime_cycle.py      Simulation tick engine
-  command_bus.py        Runtime command gateway
+  workspace_service.py  Runtime orchestration facade
+  profile.py            Runtime profile defaults
+  application_service.py
 
 simulation/             Train lifecycle and snapshot hydration helpers
 infrastructure/         Persistence adapters and clocks
@@ -89,74 +98,78 @@ integration/            SmartIO protocol and bridge code
 ui/                     PyQt controllers, presenters, and views
 tests/                  Automated tests
 data/                   Sample layouts and runtime data
-tool/                   Tooling and helper assets
 ```
 
-## Important Runtime Concepts
+## Key Runtime Concepts
 
 ### RailwayTopology
 
-`RailwayTopology` is the structural source of truth for the station model. It represents nodes, edges, signals, sections, and points, and is reused across editing, compilation, simulation, runtime, and serialization.
+`RailwayTopology` (see `core/domain/model/topology.py`) is the structural source of truth for the station model. It represents nodes, edges, signals, sections, and points. The same topology object is reused across editing, compilation, simulation, runtime, and serialization.
 
 ### RuntimeSession
 
-`runtime/runtime_controller.py` defines the stateful runtime session. It is responsible for:
-
-- holding the active runtime state;
-- applying route, occupancy, point, and train commands;
-- hydrating snapshots;
-- exposing the runtime-facing read model.
-
-This is the execution layer used by the application orchestration code and the SmartIO bridge.
+`RuntimeSession` (see `runtime/runtime_controller.py`) owns mutable runtime state and delegates behavior to engines. It exposes methods such as `set_route`, `cancel_route`, `set_section_occupied`, `set_point_position`, `upsert_train`, `remove_train`, `hydrate_snapshot`, and `step`.
 
 ### SimulationEngine
 
-`runtime/runtime_cycle.py` defines the simulation engine. It is responsible for:
-
-- advancing train movement with `step()`;
-- updating time-based progression for the current runtime session;
-- running safety checks during time-stepped simulation behavior.
-
-It does not own journaling, recovery, or workspace orchestration.
+`SimulationEngine` (see `runtime/runtime_cycle.py`) is responsible for time-stepped behavior. Each tick updates time locking, advances trains, runs safety checks, and can trigger fail-safe STOP.
 
 ### RuntimeWorkspaceService
 
-`runtime/workspace_service.py` is the runtime facade used by the desktop app. It is the key boundary between UI/integration code and the simulation engine.
+`RuntimeWorkspaceService` (see `runtime/workspace_service.py`) is the orchestration boundary used by both UI and SmartIO. It creates or restores a session, journals commands/events/snapshots, enforces idempotency, and provides runtime view state and health.
 
-It is responsible for:
+### RuntimeJournal and Recovery
 
-- creating or restoring the runtime session;
-- accepting commands from UI and integrations;
-- journaling commands and runtime events;
-- creating runtime checkpoints;
-- restoring state after restart;
-- exposing runtime health and view state.
+`RuntimeJournal` and `RuntimeRecoveryService` (see `infrastructure/event_store.py`) store append-only `runtime_commands.jsonl`, `runtime_events.jsonl`, and `runtime_snapshots.jsonl` and restore sessions by applying the latest snapshot then replaying applied events.
 
-If you are trying to understand how runtime actions should enter the system, this service is usually the first file to inspect.
+## Runtime Command Surface
 
-## Package Dependency Intent
+All external interactions should go through `RuntimeWorkspaceService.submit_command(...)` or higher-level helpers on the same service.
 
-The intended dependency direction is:
+| Command kind | Purpose | Source |
+| --- | --- | --- |
+| `set_route` | Compute and lock a route for entry/exit signals. | UI, SmartIO command
+| `cancel_active_routes` | Cancel all active routes. | UI
+| `emergency_release_active_routes` | Force-release all active routes. | UI
+| `start_route_simulation` | Prepare route and train for simulation playback. | UI
+| `set_section_occupied` | Manual occupancy override for a section. | UI
+| `set_point_position` | Move a point through the locking engine. | UI, SmartIO command
+| `upsert_train` | Create or update a train instance. | UI, SmartIO state_update
+| `remove_train` | Remove a train instance. | UI, SmartIO state_update
+| `step_runtime` | Advance simulation by one tick. | UI
+| `apply_state_update` | Apply SmartIO state updates for sections, points, trains. | SmartIO state_update
+| `hydrate_snapshot` | Apply a runtime snapshot payload. | SmartIO runtime_snapshot
 
-- `core/` should remain the most stable and reusable layer;
-- `kernel/` may depend on `core/domain` and `infrastructure/clocks`;
-- `runtime/` may orchestrate `core/`, `kernel/`, `simulation/`, and `infrastructure/`;
-- `simulation/` may depend on `core/` and collaborate with `runtime/`;
-- `ui/` and `integration/` should go through runtime services rather than mutating runtime state directly.
+SmartIO `state_update` envelopes are converted into `apply_state_update` commands by the SmartIO bridge.
 
-In practice, the design goal is that UI and SmartIO do not write runtime internals directly. Changes should go through command-oriented boundaries such as `RuntimeWorkspaceService`.
+## Modes and Capabilities
 
-## Requirements
+Mode permissions are defined in `runtime/application/mode_policy/policy.py`.
 
-- Python 3.11+
-- PyQt6
-- pytest for running tests
+| Mode | Can edit layout | Can manual override | Can set route | Can cancel route | Can start simulation |
+| --- | --- | --- | --- | --- | --- |
+| `DESIGN_LAYOUT` | Yes | Yes | No | No | No |
+| `SIMULATION` | No | Yes | Yes | Yes | Yes |
+| `RUNTIME` | No | No | Yes | Yes | No |
 
-The repository includes project metadata and tool configuration in [pyproject.toml](/Users/Storm/Desktop/CBI_Railway_Signal/pyproject.toml), but it does not currently include a pinned `requirements.txt`.
+## Configuration
+
+Defaults live in `runtime/profile.py` (`GenericApplicationProfile`). Key settings include:
+
+| Field | Default | Purpose |
+| --- | --- | --- |
+| `time_lock_seconds` | `2.0` | Approach time lock duration.
+| `default_overlap_length` | `1` | Default overlap length when computing routes.
+| `overlap_release_seconds` | `2.0` | Overlap release delay.
+| `smart_io_ws_url` | `wss://cbi-smartio.onrender.com/smartio` | SmartIO WebSocket endpoint.
+| `smart_io_snapshot_heartbeat_seconds` | `5.0` | Snapshot publish interval.
+| `smart_io_runtime_stale_seconds` | `15.0` | Transport stale threshold.
+| `runtime_journal_dir` | `data/runtime_journal` | Journal directory.
+| `runtime_snapshot_checkpoint_interval` | `1` | Snapshot checkpoint cadence (per stream_seq).
+
+These defaults can be overridden by constructing `GenericApplicationProfile` differently in application code.
 
 ## Getting Started
-
-Create and activate a virtual environment, then install the dependencies your environment needs. A typical local setup is:
 
 ```bash
 python -m venv .venv
@@ -165,80 +178,274 @@ python -m pip install -U pip
 python -m pip install PyQt6 pytest
 ```
 
-If your environment already manages dependencies another way, adapt the commands accordingly.
-
 ## Running the Application
-
-Start the desktop application with:
 
 ```bash
 python main.py
 ```
 
-`main.py` creates a `QApplication`, builds a `GenericApplicationProfile`, and opens the main PyQt window.
+`main.py` creates a `QApplication`, builds a `GenericApplicationProfile`, and opens the main window.
 
 ## Running Tests
-
-Run the full test suite with:
 
 ```bash
 python -m pytest
 ```
 
-Run the runtime workspace tests only with:
+```bash
+python -m pytest tests/test_runtime_workspace.py
+```
+
+## Data and Persistence
+
+Static layouts and runtime artifacts are stored under `data/`.
+
+Key locations:
+- `data/station_layout/` for sample layouts.
+- `data/_smartio_local/` for local SmartIO payload samples.
+- `data/runtime_journal/` for runtime command/event/snapshot JSONL streams.
+
+The runtime journal files are:
+- `runtime_commands.jsonl`
+- `runtime_events.jsonl`
+- `runtime_snapshots.jsonl`
+
+## SmartIO Integration
+
+SmartIO integration lives under `integration/smartio_adapter/` and is coordinated by `ui/controllers/runtime_workspace_controller.py`.
+
+Key behaviors:
+- WebSocket envelopes are validated before processing.
+- `command` envelopes are converted into runtime commands.
+- `state_update` envelopes are converted into `apply_state_update` commands.
+- Direct writes to interlocking fields such as `locked_by`, `signal.aspect`, or `signal.route_id` are blocked.
+
+## Additional Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md)
+- [ARCHITECTURE.vi.md](ARCHITECTURE.vi.md)
+
+## Tiếng Việt
+
+### Tổng quan
+
+`CBI_Railway_Signal` kết hợp thiết kế layout, biên dịch liên khóa, điều phối runtime, và tích hợp SmartIO trong một ứng dụng desktop PyQt6.
+
+Năng lực chính:
+- Thiết kế và kiểm tra layout ga (signal, section, point, đồ thị topology).
+- Biên dịch các quy tắc liên khóa và đặc tả route từ layout.
+- Điều phối một runtime session stateful với journaling và phục hồi.
+- Mô phỏng chuyển động tàu và thực thi các ràng buộc an toàn.
+- Tích hợp SmartIO qua WebSocket cho điều khiển và telemetry bên ngoài.
+
+Điểm vào của ứng dụng desktop là [main.py](main.py).
+
+### Bản đồ kiến trúc
+
+Repository được tổ chức theo các lớp với trách nhiệm rõ ràng:
+- `core/` - Mô hình miền thuần và logic compiler.
+- `kernel/` - Các engine runtime cho routing, locking, occupancy, và safety.
+- `runtime/` - Runtime session, use case ứng dụng, read model, và orchestration.
+- `simulation/` - Helper mô phỏng và snapshot hydration.
+- `infrastructure/` - Persistence adapters và clocks.
+- `integration/` - Xử lý protocol SmartIO và runtime bridge.
+- `ui/` - Controller, presenter, và view PyQt6.
+
+Luồng tổng quát (đường lệnh):
+
+```text
+User / SmartIO
+    |
+    v
+UI Controllers / SmartIO Coordinator
+    |
+    v
+RuntimeWorkspaceService
+    |
+    v
+RuntimeSession
+    |
+    v
+RouteDispatcher / LockingEngine / SafetyMonitor
+    |
+    v
+RailwayTopology + Routes + Trains
+```
+
+Luồng tick mô phỏng (chỉ khi gọi `step_runtime`):
+
+```text
+UI action (step_runtime)
+    |
+    v
+RuntimeWorkspaceService
+    |
+    v
+RuntimeSession
+    |
+    v
+SimulationEngine
+    |
+    v
+RouteDispatcher / LockingEngine / SafetyMonitor
+    |
+    v
+RailwayTopology + Routes + Trains
+```
+
+### Cấu trúc dự án
+
+```text
+core/
+  compiler/             Route compiler và sinh đặc tả liên khóa
+  domain/               Topology, policy, và lifecycle rules
+
+kernel/
+  locking_engine/       Logic locking và release route
+  occupancy_engine/     Reconcile occupancy
+  route_dispatcher/     Tìm và dispatch route
+  safety_engine/        Kiểm tra an toàn và fail-safe
+
+runtime/
+  application/          Use case ứng dụng và helper serialization
+  specific_application/ Logic editor và layout theo ga
+  command_bus.py        Runtime command gateway
+  read_model.py         Runtime-facing view state
+  runtime_controller.py Runtime session stateful
+  runtime_cycle.py      Engine tick mô phỏng
+  workspace_service.py  Runtime orchestration facade
+  profile.py            Runtime profile mặc định
+  application_service.py
+
+simulation/             Helper train lifecycle và snapshot hydration
+infrastructure/         Persistence adapters và clocks
+integration/            SmartIO protocol và bridge code
+ui/                     Controller, presenter, và view PyQt
+tests/                  Kiểm thử tự động
+data/                   Layout mẫu và runtime data
+```
+
+### Các khái niệm runtime chính
+
+#### RailwayTopology
+
+`RailwayTopology` (xem `core/domain/model/topology.py`) là nguồn cấu trúc chuẩn của mô hình nhà ga. Nó đại diện cho node, edge, signal, section, và point. Cùng một topology được tái sử dụng xuyên suốt editing, compilation, simulation, runtime, và serialization.
+
+#### RuntimeSession
+
+`RuntimeSession` (xem `runtime/runtime_controller.py`) sở hữu trạng thái runtime có thể thay đổi và ủy quyền hành vi cho các engine. Nó cung cấp các phương thức như `set_route`, `cancel_route`, `set_section_occupied`, `set_point_position`, `upsert_train`, `remove_train`, `hydrate_snapshot`, và `step`.
+
+#### SimulationEngine
+
+`SimulationEngine` (xem `runtime/runtime_cycle.py`) chịu trách nhiệm hành vi theo tick. Mỗi tick cập nhật time locking, di chuyển tàu, chạy kiểm tra an toàn, và có thể kích hoạt fail-safe STOP.
+
+#### RuntimeWorkspaceService
+
+`RuntimeWorkspaceService` (xem `runtime/workspace_service.py`) là ranh giới orchestration dùng bởi cả UI và SmartIO. Nó tạo hoặc phục hồi session, journal command/event/snapshot, thực thi idempotency, và cung cấp runtime view state cùng health.
+
+#### RuntimeJournal và phục hồi
+
+`RuntimeJournal` và `RuntimeRecoveryService` (xem `infrastructure/event_store.py`) lưu các file append-only `runtime_commands.jsonl`, `runtime_events.jsonl`, và `runtime_snapshots.jsonl`, rồi phục hồi session bằng cách áp dụng snapshot mới nhất và replay các event đã áp dụng.
+
+### Bề mặt lệnh runtime
+
+Mọi tương tác từ bên ngoài nên đi qua `RuntimeWorkspaceService.submit_command(...)` hoặc các helper cao hơn trên cùng service.
+
+| Loại lệnh | Mục đích | Nguồn |
+| --- | --- | --- |
+| `set_route` | Tính toán và khóa route cho cặp signal vào/ra. | UI, lệnh SmartIO
+| `cancel_active_routes` | Hủy toàn bộ route đang hoạt động. | UI
+| `emergency_release_active_routes` | Giải phóng khẩn cấp toàn bộ route đang hoạt động. | UI
+| `start_route_simulation` | Chuẩn bị route và tàu cho mô phỏng. | UI
+| `set_section_occupied` | Override occupancy thủ công cho một section. | UI
+| `set_point_position` | Chuyển point qua locking engine. | UI, lệnh SmartIO
+| `upsert_train` | Tạo hoặc cập nhật train. | UI, SmartIO state_update
+| `remove_train` | Xóa train. | UI, SmartIO state_update
+| `step_runtime` | Tăng một tick mô phỏng. | UI
+| `apply_state_update` | Áp dụng state update SmartIO cho sections, points, trains. | SmartIO state_update
+| `hydrate_snapshot` | Áp dụng payload snapshot runtime. | SmartIO runtime_snapshot
+
+Các envelope `state_update` từ SmartIO được chuyển thành lệnh `apply_state_update` bởi SmartIO bridge.
+
+### Chế độ và năng lực
+
+Quyền theo mode được định nghĩa tại `runtime/application/mode_policy/policy.py`.
+
+| Chế độ | Có thể chỉnh layout | Có thể override thủ công | Có thể đặt route | Có thể hủy route | Có thể bắt đầu mô phỏng |
+| --- | --- | --- | --- | --- | --- |
+| `DESIGN_LAYOUT` | Có | Có | Không | Không | Không |
+| `SIMULATION` | Không | Có | Có | Có | Có |
+| `RUNTIME` | Không | Không | Có | Có | Không |
+
+### Cấu hình
+
+Giá trị mặc định nằm trong `runtime/profile.py` (`GenericApplicationProfile`). Các thiết lập chính gồm:
+
+| Trường | Mặc định | Mục đích |
+| --- | --- | --- |
+| `time_lock_seconds` | `2.0` | Thời lượng khóa thời gian tiếp cận.
+| `default_overlap_length` | `1` | Độ dài overlap mặc định khi tính route.
+| `overlap_release_seconds` | `2.0` | Độ trễ release overlap.
+| `smart_io_ws_url` | `wss://cbi-smartio.onrender.com/smartio` | Endpoint WebSocket SmartIO.
+| `smart_io_snapshot_heartbeat_seconds` | `5.0` | Chu kỳ publish snapshot.
+| `smart_io_runtime_stale_seconds` | `15.0` | Ngưỡng stale của transport.
+| `runtime_journal_dir` | `data/runtime_journal` | Thư mục journal.
+| `runtime_snapshot_checkpoint_interval` | `1` | Chu kỳ checkpoint snapshot (theo stream_seq).
+
+Các giá trị mặc định có thể được ghi đè bằng cách khởi tạo `GenericApplicationProfile` khác trong code ứng dụng.
+
+### Bắt đầu
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+python -m pip install -U pip
+python -m pip install PyQt6 pytest
+```
+
+### Chạy ứng dụng
+
+```bash
+python main.py
+```
+
+`main.py` tạo `QApplication`, xây dựng `GenericApplicationProfile`, và mở cửa sổ chính.
+
+### Chạy kiểm thử
+
+```bash
+python -m pytest
+```
 
 ```bash
 python -m pytest tests/test_runtime_workspace.py
 ```
 
-## Key Files to Read First
+### Dữ liệu và lưu trữ
 
-If you are new to the repository, these files are the best starting points:
+Layout tĩnh và runtime artifact được lưu trong `data/`.
 
-- [main.py](/Users/Storm/Desktop/CBI_Railway_Signal/main.py)
-  Desktop entrypoint.
-- [runtime/workspace_service.py](/Users/Storm/Desktop/CBI_Railway_Signal/runtime/workspace_service.py)
-  Main runtime orchestration facade.
-- [runtime/application_service.py](/Users/Storm/Desktop/CBI_Railway_Signal/runtime/application_service.py)
-  Generic application service layer.
-- [runtime/specific_application/editor_service.py](/Users/Storm/Desktop/CBI_Railway_Signal/runtime/specific_application/editor_service.py)
-  Station-specific editor behavior.
-- [runtime/runtime_controller.py](/Users/Storm/Desktop/CBI_Railway_Signal/runtime/runtime_controller.py)
-  Stateful runtime session.
-- [runtime/runtime_cycle.py](/Users/Storm/Desktop/CBI_Railway_Signal/runtime/runtime_cycle.py)
-  Pure simulation stepping behavior.
-- [core/compiler/route_compiler.py](/Users/Storm/Desktop/CBI_Railway_Signal/core/compiler/route_compiler.py)
-  Route compilation and interlocking-related logic.
-- [tests/test_runtime_workspace.py](/Users/Storm/Desktop/CBI_Railway_Signal/tests/test_runtime_workspace.py)
-  Practical examples of how the runtime workspace is used.
+Các vị trí chính:
+- `data/station_layout/` cho layout mẫu.
+- `data/_smartio_local/` cho payload SmartIO local.
+- `data/runtime_journal/` cho các stream JSONL command/event/snapshot.
 
-## Data and Persistence
+Các file journal runtime:
+- `runtime_commands.jsonl`
+- `runtime_events.jsonl`
+- `runtime_snapshots.jsonl`
 
-The repository includes a `data/` directory for layouts and runtime-related persisted artifacts. Runtime orchestration also uses command/event/snapshot journaling to support recovery and replay behavior.
+### Tích hợp SmartIO
 
-If you change runtime persistence behavior, review both:
+Tích hợp SmartIO nằm trong `integration/smartio_adapter/` và được điều phối bởi `ui/controllers/runtime_workspace_controller.py`.
 
-- runtime journaling and recovery in `infrastructure/event_store.py`;
-- runtime state and view model code in `runtime/`;
-- simulation stepping and train lifecycle behavior in `simulation/`.
+Hành vi chính:
+- WebSocket envelope được validate trước khi xử lý.
+- Envelope `command` được chuyển thành runtime command.
+- Envelope `state_update` được chuyển thành lệnh `apply_state_update`.
+- Các ghi trực tiếp vào `locked_by`, `signal.aspect`, hoặc `signal.route_id` bị chặn.
 
-## SmartIO Integration
+### Tài liệu bổ sung
 
-SmartIO-related integration code lives under `integration/smartio_adapter/`.
-
-This integration is responsible for:
-
-- receiving and validating external messages;
-- translating envelopes into typed runtime actions;
-- emitting command results, runtime events, and runtime snapshots outward.
-
-The intended architecture is that SmartIO integration does not directly manipulate topology or runtime internals. It should pass through the same orchestration boundary as the UI.
-
-## Additional Documentation
-
-Detailed architecture references are available in:
-
-- [ARCHITECTURE.md](/Users/Storm/Desktop/CBI_Railway_Signal/ARCHITECTURE.md)
-- [ARCHITECTURE.vi.md](/Users/Storm/Desktop/CBI_Railway_Signal/ARCHITECTURE.vi.md)
-
-Use the README for orientation and setup; use the architecture documents for deeper package responsibilities and dependency rules.
+- [ARCHITECTURE.md](ARCHITECTURE.md)
+- [ARCHITECTURE.vi.md](ARCHITECTURE.vi.md)

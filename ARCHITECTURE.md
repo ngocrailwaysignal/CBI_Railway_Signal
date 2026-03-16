@@ -1,69 +1,72 @@
 # CBI Railway Signal System Architecture
 
-This document describes the current architecture of the `CBI_Railway_Signal` application based on the actual codebase.
+This document describes the current architecture of the `CBI_Railway_Signal` application based on the codebase in this repository.
 
-The goals of this document are to clarify:
-- the boundaries between packages;
-- the data flow from layout -> runtime -> journal -> SmartIO;
-- the responsibility of each major component;
-- the dependency rules that should remain stable as the system evolves.
+Goals:
+- Clarify boundaries between packages and layers.
+- Describe the end-to-end data flow from layout to runtime to journaling to SmartIO.
+- Capture command execution, journaling, and recovery rules.
+- Document protocol handling, safety enforcement, and simulation semantics.
 
-The system is currently split into the following major blocks:
-- `core/`: interlocking rules, domain models, and compiler logic.
-- `kernel/`: runtime engines for locking, routing, safety, and occupancy.
-- `runtime/`: stateful runtime session, application use cases, and workspace orchestration.
-- `simulation/`: simulation helpers such as train lifecycle and snapshot hydration.
-- `infrastructure/`: persistence adapters and clocks.
-- `integration/`: SmartIO communication over WebSocket and envelope <-> runtime command translation.
-- `ui/`: UI orchestration, operating modes, and user-to-service integration.
+## 1. System Layers
 
-## 1. Architecture Overview
+The system is organized into five layers:
+1. Pure domain and compiler logic (`core/domain`, `core/compiler`).
+2. Runtime engine layer (`kernel`).
+3. Stateful runtime session and application layer (`runtime`, `runtime/application`).
+4. Simulation helpers (`simulation`).
+5. Integration and presentation layer (`integration`, `ui`, with `infrastructure` support).
 
-The system can be understood as five main layers:
-
-1. Pure domain/compiler logic layer:
-   `core/domain`, `core/compiler`
-2. Kernel runtime engine layer:
-   `kernel`
-3. Stateful runtime session and application layer:
-   `runtime`, `runtime/application`
-4. Simulation helper layer:
-   `simulation`
-5. External integration and presentation layer (with infrastructure support):
-   `integration`, `ui`, `infrastructure`
-
-The main system flow is:
+High-level flow (command path):
 
 ```text
-User / SmartIO Web
-        |
-        v
+User / SmartIO
+    |
+    v
 UI Controllers / SmartIO Coordinator
-        |
-        v
+    |
+    v
 RuntimeWorkspaceService  <---->  RuntimeJournal / Recovery
-        |
-        v
+    |
+    v
 RuntimeSession
-        |
-        v
-SimulationEngine
-        |
-        v
+    |
+    v
 RouteDispatcher / LockingEngine / SafetyMonitor
-        |
-        v
+    |
+    v
+RailwayTopology + Route + Train
+```
+
+Simulation tick path (only when `step_runtime` is invoked):
+
+```text
+UI action (step_runtime)
+    |
+    v
+RuntimeWorkspaceService
+    |
+    v
+RuntimeSession
+    |
+    v
+SimulationEngine
+    |
+    v
+RouteDispatcher / LockingEngine / SafetyMonitor
+    |
+    v
 RailwayTopology + Route + Train
 ```
 
 ## 2. Bounded Contexts and Responsibilities
 
-### 2.1 `layout_context`
+### 2.1 layout_context
 
-Primary responsibilities:
-- creating, editing, and validating the station layout;
-- managing static topology before entering runtime;
-- providing layout data for the UI and SmartIO snapshots.
+Responsibilities:
+- Create, edit, and validate station layouts.
+- Manage static topology before entering runtime.
+- Provide layout payloads for UI and SmartIO snapshots.
 
 Related modules:
 - `runtime/specific_application/editor_service.py`
@@ -72,16 +75,16 @@ Related modules:
 - `core/domain/model/topology.py`
 - `runtime/application/serialization/layout_payload_serializer.py`
 
-Inputs/Outputs:
-- input: canvas editor actions, `layout.json`;
-- output: `RailwayTopology`, layout payload for web/runtime.
+Inputs and outputs:
+- Input: canvas editor actions, `layout.json`.
+- Output: `RailwayTopology`, layout payloads for UI and SmartIO.
 
-### 2.2 `interlocking_compile_context`
+### 2.2 interlocking_compile_context
 
-Primary responsibilities:
-- compiling topology into a deterministic interlocking specification;
-- generating route candidates and conflict/flank/overlap rules;
-- producing artifacts that can be saved and loaded later.
+Responsibilities:
+- Compile topology into a deterministic interlocking specification.
+- Generate route candidates and conflict, flank, and overlap rules.
+- Produce artifacts that can be saved and reloaded.
 
 Related modules:
 - `core/compiler/route_compiler.py`
@@ -89,17 +92,17 @@ Related modules:
 - `core/compiler/spec_models.py`
 - `runtime/application_service.py`
 
-Inputs/Outputs:
-- input: `RailwayTopology`, overlap parameters;
-- output: `InterlockingSpec`, interlocking table rows, `interlocking_spec.json`.
+Inputs and outputs:
+- Input: `RailwayTopology`, overlap parameters.
+- Output: `InterlockingSpec`, interlocking table rows, `interlocking_spec.json`.
 
-### 2.3 `runtime_control_context`
+### 2.3 runtime_control_context
 
-Primary responsibilities:
-- setting routes, cancelling routes, emergency releasing routes;
-- enforcing interlocking on sections, points, and signals;
-- updating occupancy, timed release, and approach locking;
-- monitoring safety and triggering fail-safe STOP when necessary.
+Responsibilities:
+- Set routes, cancel routes, and emergency release routes.
+- Enforce interlocking on sections, points, and signals.
+- Update occupancy, timed release, and approach locking.
+- Monitor safety and trigger fail-safe STOP when needed.
 
 Related modules:
 - `kernel/route_dispatcher/route_engine.py`
@@ -111,18 +114,17 @@ Related modules:
 - `kernel/locking_engine/sequence_locking.py`
 - `core/domain/lifecycle/approach_locking.py`
 
-Critical rules:
-- runtime does not allow direct external writes to `locked_by`, `signal.aspect`, or `signal.route_id`;
-- every state mutation must go through a validated command boundary;
-- when unsafe conditions are detected, all signals are forced to STOP.
+Safety rules:
+- Direct writes to `locked_by`, `signal.aspect`, or `signal.route_id` are blocked.
+- All state mutations go through validated command boundaries.
+- Unsafe conditions force all signals to STOP.
 
-### 2.4 `simulation_workspace_context`
+### 2.4 simulation_workspace_context
 
-Primary responsibilities:
-- driving pure simulation behavior for the active runtime session;
-- creating/updating trains and advancing simulation ticks;
-- hydrating simulation-facing state through the runtime session boundary;
-- delegating on the mutable runtime session instead of owning it.
+Responsibilities:
+- Drive time-stepped simulation for the active runtime session.
+- Create and update trains and advance simulation ticks.
+- Hydrate simulation-facing state through the runtime session boundary.
 
 Related modules:
 - `runtime/runtime_cycle.py`
@@ -132,17 +134,17 @@ Related modules:
 - `runtime/read_model.py`
 
 Architectural meaning:
-- `RuntimeSession` is the single stateful runtime session inside the desktop app;
-- `SimulationEngine` is a collaborator that advances train movement and time-stepped behavior;
-- `runtime/` is the execution layer for runtime use cases in the workspace service.
+- `RuntimeSession` is the single stateful runtime session in the desktop app.
+- `SimulationEngine` advances train movement and time-based behavior.
+- `runtime/` remains the execution layer for runtime use cases.
 
-### 2.5 `runtime_orchestration_context`
+### 2.5 runtime_orchestration_context
 
-Primary responsibilities:
-- managing the runtime session lifecycle for the active workspace;
-- receiving commands from the UI or SmartIO, journaling them, executing them, and generating events;
-- creating checkpoint snapshots and restoring on restart;
-- providing runtime health to the UI and transport layer.
+Responsibilities:
+- Manage runtime session lifecycle per workspace.
+- Accept commands from UI or SmartIO, journal them, execute them, and emit events.
+- Create checkpoint snapshots and restore on restart.
+- Provide runtime health for UI and transport.
 
 Related modules:
 - `runtime/workspace_service.py`
@@ -150,17 +152,17 @@ Related modules:
 - `runtime/profile.py`
 
 Architectural meaning:
-- `RuntimeWorkspaceService` is the central runtime facade;
-- it decides which commands are journaled, which events are emitted, and when checkpoints are created;
-- `RuntimeSession` does not write journals by itself, and the UI is not allowed to mutate runtime state directly.
+- `RuntimeWorkspaceService` is the runtime facade and transaction boundary.
+- `RuntimeSession` does not journal on its own.
+- UI and transport do not mutate runtime state directly.
 
-### 2.6 `integration_context`
+### 2.6 integration_context
 
-Primary responsibilities:
-- connecting to the SmartIO system over WebSocket;
-- validating envelopes, parsing messages, and retrying connections;
-- translating SmartIO events into typed runtime commands;
-- sending `command_result`, `runtime_event`, and `runtime_snapshot` outward.
+Responsibilities:
+- Connect to SmartIO over WebSocket.
+- Validate envelopes, parse messages, and handle reconnect.
+- Translate SmartIO events into typed runtime commands.
+- Send `command_result`, `runtime_event`, and `runtime_snapshot` outward.
 
 Related modules:
 - `integration/smartio_adapter/protocol.py`
@@ -169,16 +171,16 @@ Related modules:
 - `ui/controllers/runtime_workspace_controller.py`
 
 Architectural meaning:
-- SmartIO does not directly manipulate topology or the locking engine;
-- all changes still go through `RuntimeWorkspaceService.submit_command(...)`;
-- the bridge is responsible only for protocol normalization and error mapping to `SmartIOProtocolError`.
+- SmartIO does not directly manipulate topology or locking engines.
+- All changes pass through `RuntimeWorkspaceService.submit_command(...)`.
+- The bridge normalizes protocol and maps errors to `SmartIOProtocolError`.
 
-### 2.7 `presentation_context`
+### 2.7 presentation_context
 
-Primary responsibilities:
-- managing Design / Simulation / Runtime modes;
-- binding user actions to the application and runtime services;
-- presenting the read model, runtime health, and SmartIO status.
+Responsibilities:
+- Manage Design, Simulation, and Runtime modes.
+- Bind user actions to application and runtime services.
+- Present read models, runtime health, and SmartIO status.
 
 Related modules:
 - `ui/controllers/main_window_controller.py`
@@ -188,173 +190,128 @@ Related modules:
 - `ui/views/main_window_view.py`
 - `ui/views/canvas_editor_view.py`
 
-## 3. Core Components
+## 3. Core Runtime Components
 
-### 3.1 `RailwayTopology`
+### 3.1 RailwayTopology
 
-`RailwayTopology` is the foundational station model.
+`RailwayTopology` (see `core/domain/model/topology.py`) manages:
+- Graph nodes and edges.
+- Signals, sections, and points.
+- Topology validation.
+- JSON import and export.
 
-It manages:
-- graph nodes and edges;
-- signals, sections, and points;
-- topology-related validations;
-- JSON import/export.
+It is the structural source of truth across design, compile, simulation, and runtime.
 
-Topology is used throughout design, compile, simulation, runtime, and serialization.
+### 3.2 RuntimeSession
 
-It is the structural source of truth for the system.
+`RuntimeSession` (see `runtime/runtime_controller.py`) initializes and coordinates engines:
+- `RouteEngine`, `LockingEngine`, `RouteDispatcher`.
+- `OccupancyReconciler`, `SafetyMonitor`.
+- `RuntimeCommandHandler`, `RuntimeTrainLifecycle`, `RuntimeSnapshotHydrator`.
+- `SimulationEngine`.
 
-### 3.2 `RuntimeSession`
+Runtime commands include:
+- `set_route`, `cancel_route`.
+- `set_section_occupied`, `set_point_position`.
+- `upsert_train`, `remove_train`.
+- `hydrate_snapshot`, `step`.
 
-`runtime/runtime_controller.py` defines the `RuntimeSession` class, which is the stateful runtime session.
+### 3.3 SimulationEngine
 
-In `__post_init__`, it initializes:
-- `RouteEngine`
-- `LockingEngine`
-- `RouteDispatcher`
-- `OccupancyReconciler`
-- `SafetyMonitor`
-- `RuntimeCommandHandler`
-- `RuntimeTrainLifecycle`
-- `RuntimeSnapshotHydrator`
-- `SimulationEngine`
+`SimulationEngine` (see `runtime/runtime_cycle.py`) implements time-stepped behavior:
+- Increments `tick` each step.
+- Updates time locking before and after train movement.
+- Steps each train along its active route.
+- Runs `SafetyMonitor.detect_unsafe_conditions(...)`.
+- On unsafe conditions, forces all signals to STOP and raises `RuntimeError`.
 
-`RuntimeSession` exposes a high-level runtime interface:
-- `set_route(...)`
-- `cancel_route(...)`
-- `set_section_occupied(...)`
-- `set_point_position(...)`
-- `upsert_train(...)`
-- `remove_train(...)`
-- `hydrate_snapshot(...)`
-- `step()`
+### 3.4 RuntimeWorkspaceService
 
-`step()` delegates pure simulation behavior to `SimulationEngine`, which is responsible for:
-- incrementing `tick`;
-- updating time locking before and after train movement;
-- moving each train on its active route;
-- running `SafetyMonitor.detect_unsafe_conditions(...)`;
-- raising fail-safe behavior and throwing `RuntimeError` on unsafe conditions.
+`RuntimeWorkspaceService` (see `runtime/workspace_service.py`) is the command boundary for UI and SmartIO:
+- Creates or restores a runtime session.
+- Journals commands, emits events, and checkpoints snapshots.
+- Enforces idempotency and stream ordering (`stream_seq`).
+- Exposes runtime view state and health.
 
-### 3.3 `RuntimeWorkspaceService`
+### 3.5 RuntimeJournal and Recovery
 
-`runtime/workspace_service.py` is the runtime facade for the entire desktop app.
-
-Primary responsibilities:
-- ensuring the runtime session exists via `ensure_session(topology)`;
-- submitting commands with an idempotency key (`source_id`, `command_id`);
-- appending to `runtime_commands.jsonl`;
-- executing commands;
-- generating `RuntimeEvent` and appending to `runtime_events.jsonl`;
-- checkpointing snapshots into `runtime_snapshots.jsonl`;
-- restoring the session from snapshots plus event replay;
-- tracking `RuntimeHealth`.
-
-Architectural role:
-- the transaction boundary for runtime commands;
-- an anti-corruption layer between UI/transport and the runtime session;
-- the place that owns `stream_seq` for a lightweight event-sourcing model.
-
-### 3.4 `RuntimeJournal` and `RuntimeRecoveryService`
-
-`infrastructure/event_store.py` contains the realtime primitives:
-- `RuntimeCommand`
-- `RuntimeEvent`
-- `RuntimeCommandResult`
-- `RuntimeHealth`
-- `RuntimeJournal`
-- `RuntimeRecoveryService`
-
-`RuntimeJournal` is an append-only JSONL store:
+`RuntimeJournal` and `RuntimeRecoveryService` (see `infrastructure/event_store.py`) manage append-only JSONL streams:
 - `runtime_commands.jsonl`
 - `runtime_events.jsonl`
 - `runtime_snapshots.jsonl`
 
-Important properties:
-- it can truncate an invalid tail when reading partially written JSONL files;
-- it stores commands and events separately;
-- snapshots do not replace events; they only act as checkpoints for faster restore.
+Recovery algorithm:
+1. Load the latest snapshot.
+2. Compare `topology_revision`.
+3. Hydrate the session from snapshot.
+4. Replay events with `command_status == "applied"` after snapshot `stream_seq`.
 
-`RuntimeRecoveryService.restore(...)` performs:
-1. load the latest snapshot;
-2. compare `topology_revision`;
-3. hydrate the session from the snapshot;
-4. replay events with `command_status == "applied"` after the snapshot `stream_seq`.
+If recovery fails or topology revisions mismatch, the session becomes degraded and may be forced to STOP.
 
-If the topology revision mismatches or replay fails:
-- the session is marked as `degraded`;
-- the runtime may be forced into a fail-safe STOP state.
+## 4. Command Flow and Journaling
 
-## 4. Main Operational Flows
+`RuntimeWorkspaceService.submit_command(...)` is the canonical entry point for command processing.
 
-### 4.1 From Layout to Runtime
+Command execution steps:
+1. Normalize `source_id`, `command_id`, and payload.
+2. Return a cached result for duplicate (`source_id`, `command_id`) pairs.
+3. Append `RuntimeCommand` to `runtime_commands.jsonl`.
+4. Execute the command handler and capture result or error.
+5. Increment `stream_seq` and append a `RuntimeEvent` to `runtime_events.jsonl`.
+6. Cache the `RuntimeCommandResult` and update runtime health metadata.
+7. Optionally checkpoint a snapshot based on `runtime_snapshot_checkpoint_interval`.
 
-1. The UI/editor creates or modifies `RailwayTopology`.
-2. `GenericApplicationService` loads/saves topology and can compile the spec.
-3. When entering Simulation/Runtime, `RuntimeWorkspaceService.ensure_session(topology)` creates `RuntimeSession`.
-4. The session may be restored from checkpoints and the event journal.
-5. The UI receives `RuntimeViewState` for rendering.
+Event payloads include a summarized result for faster external consumption.
 
-### 4.2 Setting a Route from the UI
+## 5. Operational Flows
+
+### 5.1 Layout to Runtime
+
+1. UI/editor creates or updates `RailwayTopology`.
+2. `GenericApplicationService` loads/saves topology and compiles interlocking specs.
+3. Entering Simulation or Runtime calls `RuntimeWorkspaceService.ensure_session(topology)`.
+4. Recovery restores snapshots and replays applied events.
+5. UI renders `RuntimeViewState` from `runtime/read_model.py`.
+
+### 5.2 Set Route Flow
 
 ```text
-UI action
+UI or SmartIO command
 -> RuntimeWorkspaceService.submit_command(kind="set_route")
 -> SetOrReuseRouteUseCase
 -> RuntimeSession.set_route(...)
 -> RouteDispatcher + LockingEngine
 -> RuntimeEvent(applied/rejected)
--> checkpoint snapshot if interval reached
--> UI refresh RuntimeViewState
+-> Snapshot checkpoint if interval reached
+-> Updated RuntimeViewState
 ```
 
-The result of the command is more than just the route:
-- it also creates an audit event;
-- it updates the stream sequence;
-- it may create a new snapshot;
-- it is cached to avoid reprocessing duplicate commands.
+### 5.3 Step Runtime Flow
 
-### 4.3 Step Runtime
+```text
+UI action
+-> RuntimeWorkspaceService.submit_command(kind="step_runtime")
+-> RuntimeSession.step()
+-> SimulationEngine.step()
+-> SafetyMonitor.detect_unsafe_conditions()
+-> RuntimeEvent(applied/rejected)
+-> Updated RuntimeViewState and tick
+```
 
-`step_runtime` is the command that advances the simulation cycle.
+### 5.4 Snapshot Publish Flow
 
-It:
-- is journaled like any other command;
-- calls `RuntimeSession.step()`;
-- returns a new `RuntimeViewState` and `tick`;
-- rejects the command and records the error message in the event if a safety issue occurs.
+```text
+SmartIO coordinator heartbeat
+-> drain_pending_runtime_events()
+-> send runtime_event envelopes
+-> checkpoint_runtime_snapshot()
+-> attach layout payload
+-> send runtime_snapshot envelope
+```
 
-### 4.4 Manual Override / Occupancy Update
+## 6. SmartIO Protocol Handling and Safety
 
-The system allows controlled updates:
-- `set_section_occupied`
-- `set_point_position`
-- `upsert_train`
-- `remove_train`
-- `apply_state_update`
-
-But direct writes into interlocking-controlled fields are blocked:
-- `locked_by` cannot be set directly;
-- `signal.aspect` cannot be set directly;
-- `signal.route_id` cannot be set directly.
-
-This ensures:
-- interlocking logic remains centralized in the engine;
-- the transport layer cannot break safety invariants.
-
-## 5. SmartIO Integration
-
-### 5.1 `SmartIOWebSocketClient`
-
-`integration/smartio_adapter/qt_ws_client.py` is the Qt WebSocket adapter.
-
-Main functions:
-- opening and closing the connection;
-- reconnect backoff;
-- parsing text JSON;
-- validating the envelope schema.
-
-The normalized envelope format is:
+SmartIO envelope schema:
 
 ```json
 {
@@ -364,204 +321,437 @@ The normalized envelope format is:
 }
 ```
 
-It emits the following Qt signals:
-- `event_received`
-- `status_changed`
-- `error_occurred`
+Protocol handling rules:
+- `command` envelopes are translated into runtime commands.
+- `state_update` envelopes are translated into `apply_state_update` commands.
+- Envelopes are validated before processing.
 
-It contains no interlocking logic.
+Safety enforcement:
+- Direct updates to `locked_by` are rejected for sections and points.
+- Direct updates to `signal.aspect` or `signal.route_id` are rejected.
+- Unsafe runtime conditions trigger fail-safe STOP.
 
-### 5.2 `SmartIORuntimeBridge`
+Transport acceptance by mode:
+- Runtime mode accepts SmartIO commands and publishes snapshots.
+- Simulation mode accepts SmartIO commands only for local endpoints.
 
-`integration/smartio_adapter/runtime_bridge.py` performs three main tasks:
-- converting `command` envelopes into runtime commands;
-- converting `state_update` envelopes into the `apply_state_update` command;
-- validating dangerous payloads and raising `SmartIOProtocolError`.
+## 7. Data Artifacts and Metadata
 
-Typical mappings:
-- `command(type=signal, action=set_aspect, value=PROCEED)` -> `set_route`
-- `command(type=signal, action=set_aspect, value=STOP)` -> `cancel_route`
-- `command(type=point, action=set_position)` -> `set_point_position`
-- `state_update` -> `apply_state_update`
+Design artifacts:
+- `layout.json` for station topology.
+- `interlocking_spec.json` for compiled routes and conflicts.
 
-The bridge also supports:
-- resolving routes by `route_id` or by the `entry_signal/exit_signal` pair;
-- ignoring stale train `route_id` values when the route has already been auto-released by CBI;
-- blocking direct state writes into sensitive fields.
+Runtime artifacts:
+- `runtime_snapshot.json` for standalone snapshots.
+- `runtime_commands.jsonl`, `runtime_events.jsonl`, `runtime_snapshots.jsonl` for journaling.
 
-### 5.3 `SmartIORuntimeCoordinator`
+Key metadata fields:
+- `stream_seq` for event ordering.
+- `topology_revision` for snapshot and replay safety.
+- `snapshot_version` for schema evolution.
 
-`ui/controllers/runtime_workspace_controller.py` owns the SmartIO connection lifecycle in the UI layer.
+## 8. Dependency Rules
 
-Responsibilities:
-- creating the `SmartIOWebSocketClient`;
-- deciding which modes are allowed to keep the connection alive;
-- sending `hello` after connection;
-- receiving socket events and mapping them to `RuntimeWorkspaceService.submit_command(...)`;
-- sending back `command_result`;
-- publishing pending `runtime_event` messages and `runtime_snapshot` on a heartbeat;
-- aggregating `runtime_health`.
+- `core/` must not depend on `ui/`, `runtime/`, `simulation/`, or `integration/`.
+- `kernel/` may depend on `core/domain/` and `infrastructure/clocks/`.
+- `runtime/` may depend on `core/`, `kernel/`, `simulation/`, and `infrastructure/`.
+- `simulation/` may depend on `core/` and collaborate with `runtime/`.
+- `integration/` should communicate only through application-level services and ports.
+- `ui/` should orchestrate and present, not contain interlocking rules.
 
-Current operating rules:
-- Runtime mode: accepts transport commands and publishes snapshots;
-- Simulation mode: only keeps the connection if the endpoint is local (`localhost`/`127.0.0.1`);
-- outside valid modes, SmartIO commands are rejected.
+## 9. Extension Guidelines
 
-## 6. Data and Artifacts
+1. Add new commands through `RuntimeWorkspaceService.submit_command(...)`.
+2. Place business logic in `runtime/application/use_cases/` or `kernel/`.
+3. Bump `snapshot_version` if old events cannot restore state.
+4. Keep external integrations behind an anti-corruption layer like `SmartIORuntimeBridge`.
+5. Enforce new safety rules inside engines or monitors, not in UI.
 
-### 6.1 Design Artifacts
+## 10. Key References
 
-- `layout.json`: the static station topology.
-- `interlocking_spec.json`: the compiled route/conflict/flank/overlap result.
+- [main.py](main.py)
+- [runtime/workspace_service.py](runtime/workspace_service.py)
+- [runtime/runtime_controller.py](runtime/runtime_controller.py)
+- [runtime/runtime_cycle.py](runtime/runtime_cycle.py)
+- [infrastructure/event_store.py](infrastructure/event_store.py)
+- [integration/smartio_adapter/runtime_bridge.py](integration/smartio_adapter/runtime_bridge.py)
+- [ui/controllers/runtime_workspace_controller.py](ui/controllers/runtime_workspace_controller.py)
 
-### 6.2 Runtime Artifacts
+## Tiếng Việt
 
-- `runtime_snapshot.json`: a standalone runtime state snapshot.
-- `runtime_commands.jsonl`: the append-only command journal.
-- `runtime_events.jsonl`: the append-only event audit log.
-- `runtime_snapshots.jsonl`: the append-only checkpoint snapshot stream.
+Tài liệu này mô tả kiến trúc hiện tại của ứng dụng `CBI_Railway_Signal` dựa trên code trong repository.
 
-### 6.3 Important Metadata Fields
+Mục tiêu:
+- Làm rõ ranh giới giữa các package và lớp.
+- Mô tả luồng dữ liệu từ layout đến runtime đến journaling đến SmartIO.
+- Nêu quy tắc thực thi command, journaling, và recovery.
+- Tài liệu hóa xử lý protocol, thực thi an toàn, và hành vi mô phỏng.
 
-Runtime snapshots and events carry:
-- `stream_seq`: the event order in the runtime stream;
-- `topology_revision`: the fingerprint of the current topology;
-- `snapshot_version`: the snapshot schema version.
+### 1. Các lớp hệ thống
 
-Purpose:
-- enabling safe recovery;
-- preventing replay of events from a different topology;
-- supporting debugging and synchronization with external clients.
+Hệ thống được tổ chức thành 5 lớp:
+1. Logic miền và compiler thuần (`core/domain`, `core/compiler`).
+2. Lớp engine runtime (`kernel`).
+3. Lớp runtime session và application (`runtime`, `runtime/application`).
+4. Helper mô phỏng (`simulation`).
+5. Lớp tích hợp và trình bày (`integration`, `ui`, có hỗ trợ từ `infrastructure`).
 
-## 7. Recovery and Health Model
-
-The system treats the CBI desktop application as the highest-authority runtime node.
-
-Principles:
-- every accepted command is journaled;
-- every processed command generates a `RuntimeEvent`;
-- snapshots are treated as derived state, not the original source of truth;
-- on restart, the system restores from the latest snapshot and then replays applied events.
-
-`RuntimeHealth` tracks:
-- `topology_revision`
-- `stream_seq`
-- `last_applied_command_at`
-- `last_snapshot_at`
-- `last_command_id`
-- `last_command_status`
-- `degraded_reason`
-
-The `degraded` state can appear when:
-- the checkpoint revision does not match;
-- recovery fails;
-- transport heartbeat/snapshot becomes stale in Runtime mode.
-
-## 8. Folder Structure
+Luồng tổng quát (đường lệnh):
 
 ```text
-core/
-  compiler/
-  domain/
-    lifecycle/
-    model/
-    policy/
-kernel/
-  locking_engine/
-  occupancy_engine/
-  route_dispatcher/
-  safety_engine/
-
-runtime/
-  application/
-    dto/
-    mode_policy/
-    serialization/
-    use_cases/
-  specific_application/
-  command_bus.py
-  read_model.py
-  runtime_controller.py
-  runtime_cycle.py
-  workspace_service.py
-  profile.py
-  application_service.py
-
-simulation/
-  environment_simulator.py
-  train_simulator.py
-
-infrastructure/
-  clocks/
-  snapshot_store/
-  event_store.py
-
-integration/
-  smartio_adapter/
-    protocol.py
-    qt_ws_client.py
-    runtime_bridge.py
-
-ui/
-  controllers/
-  presenters/
-  views/
+User / SmartIO
+    |
+    v
+UI Controllers / SmartIO Coordinator
+    |
+    v
+RuntimeWorkspaceService  <---->  RuntimeJournal / Recovery
+    |
+    v
+RuntimeSession
+    |
+    v
+RouteDispatcher / LockingEngine / SafetyMonitor
+    |
+    v
+RailwayTopology + Route + Train
 ```
 
-## 9. Dependency Rules
+Luồng tick mô phỏng (chỉ khi gọi `step_runtime`):
 
-### 9.1 `core/*`
+```text
+UI action (step_runtime)
+    |
+    v
+RuntimeWorkspaceService
+    |
+    v
+RuntimeSession
+    |
+    v
+SimulationEngine
+    |
+    v
+RouteDispatcher / LockingEngine / SafetyMonitor
+    |
+    v
+RailwayTopology + Route + Train
+```
 
-- must not depend on `ui/*`, `runtime/*`, `simulation/*`, or `integration/*`;
-- contains logic that can be tested independently;
-- defines domain models and compiler logic (may use kernel product rules when compiling routes).
+### 2. Bounded contexts và trách nhiệm
 
-### 9.2 `kernel/*`
+#### 2.1 layout_context
 
-- may depend on `core/domain/*` and `infrastructure/clocks/*`;
-- owns runtime engines for locking, routing, occupancy, and safety;
-- should not contain UI or transport logic.
+Trách nhiệm:
+- Tạo, chỉnh sửa, và kiểm tra layout ga.
+- Quản lý topology tĩnh trước khi vào runtime.
+- Cung cấp layout payload cho UI và SmartIO snapshot.
 
-### 9.3 `runtime/*`
+Module liên quan:
+- `runtime/specific_application/editor_service.py`
+- `runtime/specific_application/station_layout.py`
+- `ui/views/canvas_editor_view.py`
+- `core/domain/model/topology.py`
+- `runtime/application/serialization/layout_payload_serializer.py`
 
-- may use `core/*`, `kernel/*`, `simulation/*`, and `infrastructure/*`;
-- owns runtime orchestration, command handling, and view state;
-- should not contain widget or UI code.
+Đầu vào và đầu ra:
+- Đầu vào: thao tác canvas editor, `layout.json`.
+- Đầu ra: `RailwayTopology`, layout payload cho UI và SmartIO.
 
-### 9.4 `simulation/*`
+#### 2.2 interlocking_compile_context
 
-- may depend on `core/*` and collaborate with `runtime/*`;
-- should not contain UI or transport logic;
-- is the home of pure simulation behavior.
+Trách nhiệm:
+- Biên dịch topology thành đặc tả liên khóa xác định.
+- Sinh route candidates và quy tắc conflict, flank, overlap.
+- Tạo artifact có thể lưu và tải lại.
 
-### 9.5 `integration/*`
+Module liên quan:
+- `core/compiler/route_compiler.py`
+- `core/compiler/interlocking_table.py`
+- `core/compiler/spec_models.py`
+- `runtime/application_service.py`
 
-- should communicate only with application-level services and ports;
-- must not directly manipulate `LockingEngine` internals through raw state mutation;
-- every interaction must pass through the protocol and command boundary.
+Đầu vào và đầu ra:
+- Đầu vào: `RailwayTopology`, tham số overlap.
+- Đầu ra: `InterlockingSpec`, bảng interlocking, `interlocking_spec.json`.
 
-### 9.6 `ui/*`
+#### 2.3 runtime_control_context
 
-- may depend on `runtime/*`, `runtime/specific_application/*`, and `integration/*`;
-- should focus on orchestration and presentation;
-- should not place interlocking rules inside controllers or views.
+Trách nhiệm:
+- Đặt route, hủy route, và emergency release route.
+- Thực thi liên khóa trên sections, points, và signals.
+- Cập nhật occupancy, timed release, và approach locking.
+- Giám sát an toàn và kích hoạt fail-safe STOP khi cần.
 
-## 10. Extension Guidelines
+Module liên quan:
+- `kernel/route_dispatcher/route_engine.py`
+- `kernel/route_dispatcher/route_dispatcher.py`
+- `kernel/locking_engine/locking_engine.py`
+- `kernel/occupancy_engine/occupancy_reconciler.py`
+- `kernel/safety_engine/safety_monitor.py`
+- `kernel/locking_engine/timed_release.py`
+- `kernel/locking_engine/sequence_locking.py`
+- `core/domain/lifecycle/approach_locking.py`
 
-1. Add new commands through `RuntimeWorkspaceService.submit_command(...)` instead of mutating state directly.
-2. If a command has business meaning, place the logic in `runtime/application/use_cases` or `kernel/*`.
-3. If state can no longer be restored from older events, bump `snapshot_version` and update the hydrator.
-4. External integrations should go through an anti-corruption layer similar to `SmartIORuntimeBridge`.
-5. New safety rules must be enforced in the engine/monitor, not in the UI.
+Quy tắc an toàn:
+- Chặn ghi trực tiếp vào `locked_by`, `signal.aspect`, hoặc `signal.route_id`.
+- Mọi thay đổi trạng thái phải qua command boundary có kiểm tra.
+- Khi phát hiện điều kiện unsafe, mọi signal bị đưa về STOP.
 
-## 11. Summary
+#### 2.4 simulation_workspace_context
 
-The current `CBI_Railway_Signal` architecture revolves around a stateful runtime session (`RuntimeSession`) wrapped by an orchestration layer with journaling and recovery (`RuntimeWorkspaceService`).
+Trách nhiệm:
+- Vận hành mô phỏng theo tick cho runtime session đang hoạt động.
+- Tạo và cập nhật trains và tiến hành simulation ticks.
+- Hydrate trạng thái mô phỏng qua runtime session boundary.
 
-`core/` holds pure domain and compiler logic; `kernel/` holds runtime engines; `runtime/` holds mutable runtime state and the runtime-facing read model; `simulation/` holds pure simulation behavior; `infrastructure/` owns persistence adapters; `integration/` owns the external transport protocol; `ui/` mainly orchestrates and presents.
+Module liên quan:
+- `runtime/runtime_cycle.py`
+- `simulation/train_simulator.py`
+- `simulation/environment_simulator.py`
+- `runtime/runtime_controller.py`
+- `runtime/read_model.py`
 
-This separation helps the system:
-- preserve safety invariants;
-- support runtime auditing and recovery;
-- make external integrations easier to extend;
-- prevent domain logic from leaking into the UI or transport layer.
+Ý nghĩa kiến trúc:
+- `RuntimeSession` là runtime session stateful duy nhất trong desktop app.
+- `SimulationEngine` điều khiển train movement và time-based behavior.
+- `runtime/` vẫn là lớp thực thi use case runtime.
+
+#### 2.5 runtime_orchestration_context
+
+Trách nhiệm:
+- Quản lý vòng đời runtime session theo workspace.
+- Nhận command từ UI hoặc SmartIO, journal, thực thi, và phát event.
+- Tạo checkpoint snapshot và phục hồi khi khởi động lại.
+- Cung cấp runtime health cho UI và transport.
+
+Module liên quan:
+- `runtime/workspace_service.py`
+- `infrastructure/event_store.py`
+- `runtime/profile.py`
+
+Ý nghĩa kiến trúc:
+- `RuntimeWorkspaceService` là facade và ranh giới transaction.
+- `RuntimeSession` không tự journal.
+- UI và transport không được sửa state trực tiếp.
+
+#### 2.6 integration_context
+
+Trách nhiệm:
+- Kết nối SmartIO qua WebSocket.
+- Validate envelope, parse message, và xử lý reconnect.
+- Chuyển SmartIO events thành runtime commands có kiểu.
+- Gửi `command_result`, `runtime_event`, và `runtime_snapshot` ra ngoài.
+
+Module liên quan:
+- `integration/smartio_adapter/protocol.py`
+- `integration/smartio_adapter/runtime_bridge.py`
+- `integration/smartio_adapter/qt_ws_client.py`
+- `ui/controllers/runtime_workspace_controller.py`
+
+Ý nghĩa kiến trúc:
+- SmartIO không thao tác trực tiếp vào topology hoặc locking engines.
+- Mọi thay đổi đi qua `RuntimeWorkspaceService.submit_command(...)`.
+- Bridge chuẩn hóa protocol và ánh xạ lỗi về `SmartIOProtocolError`.
+
+#### 2.7 presentation_context
+
+Trách nhiệm:
+- Quản lý mode Design, Simulation, và Runtime.
+- Liên kết hành động người dùng với application và runtime services.
+- Trình bày read model, runtime health, và trạng thái SmartIO.
+
+Module liên quan:
+- `ui/controllers/main_window_controller.py`
+- `ui/controllers/runtime_workspace_controller.py`
+- `ui/controllers/workspace_state_coordinator.py`
+- `ui/presenters/route_presenter.py`
+- `ui/views/main_window_view.py`
+- `ui/views/canvas_editor_view.py`
+
+### 3. Thành phần runtime cốt lõi
+
+#### 3.1 RailwayTopology
+
+`RailwayTopology` (xem `core/domain/model/topology.py`) quản lý:
+- Graph nodes và edges.
+- Signals, sections, và points.
+- Topology validation.
+- Import và export JSON.
+
+Đây là nguồn cấu trúc chuẩn xuyên suốt thiết kế, biên dịch, mô phỏng, và runtime.
+
+#### 3.2 RuntimeSession
+
+`RuntimeSession` (xem `runtime/runtime_controller.py`) khởi tạo và điều phối các engine:
+- `RouteEngine`, `LockingEngine`, `RouteDispatcher`.
+- `OccupancyReconciler`, `SafetyMonitor`.
+- `RuntimeCommandHandler`, `RuntimeTrainLifecycle`, `RuntimeSnapshotHydrator`.
+- `SimulationEngine`.
+
+Các runtime command gồm:
+- `set_route`, `cancel_route`.
+- `set_section_occupied`, `set_point_position`.
+- `upsert_train`, `remove_train`.
+- `hydrate_snapshot`, `step`.
+
+#### 3.3 SimulationEngine
+
+`SimulationEngine` (xem `runtime/runtime_cycle.py`) thực hiện hành vi theo tick:
+- Tăng `tick` mỗi bước.
+- Cập nhật time locking trước và sau khi train di chuyển.
+- Step mỗi train trên route đang hoạt động.
+- Chạy `SafetyMonitor.detect_unsafe_conditions(...)`.
+- Khi unsafe, ép mọi signal về STOP và ném `RuntimeError`.
+
+#### 3.4 RuntimeWorkspaceService
+
+`RuntimeWorkspaceService` (xem `runtime/workspace_service.py`) là command boundary cho UI và SmartIO:
+- Tạo hoặc phục hồi runtime session.
+- Journal command, phát event, và checkpoint snapshot.
+- Thực thi idempotency và stream ordering (`stream_seq`).
+- Cung cấp runtime view state và health.
+
+#### 3.5 RuntimeJournal và Recovery
+
+`RuntimeJournal` và `RuntimeRecoveryService` (xem `infrastructure/event_store.py`) quản lý các JSONL append-only:
+- `runtime_commands.jsonl`
+- `runtime_events.jsonl`
+- `runtime_snapshots.jsonl`
+
+Thuật toán recovery:
+1. Tải snapshot mới nhất.
+2. So sánh `topology_revision`.
+3. Hydrate session từ snapshot.
+4. Replay event với `command_status == "applied"` sau `stream_seq` của snapshot.
+
+Nếu recovery thất bại hoặc topology revision không khớp, session bị degraded và có thể bị ép STOP.
+
+### 4. Luồng command và journaling
+
+`RuntimeWorkspaceService.submit_command(...)` là điểm vào chuẩn cho xử lý command.
+
+Các bước thực thi command:
+1. Chuẩn hóa `source_id`, `command_id`, và payload.
+2. Trả kết quả cache cho cặp (`source_id`, `command_id`) trùng.
+3. Append `RuntimeCommand` vào `runtime_commands.jsonl`.
+4. Thực thi command và ghi kết quả hoặc lỗi.
+5. Tăng `stream_seq` và append `RuntimeEvent` vào `runtime_events.jsonl`.
+6. Cache `RuntimeCommandResult` và cập nhật metadata runtime health.
+7. Checkpoint snapshot theo `runtime_snapshot_checkpoint_interval`.
+
+Event payload chứa bản tóm tắt kết quả để tiêu thụ nhanh hơn từ bên ngoài.
+
+### 5. Luồng vận hành
+
+#### 5.1 Từ layout đến runtime
+
+1. UI/editor tạo hoặc cập nhật `RailwayTopology`.
+2. `GenericApplicationService` load/save topology và compile interlocking spec.
+3. Khi vào Simulation hoặc Runtime, gọi `RuntimeWorkspaceService.ensure_session(topology)`.
+4. Recovery phục hồi snapshot và replay event đã áp dụng.
+5. UI render `RuntimeViewState` từ `runtime/read_model.py`.
+
+#### 5.2 Luồng đặt route
+
+```text
+UI hoặc SmartIO command
+-> RuntimeWorkspaceService.submit_command(kind="set_route")
+-> SetOrReuseRouteUseCase
+-> RuntimeSession.set_route(...)
+-> RouteDispatcher + LockingEngine
+-> RuntimeEvent(applied/rejected)
+-> Snapshot checkpoint nếu đến chu kỳ
+-> RuntimeViewState cập nhật
+```
+
+#### 5.3 Luồng step runtime
+
+```text
+UI action
+-> RuntimeWorkspaceService.submit_command(kind="step_runtime")
+-> RuntimeSession.step()
+-> SimulationEngine.step()
+-> SafetyMonitor.detect_unsafe_conditions()
+-> RuntimeEvent(applied/rejected)
+-> RuntimeViewState và tick cập nhật
+```
+
+#### 5.4 Luồng publish snapshot
+
+```text
+SmartIO coordinator heartbeat
+-> drain_pending_runtime_events()
+-> gửi runtime_event envelopes
+-> checkpoint_runtime_snapshot()
+-> gắn layout payload
+-> gửi runtime_snapshot envelope
+```
+
+### 6. Xử lý protocol SmartIO và an toàn
+
+Schema envelope SmartIO:
+
+```json
+{
+  "type": "command | state_update | runtime_snapshot | runtime_event | command_result | hello | error | ack",
+  "payload": {},
+  "ts": 0
+}
+```
+
+Quy tắc xử lý protocol:
+- Envelope `command` được chuyển thành runtime command.
+- Envelope `state_update` được chuyển thành lệnh `apply_state_update`.
+- Envelope được validate trước khi xử lý.
+
+Thực thi an toàn:
+- Chặn cập nhật trực tiếp `locked_by` cho sections và points.
+- Chặn cập nhật trực tiếp `signal.aspect` hoặc `signal.route_id`.
+- Điều kiện unsafe kích hoạt fail-safe STOP.
+
+Chấp nhận transport theo mode:
+- Runtime mode nhận SmartIO commands và publish snapshots.
+- Simulation mode chỉ nhận SmartIO commands với endpoint local.
+
+### 7. Artifact dữ liệu và metadata
+
+Artifact thiết kế:
+- `layout.json` cho topology ga.
+- `interlocking_spec.json` cho route/conflict đã compile.
+
+Artifact runtime:
+- `runtime_snapshot.json` cho snapshot độc lập.
+- `runtime_commands.jsonl`, `runtime_events.jsonl`, `runtime_snapshots.jsonl` cho journaling.
+
+Trường metadata chính:
+- `stream_seq` cho thứ tự event.
+- `topology_revision` để an toàn snapshot và replay.
+- `snapshot_version` cho tiến hóa schema.
+
+### 8. Quy tắc phụ thuộc
+
+- `core/` không được phụ thuộc `ui/`, `runtime/`, `simulation/`, hoặc `integration/`.
+- `kernel/` có thể phụ thuộc `core/domain/` và `infrastructure/clocks/`.
+- `runtime/` có thể phụ thuộc `core/`, `kernel/`, `simulation/`, và `infrastructure/`.
+- `simulation/` có thể phụ thuộc `core/` và cộng tác với `runtime/`.
+- `integration/` chỉ nên giao tiếp qua application-level services và ports.
+- `ui/` chỉ nên điều phối và trình bày, không đặt luật liên khóa trong UI.
+
+### 9. Hướng dẫn mở rộng
+
+1. Thêm command mới qua `RuntimeWorkspaceService.submit_command(...)`.
+2. Đặt logic nghiệp vụ trong `runtime/application/use_cases/` hoặc `kernel/`.
+3. Tăng `snapshot_version` nếu event cũ không thể phục hồi state.
+4. Giữ tích hợp ngoài qua anti-corruption layer như `SmartIORuntimeBridge`.
+5. Thực thi quy tắc an toàn mới trong engine hoặc monitor, không phải UI.
+
+### 10. Tham chiếu chính
+
+- [main.py](main.py)
+- [runtime/workspace_service.py](runtime/workspace_service.py)
+- [runtime/runtime_controller.py](runtime/runtime_controller.py)
+- [runtime/runtime_cycle.py](runtime/runtime_cycle.py)
+- [infrastructure/event_store.py](infrastructure/event_store.py)
+- [integration/smartio_adapter/runtime_bridge.py](integration/smartio_adapter/runtime_bridge.py)
+- [ui/controllers/runtime_workspace_controller.py](ui/controllers/runtime_workspace_controller.py)
