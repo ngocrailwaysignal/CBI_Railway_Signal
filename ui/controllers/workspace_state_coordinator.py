@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.application import ModeCapabilities
+from runtime.application import ModeCapabilities
 
 
 @dataclass(slots=True, frozen=True)

@@ -25,18 +25,16 @@ The main desktop entrypoint is [main.py](/Users/Storm/Desktop/CBI_Railway_Signal
 The codebase is split into a small number of architectural areas with fairly clear boundaries:
 
 - `core/`
-  Pure domain logic, compiler logic, runtime engines, and application use cases. This is the most reusable part of the system and should stay free from UI-specific concerns.
-- `runtime_session/`
-  The stateful runtime session for CBI. This layer owns mutable runtime state, route/occupancy/point/train mutations, snapshot restore, and the runtime-facing read model.
+  Pure domain logic and compiler logic. This is the most reusable part of the system and should stay free from UI-specific concerns.
+- `kernel/`
+  Runtime engines for locking, routing, safety, and occupancy plus product rules.
+- `runtime/`
+  Stateful runtime session, application use cases, workspace orchestration, and the runtime-facing read model.
 - `simulation/`
-  Pure simulation behavior layered on top of the runtime session. This layer owns train lifecycle, simulation stepping, and other time-driven simulation concerns.
-- `products/generic_application/`
-  Application-level orchestration for the runtime workspace. This layer owns command journaling, checkpointing, recovery, profiles, and the main runtime facade.
-- `products/generic_product/`
-  Reusable product rules and product kernel behavior that support route/runtime use cases.
-- `products/specific_application/`
-  Station-specific editor and layout logic. This is where app-specific or domain-specific layout behavior lives.
-- `integrations/`
+  Simulation helpers such as train lifecycle and snapshot hydration.
+- `infrastructure/`
+  Persistence adapters and clocks.
+- `integration/`
   External integration code, currently centered around SmartIO communication.
 - `ui/`
   PyQt6 controllers, presenters, and views.
@@ -69,24 +67,29 @@ RailwayTopology + Routes + Trains
 
 ```text
 core/
-  application/          Application use cases and serialization helpers
   compiler/             Route compiler and interlocking spec generation
   domain/               Topology, policies, and lifecycle rules
-  infrastructure/       Persistence, clocks, and infrastructure adapters
-  runtime/              Runtime engines and safety/interlocking behavior
 
-products/
-  generic_application/  Runtime facade, journaling, recovery, profiles
-  generic_product/      Product kernel and reusable product rules
+kernel/
+  locking_engine/       Route locking and release logic
+  occupancy_engine/     Occupancy reconciliation
+  route_dispatcher/     Route finding and dispatching
+  safety_engine/        Safety checks and fail-safe monitoring
+
+runtime/
+  application/          Application use cases and serialization helpers
   specific_application/ Station-specific editor and layout logic
+  runtime_controller.py Stateful runtime session
+  runtime_cycle.py      Simulation tick engine
+  command_bus.py        Runtime command gateway
 
-runtime_session/        Stateful CBI runtime session and runtime view state
-simulation/             Pure simulation stepping and train lifecycle
-integrations/           SmartIO protocol and bridge code
+simulation/             Train lifecycle and snapshot hydration helpers
+infrastructure/         Persistence adapters and clocks
+integration/            SmartIO protocol and bridge code
 ui/                     PyQt controllers, presenters, and views
 tests/                  Automated tests
 data/                   Sample layouts and runtime data
-tools/                  Tooling and helper assets
+tool/                   Tooling and helper assets
 ```
 
 ## Important Runtime Concepts
@@ -97,7 +100,7 @@ tools/                  Tooling and helper assets
 
 ### RuntimeSession
 
-`runtime_session/session.py` defines the stateful runtime session. It is responsible for:
+`runtime/runtime_controller.py` defines the stateful runtime session. It is responsible for:
 
 - holding the active runtime state;
 - applying route, occupancy, point, and train commands;
@@ -108,7 +111,7 @@ This is the execution layer used by the application orchestration code and the S
 
 ### SimulationEngine
 
-`simulation/engine.py` defines the pure simulation engine. It is responsible for:
+`runtime/runtime_cycle.py` defines the simulation engine. It is responsible for:
 
 - advancing train movement with `step()`;
 - updating time-based progression for the current runtime session;
@@ -118,7 +121,7 @@ It does not own journaling, recovery, or workspace orchestration.
 
 ### RuntimeWorkspaceService
 
-`products/generic_application/runtime_workspace_service.py` is the runtime facade used by the desktop app. It is the key boundary between UI/integration code and the simulation engine.
+`runtime/workspace_service.py` is the runtime facade used by the desktop app. It is the key boundary between UI/integration code and the simulation engine.
 
 It is responsible for:
 
@@ -136,11 +139,10 @@ If you are trying to understand how runtime actions should enter the system, thi
 The intended dependency direction is:
 
 - `core/` should remain the most stable and reusable layer;
-- `runtime_session/` may depend on `core/` and `simulation/`;
-- `simulation/` may depend on `core/` and collaborate with `runtime_session/`;
-- `products/generic_application/` may orchestrate `core/`, `runtime_session/`, `simulation/`, and `products/generic_product/`;
-- `products/specific_application/` may add station-specific behavior without pulling UI concerns into `core/`;
-- `ui/` and `integrations/` should go through application/runtime services rather than mutating runtime state directly.
+- `kernel/` may depend on `core/domain` and `infrastructure/clocks`;
+- `runtime/` may orchestrate `core/`, `kernel/`, `simulation/`, and `infrastructure/`;
+- `simulation/` may depend on `core/` and collaborate with `runtime/`;
+- `ui/` and `integration/` should go through runtime services rather than mutating runtime state directly.
 
 In practice, the design goal is that UI and SmartIO do not write runtime internals directly. Changes should go through command-oriented boundaries such as `RuntimeWorkspaceService`.
 
@@ -195,15 +197,15 @@ If you are new to the repository, these files are the best starting points:
 
 - [main.py](/Users/Storm/Desktop/CBI_Railway_Signal/main.py)
   Desktop entrypoint.
-- [products/generic_application/runtime_workspace_service.py](/Users/Storm/Desktop/CBI_Railway_Signal/products/generic_application/runtime_workspace_service.py)
+- [runtime/workspace_service.py](/Users/Storm/Desktop/CBI_Railway_Signal/runtime/workspace_service.py)
   Main runtime orchestration facade.
-- [products/generic_application/service.py](/Users/Storm/Desktop/CBI_Railway_Signal/products/generic_application/service.py)
+- [runtime/application_service.py](/Users/Storm/Desktop/CBI_Railway_Signal/runtime/application_service.py)
   Generic application service layer.
-- [products/specific_application/editor_service.py](/Users/Storm/Desktop/CBI_Railway_Signal/products/specific_application/editor_service.py)
+- [runtime/specific_application/editor_service.py](/Users/Storm/Desktop/CBI_Railway_Signal/runtime/specific_application/editor_service.py)
   Station-specific editor behavior.
-- [runtime_session/session.py](/Users/Storm/Desktop/CBI_Railway_Signal/runtime_session/session.py)
+- [runtime/runtime_controller.py](/Users/Storm/Desktop/CBI_Railway_Signal/runtime/runtime_controller.py)
   Stateful runtime session.
-- [simulation/engine.py](/Users/Storm/Desktop/CBI_Railway_Signal/simulation/engine.py)
+- [runtime/runtime_cycle.py](/Users/Storm/Desktop/CBI_Railway_Signal/runtime/runtime_cycle.py)
   Pure simulation stepping behavior.
 - [core/compiler/route_compiler.py](/Users/Storm/Desktop/CBI_Railway_Signal/core/compiler/route_compiler.py)
   Route compilation and interlocking-related logic.
@@ -216,13 +218,13 @@ The repository includes a `data/` directory for layouts and runtime-related pers
 
 If you change runtime persistence behavior, review both:
 
-- runtime journaling and recovery in `products/generic_application/`;
-- runtime state and view model code in `runtime_session/`;
+- runtime journaling and recovery in `infrastructure/event_store.py`;
+- runtime state and view model code in `runtime/`;
 - simulation stepping and train lifecycle behavior in `simulation/`.
 
 ## SmartIO Integration
 
-SmartIO-related integration code lives under `integrations/smartio/`.
+SmartIO-related integration code lives under `integration/smartio_adapter/`.
 
 This integration is responsible for:
 

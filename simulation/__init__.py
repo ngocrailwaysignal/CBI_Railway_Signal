@@ -1,5 +1,6 @@
-"""Pure simulation package."""
+"""Pure simulation helper package."""
 
-from .engine import SimulationEngine
+from .environment_simulator import RuntimeSnapshotHydrator
+from .train_simulator import RuntimeTrainLifecycle
 
-__all__ = ["SimulationEngine"]
+__all__ = ["RuntimeTrainLifecycle", "RuntimeSnapshotHydrator"]

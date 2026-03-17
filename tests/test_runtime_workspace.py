@@ -5,16 +5,12 @@ from pathlib import Path
 
 from PyQt6.QtCore import QObject
 
-from core.application import AppMode
-from core.application.runtime_session_port import RuntimeSessionPort
-from products.generic_application import (
-    GenericApplicationProfile,
-    GenericApplicationService,
-    RuntimeWorkspaceService,
-)
-from core.application.serialization import build_runtime_snapshot
-from integrations.smartio.runtime_bridge import SmartIORuntimeBridge
-from runtime_session import RuntimeSession
+from runtime.application import AppMode
+from runtime.application.runtime_session_port import RuntimeSessionPort
+from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
+from runtime.application.serialization import build_runtime_snapshot
+from integration.smartio_adapter.runtime_bridge import SmartIORuntimeBridge
+from runtime import RuntimeSession
 from ui.controllers.runtime_workspace_controller import SmartIORuntimeCoordinator
 
 
@@ -674,11 +670,11 @@ def test_runtime_workspace_recovers_from_checkpoint_journal() -> None:
 def test_architecture_boundaries_do_not_regress() -> None:
     main_window_text = (REPO_ROOT / "ui" / "views" / "main_window_view.py").read_text()
     assert "simulation.session" not in main_window_text
-    assert "core.runtime.simulation" not in main_window_text
+    assert "core.runtime" not in main_window_text
+    assert "runtime_session" not in main_window_text
 
     for path in (REPO_ROOT / "core").rglob("*.py"):
         text = path.read_text()
         assert "PyQt6" not in text, f"Qt import leaked into core: {path}"
-        assert "integrations.smartio" not in text, f"SmartIO integration leaked into core: {path}"
-        assert "core.infrastructure.smartio" not in text, f"Legacy SmartIO import leaked into core: {path}"
+        assert "integration.smartio_adapter" not in text, f"SmartIO integration leaked into core: {path}"
         assert "simulation.session" not in text, f"Simulation session leaked back into core: {path}"

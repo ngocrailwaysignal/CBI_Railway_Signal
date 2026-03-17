@@ -34,16 +34,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.application import AppMode
+from runtime.application import AppMode
 from core.domain.model.elements import PointPosition, TrackSection
 from core.compiler.interlocking_table import InterlockingTableRow
 from core.domain.model.route import Route
-from products.generic_application import (
-    GenericApplicationProfile,
-    GenericApplicationService,
-    RuntimeWorkspaceService,
-)
-from products.specific_application import SpecificLayoutEditorService, StationLayout
+from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
+from runtime.specific_application import SpecificLayoutEditorService, StationLayout
 from ui.controllers import (
     MainWindowController,
     SmartIORuntimeCoordinator,
@@ -124,7 +120,7 @@ class MainWindow(QMainWindow):
         self._simulation_ticks_remaining = 0
         self._initialize_smartio_client()
 
-        sample_path = Path("data/main_layout.json")
+        sample_path = Path("data/station_layout/main_layout.json")
         if sample_path.exists():
             self._load_layout_into_canvas(
                 self.layout_editor_service.load_layout(

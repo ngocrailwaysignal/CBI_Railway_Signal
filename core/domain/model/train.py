@@ -10,7 +10,7 @@ from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
 
 if TYPE_CHECKING:
-    from core.runtime.locking_engine import LockingEngine
+    from kernel.locking_engine.locking_engine import LockingEngine
 
 
 @dataclass(slots=True)

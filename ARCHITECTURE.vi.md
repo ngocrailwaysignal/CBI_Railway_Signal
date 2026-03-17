@@ -9,28 +9,28 @@ Mục tiêu của tài liệu là làm rõ:
 - các quy tắc phụ thuộc cần giữ ổn định khi mở rộng hệ thống.
 
 Hệ thống hiện được tách thành các khối chính sau:
-- `core/`: luật liên khóa, module, compiler, và runtime engine thuần logic.
-- `runtime_session/`: phiên runtime cục bộ có trạng thái, runtime-facing read model, snapshot restore, và mutation boundary.
-- `simulation/`: hành vi mô phỏng thuần như train lifecycle và time-stepped execution.
-- `products/generic_application/`: orchestration cấp ứng dụng, command journal, checkpoint, và recovery.
-- `integrations/smartio/`: giao tiếp SmartIO qua WebSocket và chuyển đổi envelope <-> runtime command.
-- `products/specific_application/`: logic đặc thù cho layout/editor của bài toán nhà ga.
+- `core/`: luật liên khóa, domain model, và compiler thuần logic.
+- `kernel/`: runtime engines cho locking, routing, safety, occupancy.
+- `runtime/`: runtime session, use case ứng dụng, và orchestration.
+- `simulation/`: helper mô phỏng như train lifecycle và snapshot hydration.
+- `infrastructure/`: persistence adapters và clocks.
+- `integration/`: giao tiếp SmartIO qua WebSocket và chuyển đổi envelope <-> runtime command.
 - `ui/`: điều phối giao diện, mode vận hành, và kết nối người dùng với service.
 
 ## 1. Tổng quan kiến trúc
 
 Có thể hình dung hệ thống theo 5 lớp chính:
 
-1. Lớp domain/runtime thuần logic:
-   `core/domain`, `core/runtime`, `core/compiler`, `core/application/use_cases`
-2. Lớp runtime session có trạng thái:
-   `runtime_session`
-3. Lớp hành vi mô phỏng thuần:
+1. Lớp domain/compiler thuần logic:
+   `core/domain`, `core/compiler`
+2. Lớp kernel runtime engine:
+   `kernel`
+3. Lớp runtime session và application:
+   `runtime`, `runtime/application`
+4. Lớp helper mô phỏng:
    `simulation`
-4. Lớp orchestration ứng dụng và persistence realtime:
-   `products/generic_application`
-5. Lớp tích hợp bên ngoài và presentation:
-   `integrations/smartio`, `ui`, `products/specific_application`
+5. Lớp tích hợp bên ngoài và presentation (kèm hạ tầng persistence):
+   `integration`, `ui`, `infrastructure`
 
 Luồng chính của hệ thống (tách rõ command và mô phỏng theo tick):
 
@@ -80,11 +80,11 @@ Phụ trách chính:
 - cung cấp dữ liệu layout cho UI và SmartIO snapshot.
 
 Module liên quan:
-- `products/specific_application/editor_service.py`
-- `products/specific_application/station_layout.py`
+- `runtime/specific_application/editor_service.py`
+- `runtime/specific_application/station_layout.py`
 - `ui/views/canvas_editor_view.py`
 - `core/domain/model/topology.py`
-- `core/application/serialization/layout_payload_serializer.py`
+- `runtime/application/serialization/layout_payload_serializer.py`
 
 Đầu vào/Đầu ra:
 - đầu vào: thao tác từ canvas editor, file `layout.json`;
@@ -101,7 +101,7 @@ Module liên quan:
 - `core/compiler/route_compiler.py`
 - `core/compiler/interlocking_table.py`
 - `core/compiler/spec_models.py`
-- `products/generic_application/service.py`
+- `runtime/application_service.py`
 
 Đầu vào/Đầu ra:
 - đầu vào: `RailwayTopology`, tham số overlap;
@@ -116,13 +116,13 @@ Phụ trách chính:
 - giám sát an toàn và kích hoạt fail-safe STOP khi cần.
 
 Module liên quan:
-- `core/runtime/route_engine.py`
-- `core/runtime/route_dispatcher.py`
-- `core/runtime/locking_engine.py`
-- `core/runtime/occupancy_reconciler.py`
-- `core/runtime/safety_monitor.py`
-- `core/runtime/timed_release.py`
-- `core/runtime/sequence_locking.py`
+- `kernel/route_dispatcher/route_engine.py`
+- `kernel/route_dispatcher/route_dispatcher.py`
+- `kernel/locking_engine/locking_engine.py`
+- `kernel/occupancy_engine/occupancy_reconciler.py`
+- `kernel/safety_engine/safety_monitor.py`
+- `kernel/locking_engine/timed_release.py`
+- `kernel/locking_engine/sequence_locking.py`
 - `core/domain/lifecycle/approach_locking.py`
 
 Quy tắc quan trọng:
@@ -139,16 +139,16 @@ Phụ trách chính:
 - không còn là implementation trực tiếp của `RuntimeSessionPort`.
 
 Module liên quan:
-- `simulation/engine.py`
-- `simulation/train_lifecycle.py`
-- `simulation/snapshot_hydrator.py`
-- `runtime_session/session.py`
-- `runtime_session/read_model.py`
+- `runtime/runtime_cycle.py`
+- `simulation/train_simulator.py`
+- `simulation/environment_simulator.py`
+- `runtime/runtime_controller.py`
+- `runtime/read_model.py`
 
 Ý nghĩa kiến trúc:
 - `RuntimeSession` là runtime session stateful duy nhất trong desktop app;
 - `SimulationEngine` là collaborator để chạy train movement và time-stepped behavior;
-- `runtime_session/` là lớp thực thi cho các runtime use case ở `products/generic_application`.
+- `runtime/` là lớp thực thi cho các runtime use case trong workspace service.
 
 ### 2.5 `runtime_orchestration_context`
 
@@ -159,9 +159,9 @@ Phụ trách chính:
 - cung cấp runtime health cho UI/transport.
 
 Module liên quan:
-- `products/generic_application/runtime_workspace_service.py`
-- `products/generic_application/runtime_realtime.py`
-- `products/generic_application/profile.py`
+- `runtime/workspace_service.py`
+- `infrastructure/event_store.py`
+- `runtime/profile.py`
 
 Ý nghĩa kiến trúc:
 - `RuntimeWorkspaceService` là facade trung tâm cho runtime;
@@ -177,9 +177,9 @@ Phụ trách chính:
 - gửi `command_result`, `runtime_event`, `runtime_snapshot` ra bên ngoài.
 
 Module liên quan:
-- `integrations/smartio/protocol.py`
-- `integrations/smartio/runtime_bridge.py`
-- `integrations/smartio/qt_ws_client.py`
+- `integration/smartio_adapter/protocol.py`
+- `integration/smartio_adapter/runtime_bridge.py`
+- `integration/smartio_adapter/qt_ws_client.py`
 - `ui/controllers/runtime_workspace_controller.py`
 
 Ý nghĩa kiến trúc:
@@ -220,7 +220,7 @@ Topology được dùng xuyên suốt ở design, compile, simulation, runtime, 
 
 ### 3.2 `RuntimeSession`
 
-`runtime_session/session.py` định nghĩa class `RuntimeSession`, là runtime session stateful.
+`runtime/runtime_controller.py` định nghĩa class `RuntimeSession`, là runtime session stateful.
 
 Trong `__post_init__`, nó khởi tạo:
 - `RouteEngine`
@@ -252,7 +252,7 @@ Trong `__post_init__`, nó khởi tạo:
 
 ### 3.3 `RuntimeWorkspaceService`
 
-`products/generic_application/runtime_workspace_service.py` là runtime facade của toàn bộ desktop app.
+`runtime/workspace_service.py` là runtime facade của toàn bộ desktop app.
 
 Nhiệm vụ chính:
 - đảm bảo tồn tại session qua `ensure_session(topology)`;
@@ -271,7 +271,7 @@ Vai trò kiến trúc:
 
 ### 3.4 `RuntimeJournal` và `RuntimeRecoveryService`
 
-`products/generic_application/runtime_realtime.py` chứa các primitive realtime:
+`infrastructure/event_store.py` chứa các primitive realtime:
 - `RuntimeCommand`
 - `RuntimeEvent`
 - `RuntimeCommandResult`
@@ -360,7 +360,7 @@ Nhưng các ghi trực tiếp vào khóa liên động bị chặn:
 
 ### 5.1 `SmartIOWebSocketClient`
 
-`integrations/smartio/qt_ws_client.py` là adapter Qt WebSocket.
+`integration/smartio_adapter/qt_ws_client.py` là adapter Qt WebSocket.
 
 Chức năng chính:
 - mở/đóng kết nối;
@@ -387,7 +387,7 @@ Nó không chứa logic liên khóa.
 
 ### 5.2 `SmartIORuntimeBridge`
 
-`integrations/smartio/runtime_bridge.py` làm 3 việc chính:
+`integration/smartio_adapter/runtime_bridge.py` làm 3 việc chính:
 - chuyển envelope `command` thành runtime command;
 - chuyển envelope `state_update` thành command `apply_state_update`;
 - validate payload nguy hiểm và ném `SmartIOProtocolError`.
@@ -475,46 +475,46 @@ Trạng thái `degraded` có thể xuất hiện khi:
 
 ```text
 core/
-  application/
-    dto/
-    mode_policy/
-    serialization/
-    use_cases/
   compiler/
   domain/
     lifecycle/
     model/
     policy/
-  infrastructure/
-    clocks/
-    persistence/
-  runtime/
+kernel/
+  locking_engine/
+  occupancy_engine/
+  route_dispatcher/
+  safety_engine/
 
-runtime_session/
-  command_gateway.py
+runtime/
+  application/
+    dto/
+    mode_policy/
+    serialization/
+    use_cases/
+  specific_application/
+  command_bus.py
   read_model.py
-  session.py
+  runtime_controller.py
+  runtime_cycle.py
+  workspace_service.py
+  profile.py
+  application_service.py
 
 simulation/
-  engine.py
-  snapshot_hydrator.py
-  train_lifecycle.py
+  environment_simulator.py
+  train_simulator.py
 
-products/generic_application/
-  profile.py
-  runtime_realtime.py
-  runtime_workspace_service.py
-  service.py
+infrastructure/
+  clocks/
+  snapshot_store/
+  event_store.py
 
-integrations/
-  smartio/
+integration/
+  smartio_adapter/
     protocol.py
     qt_ws_client.py
     runtime_bridge.py
-
-products/specific_application/
-  editor_service.py
-  station_layout.py
 
 ui/
   controllers/
@@ -526,38 +526,44 @@ ui/
 
 ### 9.1 `core/*`
 
-- không phụ thuộc vào `ui/*`, `runtime_session/*`, `simulation/*`, `integrations/*`;
+- không phụ thuộc vào `ui/*`, `runtime/*`, `simulation/*`, `integration/*`;
 - chứa logic có thể test độc lập;
-- là nơi định nghĩa domain model, runtime rules, compiler, và use cases.
+- là nơi định nghĩa domain model và compiler (có thể dùng kernel product rules khi compile route).
 
-### 9.2 `simulation/*`
+### 9.2 `kernel/*`
 
-- được phép phụ thuộc vào `core/domain/*`, `core/runtime/*`, và `runtime_session/*`;
+- được phép phụ thuộc vào `core/domain/*` và `infrastructure/clocks/*`;
+- chứa runtime engines cho locking/routing/safety/occupancy;
+- không nên chứa logic giao diện hay transport.
+
+### 9.3 `runtime/*`
+
+- được phép dùng `core/*`, `kernel/*`, `simulation/*`, `infrastructure/*`;
+- là lớp orchestration/runtime workflow;
+- không nên chứa widget/UI code.
+
+### 9.4 `simulation/*`
+
+- được phép phụ thuộc vào `core/*` và cộng tác với `runtime/*`;
 - không nên chứa logic giao diện hay transport;
 - là nơi tập hợp hành vi mô phỏng thuần.
 
-### 9.3 `products/generic_application/*`
-
-- được phép dùng `core/*`, `runtime_session/*`, `simulation/*`, `products/generic_product/*`;
-- là lớp orchestration và persistence workflow;
-- không nên chứa widget/UI code.
-
-### 9.4 `integrations/*`
+### 9.5 `integration/*`
 
 - chỉ nên nói chuyện với service/port cấp application;
 - không được can thiệp trực tiếp vào nội bộ `LockingEngine` bằng cách đột biến raw state;
 - mọi interaction phải qua protocol và command boundary.
 
-### 9.5 `ui/*`
+### 9.6 `ui/*`
 
-- được phép phụ thuộc vào `products/specific_application/*`, `products/generic_application/*`, `runtime_session/*`, `integrations/*`;
+- được phép phụ thuộc vào `runtime/*`, `runtime/specific_application/*`, và `integration/*`;
 - chỉ nên điều phối và trình bày;
 - không nên đặt luật liên khóa trong controller/view.
 
 ## 10. Nguyên tắc mở rộng
 
 1. Thêm command mới qua `RuntimeWorkspaceService.submit_command(...)` thay vì sửa state trực tiếp.
-2. Nếu command có ý nghĩa nghiệp vụ, đặt logic ở `core/application/use_cases` hoặc `core/runtime`.
+2. Nếu command có ý nghĩa nghiệp vụ, đặt logic ở `runtime/application/use_cases` hoặc `kernel/*`.
 3. Nếu không thể phục hồi state từ event cũ, tăng `snapshot_version` và cập nhật hydrator.
 4. Mọi tích hợp bên ngoài nên đi qua anti-corruption layer tương tự `SmartIORuntimeBridge`.
 5. Mọi quy tắc safety mới phải được thực thi trong engine/monitor, không đặt ở UI.
@@ -566,7 +572,7 @@ ui/
 
 Kiến trúc hiện tại của `CBI_Railway_Signal` xoay quanh một runtime session stateful (`RuntimeSession`) được bao bọc bởi một lớp orchestration có journal/recovery (`RuntimeWorkspaceService`).
 
-`core/` giữ logic liên khóa và compiler thuần; `runtime_session/` giữ mutable runtime state và runtime-facing read model; `simulation/` giữ hành vi mô phỏng thuần; `products/generic_application/` giữ command stream, checkpoint, và recovery; `integrations/smartio/` giữ giao thức kết nối bên ngoài; `ui/` chủ yếu điều phối và hiển thị.
+`core/` giữ logic liên khóa và compiler thuần; `kernel/` giữ runtime engines; `runtime/` giữ mutable runtime state và runtime-facing read model; `simulation/` giữ hành vi mô phỏng thuần; `infrastructure/` giữ persistence adapters; `integration/` giữ giao thức kết nối bên ngoài; `ui/` chủ yếu điều phối và hiển thị.
 
 Cách tách này giúp hệ thống:
 - bảo toàn safety invariant;

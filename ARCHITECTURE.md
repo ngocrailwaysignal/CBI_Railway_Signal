@@ -9,28 +9,28 @@ The goals of this document are to clarify:
 - the dependency rules that should remain stable as the system evolves.
 
 The system is currently split into the following major blocks:
-- `core/`: interlocking rules, domain models, compiler, and pure runtime engines.
-- `runtime_session/`: a stateful local runtime session, runtime-facing read model, snapshot restore, and runtime mutation boundary.
-- `simulation/`: pure simulation behavior such as train lifecycle and time-stepped execution.
-- `products/generic_application/`: application-level orchestration, command journaling, checkpoints, and recovery.
-- `integrations/smartio/`: SmartIO communication over WebSocket and envelope <-> runtime command translation.
-- `products/specific_application/`: station-specific layout and editor logic.
+- `core/`: interlocking rules, domain models, and compiler logic.
+- `kernel/`: runtime engines for locking, routing, safety, and occupancy.
+- `runtime/`: stateful runtime session, application use cases, and workspace orchestration.
+- `simulation/`: simulation helpers such as train lifecycle and snapshot hydration.
+- `infrastructure/`: persistence adapters and clocks.
+- `integration/`: SmartIO communication over WebSocket and envelope <-> runtime command translation.
 - `ui/`: UI orchestration, operating modes, and user-to-service integration.
 
 ## 1. Architecture Overview
 
-The system can be understood as four main layers:
+The system can be understood as five main layers:
 
-1. Pure domain/runtime logic layer:
-   `core/domain`, `core/runtime`, `core/compiler`, `core/application/use_cases`
-2. Stateful runtime session layer:
-   `runtime_session`
-3. Pure simulation behavior layer:
+1. Pure domain/compiler logic layer:
+   `core/domain`, `core/compiler`
+2. Kernel runtime engine layer:
+   `kernel`
+3. Stateful runtime session and application layer:
+   `runtime`, `runtime/application`
+4. Simulation helper layer:
    `simulation`
-4. Application orchestration and realtime persistence layer:
-   `products/generic_application`
-5. External integration and presentation layer:
-   `integrations/smartio`, `ui`, `products/specific_application`
+5. External integration and presentation layer (with infrastructure support):
+   `integration`, `ui`, `infrastructure`
 
 The main system flow is:
 
@@ -66,11 +66,11 @@ Primary responsibilities:
 - providing layout data for the UI and SmartIO snapshots.
 
 Related modules:
-- `products/specific_application/editor_service.py`
-- `products/specific_application/station_layout.py`
+- `runtime/specific_application/editor_service.py`
+- `runtime/specific_application/station_layout.py`
 - `ui/views/canvas_editor_view.py`
 - `core/domain/model/topology.py`
-- `core/application/serialization/layout_payload_serializer.py`
+- `runtime/application/serialization/layout_payload_serializer.py`
 
 Inputs/Outputs:
 - input: canvas editor actions, `layout.json`;
@@ -87,7 +87,7 @@ Related modules:
 - `core/compiler/route_compiler.py`
 - `core/compiler/interlocking_table.py`
 - `core/compiler/spec_models.py`
-- `products/generic_application/service.py`
+- `runtime/application_service.py`
 
 Inputs/Outputs:
 - input: `RailwayTopology`, overlap parameters;
@@ -102,13 +102,13 @@ Primary responsibilities:
 - monitoring safety and triggering fail-safe STOP when necessary.
 
 Related modules:
-- `core/runtime/route_engine.py`
-- `core/runtime/route_dispatcher.py`
-- `core/runtime/locking_engine.py`
-- `core/runtime/occupancy_reconciler.py`
-- `core/runtime/safety_monitor.py`
-- `core/runtime/timed_release.py`
-- `core/runtime/sequence_locking.py`
+- `kernel/route_dispatcher/route_engine.py`
+- `kernel/route_dispatcher/route_dispatcher.py`
+- `kernel/locking_engine/locking_engine.py`
+- `kernel/occupancy_engine/occupancy_reconciler.py`
+- `kernel/safety_engine/safety_monitor.py`
+- `kernel/locking_engine/timed_release.py`
+- `kernel/locking_engine/sequence_locking.py`
 - `core/domain/lifecycle/approach_locking.py`
 
 Critical rules:
@@ -125,16 +125,16 @@ Primary responsibilities:
 - delegating on the mutable runtime session instead of owning it.
 
 Related modules:
-- `simulation/engine.py`
-- `simulation/train_lifecycle.py`
-- `simulation/snapshot_hydrator.py`
-- `runtime_session/session.py`
-- `runtime_session/read_model.py`
+- `runtime/runtime_cycle.py`
+- `simulation/train_simulator.py`
+- `simulation/environment_simulator.py`
+- `runtime/runtime_controller.py`
+- `runtime/read_model.py`
 
 Architectural meaning:
 - `RuntimeSession` is the single stateful runtime session inside the desktop app;
 - `SimulationEngine` is a collaborator that advances train movement and time-stepped behavior;
-- `runtime_session/` is the execution layer for runtime use cases in `products/generic_application`.
+- `runtime/` is the execution layer for runtime use cases in the workspace service.
 
 ### 2.5 `runtime_orchestration_context`
 
@@ -145,9 +145,9 @@ Primary responsibilities:
 - providing runtime health to the UI and transport layer.
 
 Related modules:
-- `products/generic_application/runtime_workspace_service.py`
-- `products/generic_application/runtime_realtime.py`
-- `products/generic_application/profile.py`
+- `runtime/workspace_service.py`
+- `infrastructure/event_store.py`
+- `runtime/profile.py`
 
 Architectural meaning:
 - `RuntimeWorkspaceService` is the central runtime facade;
@@ -163,9 +163,9 @@ Primary responsibilities:
 - sending `command_result`, `runtime_event`, and `runtime_snapshot` outward.
 
 Related modules:
-- `integrations/smartio/protocol.py`
-- `integrations/smartio/runtime_bridge.py`
-- `integrations/smartio/qt_ws_client.py`
+- `integration/smartio_adapter/protocol.py`
+- `integration/smartio_adapter/runtime_bridge.py`
+- `integration/smartio_adapter/qt_ws_client.py`
 - `ui/controllers/runtime_workspace_controller.py`
 
 Architectural meaning:
@@ -206,7 +206,7 @@ It is the structural source of truth for the system.
 
 ### 3.2 `RuntimeSession`
 
-`runtime_session/session.py` defines the `RuntimeSession` class, which is the stateful runtime session.
+`runtime/runtime_controller.py` defines the `RuntimeSession` class, which is the stateful runtime session.
 
 In `__post_init__`, it initializes:
 - `RouteEngine`
@@ -238,7 +238,7 @@ In `__post_init__`, it initializes:
 
 ### 3.3 `RuntimeWorkspaceService`
 
-`products/generic_application/runtime_workspace_service.py` is the runtime facade for the entire desktop app.
+`runtime/workspace_service.py` is the runtime facade for the entire desktop app.
 
 Primary responsibilities:
 - ensuring the runtime session exists via `ensure_session(topology)`;
@@ -257,7 +257,7 @@ Architectural role:
 
 ### 3.4 `RuntimeJournal` and `RuntimeRecoveryService`
 
-`products/generic_application/runtime_realtime.py` contains the realtime primitives:
+`infrastructure/event_store.py` contains the realtime primitives:
 - `RuntimeCommand`
 - `RuntimeEvent`
 - `RuntimeCommandResult`
@@ -346,7 +346,7 @@ This ensures:
 
 ### 5.1 `SmartIOWebSocketClient`
 
-`integrations/smartio/qt_ws_client.py` is the Qt WebSocket adapter.
+`integration/smartio_adapter/qt_ws_client.py` is the Qt WebSocket adapter.
 
 Main functions:
 - opening and closing the connection;
@@ -373,7 +373,7 @@ It contains no interlocking logic.
 
 ### 5.2 `SmartIORuntimeBridge`
 
-`integrations/smartio/runtime_bridge.py` performs three main tasks:
+`integration/smartio_adapter/runtime_bridge.py` performs three main tasks:
 - converting `command` envelopes into runtime commands;
 - converting `state_update` envelopes into the `apply_state_update` command;
 - validating dangerous payloads and raising `SmartIOProtocolError`.
@@ -461,46 +461,46 @@ The `degraded` state can appear when:
 
 ```text
 core/
-  application/
-    dto/
-    mode_policy/
-    serialization/
-    use_cases/
   compiler/
   domain/
     lifecycle/
     model/
     policy/
-  infrastructure/
-    clocks/
-    persistence/
-  runtime/
+kernel/
+  locking_engine/
+  occupancy_engine/
+  route_dispatcher/
+  safety_engine/
 
-runtime_session/
-  command_gateway.py
+runtime/
+  application/
+    dto/
+    mode_policy/
+    serialization/
+    use_cases/
+  specific_application/
+  command_bus.py
   read_model.py
-  session.py
+  runtime_controller.py
+  runtime_cycle.py
+  workspace_service.py
+  profile.py
+  application_service.py
 
 simulation/
-  engine.py
-  snapshot_hydrator.py
-  train_lifecycle.py
+  environment_simulator.py
+  train_simulator.py
 
-products/generic_application/
-  profile.py
-  runtime_realtime.py
-  runtime_workspace_service.py
-  service.py
+infrastructure/
+  clocks/
+  snapshot_store/
+  event_store.py
 
-integrations/
-  smartio/
+integration/
+  smartio_adapter/
     protocol.py
     qt_ws_client.py
     runtime_bridge.py
-
-products/specific_application/
-  editor_service.py
-  station_layout.py
 
 ui/
   controllers/
@@ -512,38 +512,44 @@ ui/
 
 ### 9.1 `core/*`
 
-- must not depend on `ui/*`, `runtime_session/*`, `simulation/*`, or `integrations/*`;
+- must not depend on `ui/*`, `runtime/*`, `simulation/*`, or `integration/*`;
 - contains logic that can be tested independently;
-- defines domain models, runtime rules, compiler logic, and use cases.
+- defines domain models and compiler logic (may use kernel product rules when compiling routes).
 
-### 9.2 `simulation/*`
+### 9.2 `kernel/*`
 
-- may depend on `core/domain/*`, `core/runtime/*`, and `runtime_session/*`;
+- may depend on `core/domain/*` and `infrastructure/clocks/*`;
+- owns runtime engines for locking, routing, occupancy, and safety;
+- should not contain UI or transport logic.
+
+### 9.3 `runtime/*`
+
+- may use `core/*`, `kernel/*`, `simulation/*`, and `infrastructure/*`;
+- owns runtime orchestration, command handling, and view state;
+- should not contain widget or UI code.
+
+### 9.4 `simulation/*`
+
+- may depend on `core/*` and collaborate with `runtime/*`;
 - should not contain UI or transport logic;
 - is the home of pure simulation behavior.
 
-### 9.3 `products/generic_application/*`
-
-- may use `core/*`, `runtime_session/*`, `simulation/*`, and `products/generic_product/*`;
-- is the orchestration and persistence workflow layer;
-- should not contain widget or UI code.
-
-### 9.4 `integrations/*`
+### 9.5 `integration/*`
 
 - should communicate only with application-level services and ports;
 - must not directly manipulate `LockingEngine` internals through raw state mutation;
 - every interaction must pass through the protocol and command boundary.
 
-### 9.5 `ui/*`
+### 9.6 `ui/*`
 
-- may depend on `products/specific_application/*`, `products/generic_application/*`, `runtime_session/*`, and `integrations/*`;
+- may depend on `runtime/*`, `runtime/specific_application/*`, and `integration/*`;
 - should focus on orchestration and presentation;
 - should not place interlocking rules inside controllers or views.
 
 ## 10. Extension Guidelines
 
 1. Add new commands through `RuntimeWorkspaceService.submit_command(...)` instead of mutating state directly.
-2. If a command has business meaning, place the logic in `core/application/use_cases` or `core/runtime`.
+2. If a command has business meaning, place the logic in `runtime/application/use_cases` or `kernel/*`.
 3. If state can no longer be restored from older events, bump `snapshot_version` and update the hydrator.
 4. External integrations should go through an anti-corruption layer similar to `SmartIORuntimeBridge`.
 5. New safety rules must be enforced in the engine/monitor, not in the UI.
@@ -552,7 +558,7 @@ ui/
 
 The current `CBI_Railway_Signal` architecture revolves around a stateful runtime session (`RuntimeSession`) wrapped by an orchestration layer with journaling and recovery (`RuntimeWorkspaceService`).
 
-`core/` holds pure interlocking and compiler logic; `runtime_session/` holds mutable runtime state and the runtime-facing read model; `simulation/` holds pure simulation behavior; `products/generic_application/` owns the command stream, checkpoints, and recovery; `integrations/smartio/` owns the external transport protocol; `ui/` mainly orchestrates and presents.
+`core/` holds pure domain and compiler logic; `kernel/` holds runtime engines; `runtime/` holds mutable runtime state and the runtime-facing read model; `simulation/` holds pure simulation behavior; `infrastructure/` owns persistence adapters; `integration/` owns the external transport protocol; `ui/` mainly orchestrates and presents.
 
 This separation helps the system:
 - preserve safety invariants;

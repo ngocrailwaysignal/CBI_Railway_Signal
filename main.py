@@ -6,7 +6,7 @@ import sys
 
 from PyQt6.QtWidgets import QApplication
 
-from products.generic_application import GenericApplicationProfile
+from runtime import GenericApplicationProfile
 from ui.views.main_window_view import MainWindow
 
 

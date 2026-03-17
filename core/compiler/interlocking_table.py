@@ -12,7 +12,7 @@ import networkx as nx
 from core.domain.model.elements import PointPosition, TrackSection
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
-from core.runtime.route_engine import RouteEngine
+from kernel.route_dispatcher.route_engine import RouteEngine
 
 
 @dataclass(slots=True)

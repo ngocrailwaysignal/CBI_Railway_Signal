@@ -9,14 +9,14 @@ from typing import Any
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
-from core.application import AppMode
+from runtime.application import AppMode
 from core.domain.model.topology import RailwayTopology
-from products.generic_application import (
-    GenericApplicationProfile,
-    GenericApplicationService,
-    RuntimeWorkspaceService,
+from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
+from integration.smartio_adapter import (
+    SmartIOProtocolError,
+    SmartIORuntimeBridge,
+    SmartIOWebSocketClient,
 )
-from integrations.smartio import SmartIOProtocolError, SmartIORuntimeBridge, SmartIOWebSocketClient
 
 
 class SmartIORuntimeCoordinator(QObject):
