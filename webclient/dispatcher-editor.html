@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dispatcher Editor</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/editor.js" defer></script>
+  </head>
+  <body class="app-shell editor-page">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">CBI RAILWAY SIGNAL</p>
+        <h1>Dispatcher Editor</h1>
+        <p class="subtitle">Draw the station schematic manually, then bind each visual element to CBI IDs.</p>
+      </div>
+      <div class="topbar-actions">
+        <a class="nav-button" href="/dispatcher">Open Viewer</a>
+        <button id="saveLayoutBtn" type="button" class="primary-button" disabled>Save Schematic</button>
+        <button id="clearCanvasBtn" type="button" class="danger-button">Clear Canvas</button>
+        <button id="reloadLayoutBtn" type="button" class="ghost">Reload</button>
+      </div>
+    </header>
+
+    <main class="editor-layout">
+      <aside class="toolbox">
+        <section class="card">
+          <h3>Toolbox</h3>
+          <div class="tool-grid">
+            <button type="button" data-tool-kind="track_section">Track Section</button>
+            <button type="button" data-tool-kind="signal">Signal</button>
+            <button type="button" data-tool-kind="point">Point</button>
+            <button type="button" data-tool-kind="label">Label</button>
+            <button type="button" data-tool-kind="block_marker">Block Marker</button>
+          </div>
+          <p class="hint">Drag a tool onto the board or click a tool to insert it at the center.</p>
+        </section>
+
+        <section class="card">
+          <h3>Canvas</h3>
+          <label class="toggle-row">
+            <span>Snap To Grid</span>
+            <input id="snapToggle" type="checkbox" />
+          </label>
+          <label class="inspector-field">
+            <span class="inspector-label">Grid Size</span>
+            <input id="gridSizeInput" type="number" min="4" step="2" />
+          </label>
+          <label class="inspector-field">
+            <span class="inspector-label">Canvas Width</span>
+            <input id="canvasWidthInput" type="number" min="640" step="20" />
+          </label>
+          <label class="inspector-field">
+            <span class="inspector-label">Canvas Height</span>
+            <input id="canvasHeightInput" type="number" min="480" step="20" />
+          </label>
+          <label class="toggle-row">
+            <span>Show Debug IDs</span>
+            <input id="editorShowDebug" type="checkbox" />
+          </label>
+        </section>
+
+        <section class="card">
+          <h3>Status</h3>
+          <div class="kv-list">
+            <div class="kv-row">
+              <span>Layout File</span>
+              <strong id="layoutPathText" class="mono">-</strong>
+            </div>
+          </div>
+          <p class="hint" id="editorStatus">Loading dispatcher schematic...</p>
+        </section>
+      </aside>
+
+      <section class="board-panel editor-board-panel">
+        <div class="panel-head">
+          <div>
+            <p class="panel-kicker">Authoring Surface</p>
+            <h2>Dispatcher Schematic Canvas</h2>
+          </div>
+          <p class="hint">Shift/Ctrl click to multi-select, drag selected elements to move, and use handles to rotate or reshape.</p>
+        </div>
+        <div id="boardViewport" class="board-frame editor-frame">
+          <svg id="editorBoard" aria-label="Dispatcher editor board"></svg>
+        </div>
+      </section>
+
+      <aside class="inspector-column">
+        <section class="card">
+          <h3>Inspector</h3>
+          <div id="inspectorPanel"></div>
+        </section>
+      </aside>
+    </main>
+  </body>
+</html>

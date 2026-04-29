@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import hashlib
 import json
 
@@ -18,6 +19,7 @@ def build_layout_payload(topology: RailwayTopology) -> dict:
         "signal_links": [],
         "clearance_conflict_groups": [],
         "ui_positions": {},
+        "dispatcher_view": deepcopy(getattr(topology, "dispatcher_view", {})),
     }
 
     for node_id in topology.graph.nodes:

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dispatcher Viewer</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/viewer.js" defer></script>
+  </head>
+  <body class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">CBI RAILWAY SIGNAL</p>
+        <h1>Dispatcher Viewer</h1>
+        <p class="subtitle">Board-first runtime view for dispatcher schematic state and active routes.</p>
+      </div>
+      <div class="topbar-actions">
+        <a class="nav-button" href="/dispatcher/editor">Open Editor</a>
+        <button id="toggleRoutesBtn" type="button" class="ghost">Hide Routes</button>
+        <button id="debugLabelsBtn" type="button" class="ghost">Show Debug</button>
+        <span class="status-pill waiting" id="connectionPill">WAITING RUNTIME</span>
+        <div class="clock-block">
+          <span class="clock-label">BANGKOK</span>
+          <strong id="clockText">--:--:--</strong>
+        </div>
+      </div>
+    </header>
+
+    <main class="workspace viewer-board-only">
+      <section class="board-panel board-panel-wide">
+        <div class="panel-head">
+          <div>
+            <p class="panel-kicker">Runtime Feed</p>
+            <h2 id="scenarioTitle">Waiting For Runtime</h2>
+            <p class="hint" id="transportHint">Loading runtime feed...</p>
+          </div>
+          <div class="viewer-compact-meta">
+            <span><strong id="workspaceModeText">waiting</strong> workspace</span>
+            <span><strong id="routeMetric">0</strong> routes</span>
+            <span><strong id="trainMetric">0</strong> trains</span>
+            <span><strong id="occupancyMetric">0</strong> occupied</span>
+            <span>updated <strong id="updatedAtText">--</strong></span>
+          </div>
+        </div>
+        <div class="board-frame">
+          <svg id="dispatcherBoard" aria-label="Dispatcher viewer board"></svg>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

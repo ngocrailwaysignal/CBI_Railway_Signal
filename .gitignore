@@ -11,3 +11,6 @@ __pycache__/
 .venv/
 venv/
 
+# Generated runtime-state feed for the dispatcher webclient
+data/runtime_journal/webclient_runtime_state.json
+

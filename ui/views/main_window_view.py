@@ -38,6 +38,7 @@ from runtime.application import AppMode
 from core.domain.model.elements import PointPosition, TrackSection
 from core.compiler.interlocking_table import InterlockingTableRow
 from core.domain.model.route import Route
+from infrastructure.snapshot_store import WEBCLIENT_RUNTIME_STATE_FILENAME
 from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
 from runtime.specific_application import SpecificLayoutEditorService, StationLayout
 from ui.controllers import (
@@ -83,6 +84,8 @@ class MainWindow(QMainWindow):
         self._runtime_transport_health: dict[str, object] = {}
         self._smartio_local_process: QProcess | None = None
         self._simulation_uses_local_smartio = False
+        self._webclient_process: QProcess | None = None
+        self._webclient_browser_opened = False
 
         self.palette = ComponentsPalette(self._translator, self)
         self.canvas = CanvasEditor(self, translator=self._translator)
@@ -118,6 +121,10 @@ class MainWindow(QMainWindow):
         self._simulation_timer = QTimer(self)
         self._simulation_timer.timeout.connect(self._simulation_tick)
         self._simulation_ticks_remaining = 0
+        self._webclient_runtime_timer = QTimer(self)
+        self._webclient_runtime_timer.setInterval(1000)
+        self._webclient_runtime_timer.timeout.connect(self._publish_webclient_runtime_state)
+        self._last_webclient_runtime_export_error = ""
         self._initialize_smartio_client()
 
         sample_path = Path("data/station_layout/main_layout.json")
@@ -662,6 +669,7 @@ class MainWindow(QMainWindow):
         self.canvas.refresh_visual_state()
         self._sync_ui_state()
         self._refresh_interlocking_table()
+        self._publish_webclient_runtime_state()
 
     def _on_runtime_health_changed(self, payload: object) -> None:
         self._runtime_transport_health = payload if isinstance(payload, dict) else {}
@@ -669,7 +677,39 @@ class MainWindow(QMainWindow):
         self._sync_ui_state()
 
     def _send_smartio_runtime_snapshot(self) -> None:
+        self._publish_webclient_runtime_state()
         self.smartio_coordinator.publish_runtime_snapshot()
+
+    def _webclient_runtime_state_path(self) -> Path:
+        journal_dir = Path(getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"))
+        if not journal_dir.is_absolute():
+            journal_dir = self._repo_root() / journal_dir
+        return journal_dir / WEBCLIENT_RUNTIME_STATE_FILENAME
+
+    def _publish_webclient_runtime_state(self) -> None:
+        if self._operating_mode is not OperatingMode.RUNTIME:
+            return
+        try:
+            runtime_snapshot = self.controller.build_runtime_snapshot() if self.controller.has_runtime_session else None
+            payload = self.application_service.build_webclient_runtime_state(
+                topology=self.canvas.topology,
+                workspace_mode=self._operating_mode,
+                runtime_snapshot=runtime_snapshot,
+            )
+            self.application_service.save_webclient_runtime_state(payload, self._webclient_runtime_state_path())
+            self._last_webclient_runtime_export_error = ""
+        except Exception as exc:
+            message = str(exc).strip()
+            if message and message != self._last_webclient_runtime_export_error:
+                self.status.showMessage(f"Webclient runtime export failed: {message}", 5000)
+                self._last_webclient_runtime_export_error = message
+
+    def _sync_webclient_runtime_export_for_mode(self, mode: OperatingMode) -> None:
+        if mode is OperatingMode.RUNTIME:
+            self._webclient_runtime_timer.start()
+            self._publish_webclient_runtime_state()
+            return
+        self._webclient_runtime_timer.stop()
 
     def _smartio_state_text(self) -> str:
         token = str(self._smartio_status_token or "").strip().lower()
@@ -868,6 +908,69 @@ class MainWindow(QMainWindow):
         self._ensure_smartio_connection(force=True)
         return self.smartio_coordinator.is_connected
 
+    @staticmethod
+    def _webclient_http_url() -> str:
+        return "http://127.0.0.1:8091/"
+
+    def _webclient_layout_path(self) -> Path:
+        if self.current_layout is not None and self.current_layout.source_path is not None:
+            return self.current_layout.source_path.resolve()
+        return (self._repo_root() / "data" / "station_layout" / "main_layout.json").resolve()
+
+    def _is_webclient_server_running(self) -> bool:
+        return (
+            self._webclient_process is not None
+            and self._webclient_process.state() is not QProcess.ProcessState.NotRunning
+        )
+
+    def _stop_webclient_server_process(self) -> None:
+        if self._webclient_process is None:
+            return
+        if self._webclient_process.state() is not QProcess.ProcessState.NotRunning:
+            self._webclient_process.terminate()
+            if not self._webclient_process.waitForFinished(1500):
+                self._webclient_process.kill()
+                self._webclient_process.waitForFinished(1500)
+        self._webclient_process.deleteLater()
+        self._webclient_process = None
+
+    def _ensure_webclient_server_for_runtime(self) -> None:
+        self._publish_webclient_runtime_state()
+        if not self._is_webclient_server_running():
+            process = QProcess(self)
+            process.setProgram(sys.executable)
+            process.setArguments(
+                [
+                    str(self._repo_root() / "webclient" / "serve.py"),
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    "8091",
+                    "--layout-file",
+                    str(self._webclient_layout_path()),
+                ]
+            )
+            process.setWorkingDirectory(str(self._repo_root()))
+            process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            process.start()
+            if process.waitForStarted(3000):
+                self._webclient_process = process
+                self.status.showMessage(
+                    f"Webclient runtime monitor started at {self._webclient_http_url()}",
+                    5000,
+                )
+            else:
+                error_text = str(process.errorString()).strip()
+                process.deleteLater()
+                if error_text:
+                    self.status.showMessage(
+                        f"Webclient runtime monitor start failed: {error_text}",
+                        5000,
+                    )
+        if not self._webclient_browser_opened:
+            QDesktopServices.openUrl(QUrl(self._webclient_http_url()))
+            self._webclient_browser_opened = True
+
     def _set_operating_mode(self, mode: OperatingMode, *, announce: bool = True) -> None:
         previous_mode = self._operating_mode
         if mode is OperatingMode.RUNTIME and not self._allow_runtime_workspace():
@@ -929,6 +1032,9 @@ class MainWindow(QMainWindow):
             )
 
         self._sync_smartio_connection_for_mode(mode)
+        self._sync_webclient_runtime_export_for_mode(mode)
+        if mode is OperatingMode.RUNTIME:
+            self._ensure_webclient_server_for_runtime()
         self._sync_ui_state()
         self._update_runtime_connection_label()
         if announce and previous_mode is not mode:
@@ -1933,7 +2039,9 @@ class MainWindow(QMainWindow):
         self.overlap_release_spin.setVisible(not runtime_mode)
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        self._webclient_runtime_timer.stop()
         self.smartio_coordinator.disconnect()
         self._stop_smartio_local_process()
+        self._stop_webclient_server_process()
         super().closeEvent(event)
 

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from runtime.application import ModePolicy
-from runtime.application.serialization import build_layout_payload
+from runtime.application import AppMode, ModePolicy
+from runtime.application.serialization import build_layout_payload, build_webclient_runtime_state
 from core.compiler import InterlockingSpec, RouteCompiler
 from core.compiler.interlocking_table import InterlockingTableRow
 from core.domain.model.route import Route
@@ -14,6 +14,7 @@ from core.domain.model.topology import RailwayTopology
 from infrastructure.snapshot_store import (
     InterlockingSpecRepository,
     RuntimeSnapshotRepository,
+    WebclientRuntimeStateRepository,
 )
 from kernel.product_kernel import GenericProductKernel
 
@@ -37,6 +38,7 @@ class GenericApplicationService:
         self._route_compiler = RouteCompiler(self.kernel)
         self._spec_repository = InterlockingSpecRepository()
         self._snapshot_repository = RuntimeSnapshotRepository()
+        self._webclient_runtime_state_repository = WebclientRuntimeStateRepository()
 
     def load_topology(
         self,
@@ -160,3 +162,27 @@ class GenericApplicationService:
     def build_layout_payload(topology: RailwayTopology) -> dict:
         """Serialize current topology to one web/runtime-compatible layout payload."""
         return build_layout_payload(topology)
+
+    @staticmethod
+    def build_webclient_runtime_state(
+        *,
+        topology: RailwayTopology,
+        workspace_mode: AppMode | str,
+        runtime_snapshot: dict[str, Any] | None = None,
+        generated_at: float | None = None,
+    ) -> dict[str, Any]:
+        """Serialize one aggregated runtime-state payload for the dispatcher webclient."""
+        return build_webclient_runtime_state(
+            topology=topology,
+            workspace_mode=workspace_mode,
+            runtime_snapshot=runtime_snapshot,
+            generated_at=generated_at,
+        )
+
+    def save_webclient_runtime_state(self, payload: dict[str, Any], path: str | Path) -> None:
+        """Persist one webclient runtime-state payload atomically."""
+        self._webclient_runtime_state_repository.save(payload, path)
+
+    def load_webclient_runtime_state(self, path: str | Path) -> dict:
+        """Load one webclient runtime-state payload."""
+        return self._webclient_runtime_state_repository.load(path)

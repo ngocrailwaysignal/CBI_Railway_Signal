@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from copy import deepcopy
 import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
@@ -35,6 +36,7 @@ class RailwayTopology:
         # Metadata for special (profile/clearance) route conflicts.
         self.clearance_conflict_groups: list[set[str]] = []
         self.ui_positions: Dict[str, tuple[float, float]] = {}
+        self.dispatcher_view: Dict[str, Any] = {}
 
     def add_section(self, section: TrackSection, position: tuple[float, float] | None = None) -> None:
         """Add a track section node."""
@@ -446,6 +448,7 @@ class RailwayTopology:
             "signal_links": [],
             "clearance_conflict_groups": [],
             "ui_positions": {},
+            "dispatcher_view": deepcopy(self.dispatcher_view),
         }
 
         for node_id in self.graph.nodes:
@@ -525,6 +528,9 @@ class RailwayTopology:
         topology = cls()
 
         positions = data.get("ui_positions", {})
+        raw_dispatcher_view = data.get("dispatcher_view", {})
+        if isinstance(raw_dispatcher_view, dict):
+            topology.dispatcher_view = deepcopy(raw_dispatcher_view)
 
         for section_data in data.get("sections", []):
             section_kind = str(section_data.get("kind", "track")).strip().lower()

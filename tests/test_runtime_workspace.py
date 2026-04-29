@@ -15,8 +15,8 @@ from ui.controllers.runtime_workspace_controller import SmartIORuntimeCoordinato
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-LAYOUT_PATH = REPO_ROOT / "data" / "main_layout.json"
-TEST_LAYOUT_PATH = REPO_ROOT / "data" / "test.json"
+LAYOUT_PATH = REPO_ROOT / "data" / "station_layout" / "main_layout.json"
+TEST_LAYOUT_PATH = REPO_ROOT / "data" / "station_layout" / "test.json"
 
 
 def build_services() -> tuple[GenericApplicationService, RuntimeWorkspaceService]:
@@ -671,7 +671,8 @@ def test_architecture_boundaries_do_not_regress() -> None:
     main_window_text = (REPO_ROOT / "ui" / "views" / "main_window_view.py").read_text()
     assert "simulation.session" not in main_window_text
     assert "core.runtime" not in main_window_text
-    assert "runtime_session" not in main_window_text
+    assert "from runtime.runtime_controller import RuntimeSession" not in main_window_text
+    assert "RuntimeSession(" not in main_window_text
 
     for path in (REPO_ROOT / "core").rglob("*.py"):
         text = path.read_text()

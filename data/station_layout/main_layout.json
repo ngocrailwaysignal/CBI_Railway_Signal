@@ -348,5 +348,411 @@
       1025.0,
       -175.0
     ]
+  },
+  "dispatcher_view": {
+    "canvas": {
+      "width": 1920.0,
+      "height": 900.0,
+      "grid_size": 20.0,
+      "snap_enabled": true,
+      "background": "#050607"
+    },
+    "elements": [
+      {
+        "id": "test-main",
+        "kind": "track_section",
+        "position": {
+          "x": -460.0,
+          "y": -240.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "points": [
+            {
+              "x": 0.0,
+              "y": 0.0
+            },
+            {
+              "x": 460.0,
+              "y": 240.0
+            },
+            {
+              "x": 460.0,
+              "y": 240.0
+            },
+            {
+              "x": 460.0,
+              "y": 240.0
+            },
+            {
+              "x": 460.0,
+              "y": 240.0
+            },
+            {
+              "x": 700.0,
+              "y": 0.0
+            }
+          ],
+          "stroke_width": 4.0,
+          "marker_spacing": 42.0
+        },
+        "style": {
+          "variant": "main"
+        },
+        "z_index": 0,
+        "binding": null
+      },
+      {
+        "id": "test-diverge",
+        "kind": "track_section",
+        "position": {
+          "x": -10.0,
+          "y": -360.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "points": [
+            {
+              "x": 10.0,
+              "y": 360.0
+            },
+            {
+              "x": 0.0,
+              "y": 0.0
+            },
+            {
+              "x": 180.0,
+              "y": 0.0
+            }
+          ],
+          "stroke_width": 4.0,
+          "marker_spacing": 42.0
+        },
+        "style": {
+          "variant": "siding"
+        },
+        "z_index": 1,
+        "binding": null
+      },
+      {
+        "id": "track_section-3",
+        "kind": "track_section",
+        "position": {
+          "x": 340.0,
+          "y": 420.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "points": [
+            {
+              "x": 0.0,
+              "y": 0.0
+            },
+            {
+              "x": 180.0,
+              "y": 0.0
+            }
+          ],
+          "stroke_width": 4.0,
+          "marker_spacing": 48.0
+        },
+        "style": {
+          "variant": "main"
+        },
+        "z_index": 8,
+        "binding": {
+          "cbi_type": "section",
+          "cbi_id": "S0"
+        }
+      },
+      {
+        "id": "track_section-4",
+        "kind": "track_section",
+        "position": {
+          "x": 520.0,
+          "y": 420.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "points": [
+            {
+              "x": 0.0,
+              "y": 0.0
+            },
+            {
+              "x": 180.0,
+              "y": 0.0
+            }
+          ],
+          "stroke_width": 4.0,
+          "marker_spacing": 48.0
+        },
+        "style": {
+          "variant": "main"
+        },
+        "z_index": 9,
+        "binding": {
+          "cbi_type": "section",
+          "cbi_id": "S1"
+        }
+      },
+      {
+        "id": "track_section-5",
+        "kind": "track_section",
+        "position": {
+          "x": 700.0,
+          "y": 420.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "points": [
+            {
+              "x": 0.0,
+              "y": 0.0
+            },
+            {
+              "x": 180.0,
+              "y": 0.0
+            }
+          ],
+          "stroke_width": 4.0,
+          "marker_spacing": 48.0
+        },
+        "style": {
+          "variant": "main"
+        },
+        "z_index": 10,
+        "binding": {
+          "cbi_type": "section",
+          "cbi_id": "S2"
+        }
+      },
+      {
+        "id": "track_section-6",
+        "kind": "track_section",
+        "position": {
+          "x": 880.0,
+          "y": 420.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "points": [
+            {
+              "x": 0.0,
+              "y": 0.0
+            },
+            {
+              "x": 180.0,
+              "y": 0.0
+            }
+          ],
+          "stroke_width": 4.0,
+          "marker_spacing": 48.0
+        },
+        "style": {
+          "variant": "main"
+        },
+        "z_index": 11,
+        "binding": {
+          "cbi_type": "section",
+          "cbi_id": "S3"
+        }
+      },
+      {
+        "id": "track_section-7",
+        "kind": "track_section",
+        "position": {
+          "x": 1060.0,
+          "y": 420.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "points": [
+            {
+              "x": 0.0,
+              "y": 0.0
+            },
+            {
+              "x": 180.0,
+              "y": 0.0
+            }
+          ],
+          "stroke_width": 4.0,
+          "marker_spacing": 48.0
+        },
+        "style": {
+          "variant": "main"
+        },
+        "z_index": 12,
+        "binding": {
+          "cbi_type": "section",
+          "cbi_id": "S4"
+        }
+      },
+      {
+        "id": "signal-6",
+        "kind": "signal",
+        "position": {
+          "x": 660.0,
+          "y": 400.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "mast": 18.0,
+          "arm": 14.0,
+          "head_radius": 5.5,
+          "label_offset": 20.0
+        },
+        "style": {},
+        "z_index": 14,
+        "binding": {
+          "cbi_type": "signal",
+          "cbi_id": "ENTRY_LEFT_B"
+        }
+      },
+      {
+        "id": "signal-8",
+        "kind": "signal",
+        "position": {
+          "x": 1040.0,
+          "y": 400.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "mast": 18.0,
+          "arm": 14.0,
+          "head_radius": 5.5,
+          "label_offset": 20.0
+        },
+        "style": {},
+        "z_index": 16,
+        "binding": {
+          "cbi_type": "signal",
+          "cbi_id": "EXTI_RIGHT_B"
+        }
+      },
+      {
+        "id": "signal-EXIT_LEFT_A",
+        "kind": "signal",
+        "position": {
+          "x": -320.0,
+          "y": -240.0
+        },
+        "rotation": 180.0,
+        "geometry": {
+          "mast": 18.0,
+          "arm": 14.0,
+          "head_radius": 5.5,
+          "label_offset": 20.0
+        },
+        "style": {},
+        "z_index": 502,
+        "binding": {
+          "cbi_type": "signal",
+          "cbi_id": "EXIT_LEFT_A"
+        }
+      },
+      {
+        "id": "signal-ENTRY_RIGHT_A",
+        "kind": "signal",
+        "position": {
+          "x": -150.0,
+          "y": -360.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "mast": 18.0,
+          "arm": 14.0,
+          "head_radius": 5.5,
+          "label_offset": 20.0
+        },
+        "style": {},
+        "z_index": 503,
+        "binding": {
+          "cbi_type": "signal",
+          "cbi_id": "ENTRY_RIGHT_A"
+        }
+      },
+      {
+        "id": "signal-ENTRY_LEFT_B",
+        "kind": "signal",
+        "position": {
+          "x": 20.0,
+          "y": -240.0
+        },
+        "rotation": 180.0,
+        "geometry": {
+          "mast": 18.0,
+          "arm": 14.0,
+          "head_radius": 5.5,
+          "label_offset": 20.0
+        },
+        "style": {},
+        "z_index": 504,
+        "binding": {
+          "cbi_type": "signal",
+          "cbi_id": "ENTRY_LEFT_B"
+        }
+      },
+      {
+        "id": "signal-EXTI_RIGHT_B",
+        "kind": "signal",
+        "position": {
+          "x": 150.0,
+          "y": -360.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "mast": 18.0,
+          "arm": 14.0,
+          "head_radius": 5.5,
+          "label_offset": 20.0
+        },
+        "style": {},
+        "z_index": 505,
+        "binding": {
+          "cbi_type": "signal",
+          "cbi_id": "EXTI_RIGHT_B"
+        }
+      },
+      {
+        "id": "test-title",
+        "kind": "label",
+        "position": {
+          "x": -130.0,
+          "y": -120.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "text": "TEST\\nDISPATCHER",
+          "font_size": 30.0,
+          "align": "middle"
+        },
+        "style": {
+          "tone": "bright"
+        },
+        "z_index": 656,
+        "binding": null
+      },
+      {
+        "id": "test-platform",
+        "kind": "block_marker",
+        "position": {
+          "x": -120.0,
+          "y": -215.0
+        },
+        "rotation": 0.0,
+        "geometry": {
+          "width": 40.0,
+          "height": 18.0,
+          "radius": 8.0
+        },
+        "style": {
+          "tone": "steel"
+        },
+        "z_index": 707,
+        "binding": null
+      }
+    ]
   }
 }
