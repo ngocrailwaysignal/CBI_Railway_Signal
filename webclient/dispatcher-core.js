@@ -82,6 +82,9 @@ export function normalizeRuntimeState(payload) {
   const layout = isRecord(runtime.layout) ? runtime.layout : {};
   const dispatcherView = normalizeDispatcherView(layout.dispatcher_view, layout.ui_positions || {});
   const routes = Array.isArray(runtime.routes) ? runtime.routes.filter(isRecord) : [];
+  const interlockingRows = Array.isArray(runtime.interlocking_rows)
+    ? runtime.interlocking_rows.filter(isRecord)
+    : [];
   const sections = Array.isArray(layout.sections) ? layout.sections.filter(isRecord) : [];
   const signals = Array.isArray(layout.signals) ? layout.signals.filter(isRecord) : [];
   const edges = Array.isArray(layout.edges) ? layout.edges : [];
@@ -110,6 +113,7 @@ export function normalizeRuntimeState(payload) {
     signals,
     edges,
     routes,
+    interlockingRows,
     trains,
     occupancy,
     occupancyById,
@@ -164,6 +168,7 @@ export function renderDispatcherBoard(svg, dispatcherView, runtimeState, options
   if (showRoutes) {
     renderActiveRoutes(svg, runtime, trackBindings);
   }
+  renderOccupiedTrackSections(svg, runtime, trackBindings);
   if (showTrains) {
     renderTrains(svg, runtime, trackBindings);
   }
@@ -474,7 +479,7 @@ function renderTrackSection(group, element, runtime, options) {
   const trackStyle = DEFAULT_TRACK_STYLE[variant] || DEFAULT_TRACK_STYLE.main;
   const width = Number(element.geometry.stroke_width || 4);
   const baseColor = occupied ? "#ff655b" : trackStyle.stroke;
-  const visualWidth = occupied ? width + 2.5 : width;
+  const visualWidth = width;
 
   group.appendChild(
     createSvgElement("polyline", {
@@ -485,8 +490,7 @@ function renderTrackSection(group, element, runtime, options) {
       "stroke-width": visualWidth,
       "stroke-linecap": "square",
       "stroke-linejoin": "round",
-      class: "track-base",
-      filter: occupied ? "url(#dispatcherGlow)" : undefined,
+      class: `track-base${occupied ? " is-occupied" : ""}`,
     }),
   );
 
@@ -788,7 +792,7 @@ function createTickMarks(points, width, color = "rgba(245, 247, 251, 0.9)") {
     return null;
   }
   const group = createSvgElement("g", { class: "dispatcher-track-ticks", style: `--track-tick-stroke:${color};` });
-  [totalLength / 3, (totalLength * 2) / 3].forEach((distance) => {
+  [0, totalLength].forEach((distance) => {
     const marker = pointAndNormalAtDistance(points, distance);
     if (!marker) {
       return;
@@ -918,6 +922,30 @@ function renderActiveRoutes(svg, runtime, trackBindings) {
           filter: "url(#dispatcherRouteGlow)",
           "marker-mid": "url(#dispatcherRouteArrow)",
           "marker-end": index === routeSegments.length - 1 ? "url(#dispatcherRouteArrow)" : undefined,
+        }),
+      );
+    });
+  });
+}
+
+function renderOccupiedTrackSections(svg, runtime, trackBindings) {
+  runtime.occupancyById.forEach((item, bindingId) => {
+    if (!item?.occupied) {
+      return;
+    }
+    const boundElements = trackBindings.get(bindingId) || [];
+    boundElements.forEach((element) => {
+      const globalPoints = element.geometry.points.map((point) => localToGlobal(element, point));
+      const width = Number(element.geometry.stroke_width || 4);
+      svg.appendChild(
+        createSvgElement("polyline", {
+          points: globalPoints.map((point) => `${point.x},${point.y}`).join(" "),
+          fill: "none",
+          stroke: "#ff3b30",
+          "stroke-width": width + 1.5,
+          "stroke-linecap": "square",
+          "stroke-linejoin": "round",
+          class: "dispatcher-occupied-line",
         }),
       );
     });

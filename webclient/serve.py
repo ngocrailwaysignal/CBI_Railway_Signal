@@ -5,6 +5,8 @@ import json
 import os
 import sys
 import tempfile
+import time
+import uuid
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -14,7 +16,11 @@ repo_root_text = str(REPO_ROOT)
 if repo_root_text not in sys.path:
     sys.path.insert(0, repo_root_text)
 
-from infrastructure.snapshot_store import WEBCLIENT_RUNTIME_STATE_FILENAME
+from infrastructure.snapshot_store import (
+    WEBCLIENT_RUNTIME_COMMAND_RESULTS_FILENAME,
+    WEBCLIENT_RUNTIME_COMMANDS_FILENAME,
+    WEBCLIENT_RUNTIME_STATE_FILENAME,
+)
 from webclient.dispatcher_layout import (
     build_bindable_catalog,
     create_empty_dispatcher_view,
@@ -24,6 +30,14 @@ from webclient.dispatcher_layout import (
 
 def _default_runtime_state_path(root: Path) -> Path:
     return root.parent / "data" / "runtime_journal" / WEBCLIENT_RUNTIME_STATE_FILENAME
+
+
+def _default_runtime_command_path(root: Path) -> Path:
+    return root.parent / "data" / "runtime_journal" / WEBCLIENT_RUNTIME_COMMANDS_FILENAME
+
+
+def _default_runtime_command_result_path(root: Path) -> Path:
+    return root.parent / "data" / "runtime_journal" / WEBCLIENT_RUNTIME_COMMAND_RESULTS_FILENAME
 
 
 def _default_layout_path(root: Path) -> Path:
@@ -62,6 +76,31 @@ def _save_layout_document(path: Path, payload: dict) -> None:
         raise
 
 
+def _append_runtime_command(path: Path, command: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(command, ensure_ascii=False, sort_keys=True) + "\n"
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(line)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _read_jsonl_objects(path: Path, *, limit: int = 100) -> list[dict]:
+    if not path.exists():
+        return []
+    records: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines()[-limit:]:
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            records.append(payload)
+    return records
+
+
 def _dispatcher_layout_payload(layout_document: dict) -> dict:
     bindable_catalog = build_bindable_catalog(layout_document)
     normalized_view = normalize_dispatcher_view(
@@ -74,7 +113,14 @@ def _dispatcher_layout_payload(layout_document: dict) -> dict:
     }
 
 
-def create_handler(*, root: Path, runtime_state_path: Path, layout_path: Path):
+def create_handler(
+    *,
+    root: Path,
+    runtime_state_path: Path,
+    runtime_command_path: Path,
+    runtime_command_result_path: Path,
+    layout_path: Path,
+):
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *handler_args, **handler_kwargs):
             super().__init__(*handler_args, directory=str(root), **handler_kwargs)
@@ -98,6 +144,9 @@ def create_handler(*, root: Path, runtime_state_path: Path, layout_path: Path):
             if parsed.path == "/api/dispatcher-layout":
                 self._serve_dispatcher_layout()
                 return
+            if parsed.path == "/api/runtime-command-results":
+                self._serve_runtime_command_results()
+                return
             if parsed.path in {"", "/", "/dispatcher", "/dispatcher/"}:
                 self.path = "/dispatcher.html"
                 super().do_GET()
@@ -112,6 +161,13 @@ def create_handler(*, root: Path, runtime_state_path: Path, layout_path: Path):
             parsed = urlparse(self.path)
             if parsed.path == "/api/dispatcher-layout":
                 self._update_dispatcher_layout()
+                return
+            self.send_error(405, "Method Not Allowed")
+
+        def do_POST(self) -> None:
+            parsed = urlparse(self.path)
+            if parsed.path == "/api/runtime-command":
+                self._enqueue_runtime_command()
                 return
             self.send_error(405, "Method Not Allowed")
 
@@ -154,6 +210,14 @@ def create_handler(*, root: Path, runtime_state_path: Path, layout_path: Path):
                 )
                 return
             self._send_json(200, payload)
+
+        def _serve_runtime_command_results(self) -> None:
+            try:
+                records = _read_jsonl_objects(runtime_command_result_path)
+            except Exception as exc:
+                self._send_json(503, {"error": "runtime_command_results_unavailable", "detail": str(exc)})
+                return
+            self._send_json(200, {"results": records})
 
         def _update_dispatcher_layout(self) -> None:
             if not layout_path.exists():
@@ -200,6 +264,48 @@ def create_handler(*, root: Path, runtime_state_path: Path, layout_path: Path):
                 },
             )
 
+        def _enqueue_runtime_command(self) -> None:
+            try:
+                content_length = int(self.headers.get("Content-Length", "0") or "0")
+            except ValueError:
+                content_length = 0
+            if content_length <= 0:
+                self._send_json(400, {"error": "invalid_request", "detail": "Missing request body"})
+                return
+            try:
+                raw_body = self.rfile.read(content_length)
+                payload = json.loads(raw_body.decode("utf-8"))
+            except Exception as exc:
+                self._send_json(400, {"error": "invalid_json", "detail": str(exc)})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(400, {"error": "invalid_request", "detail": "Command payload must be an object"})
+                return
+            kind = str(payload.get("kind", "")).strip()
+            if kind not in {"set_route", "cancel_active_routes"}:
+                self._send_json(400, {"error": "unsupported_command", "detail": kind or "missing kind"})
+                return
+            command_payload = payload.get("payload", {})
+            if command_payload is None:
+                command_payload = {}
+            if not isinstance(command_payload, dict):
+                self._send_json(400, {"error": "invalid_request", "detail": "Command payload must be an object"})
+                return
+            command_ts = time.time()
+            command = {
+                "command_id": f"web-{int(command_ts * 1000)}-{os.getpid()}-{uuid.uuid4().hex[:8]}",
+                "source_id": "webclient",
+                "kind": kind,
+                "payload": command_payload,
+                "ts": command_ts,
+            }
+            try:
+                _append_runtime_command(runtime_command_path, command)
+            except Exception as exc:
+                self._send_json(500, {"error": "runtime_command_enqueue_failed", "detail": str(exc)})
+                return
+            self._send_json(202, {"status": "queued", "command_id": command["command_id"], "kind": kind})
+
         def _send_json(self, status: int, payload: dict) -> None:
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
             self.send_response(status)
@@ -218,12 +324,24 @@ def create_server(
     port: int = 8091,
     root: Path | None = None,
     runtime_state_path: Path | None = None,
+    runtime_command_path: Path | None = None,
+    runtime_command_result_path: Path | None = None,
     layout_path: Path | None = None,
 ) -> ThreadingHTTPServer:
     root_path = (root or Path(__file__).resolve().parent).resolve()
     runtime_state = (runtime_state_path or _default_runtime_state_path(root_path)).resolve()
+    runtime_commands = (runtime_command_path or _default_runtime_command_path(root_path)).resolve()
+    runtime_command_results = (
+        runtime_command_result_path or _default_runtime_command_result_path(root_path)
+    ).resolve()
     layout = (layout_path or _default_layout_path(root_path)).resolve()
-    handler = create_handler(root=root_path, runtime_state_path=runtime_state, layout_path=layout)
+    handler = create_handler(
+        root=root_path,
+        runtime_state_path=runtime_state,
+        runtime_command_path=runtime_commands,
+        runtime_command_result_path=runtime_command_results,
+        layout_path=layout,
+    )
     return ThreadingHTTPServer((host, port), handler)
 
 
@@ -232,6 +350,8 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8091)
     parser.add_argument("--runtime-state-file", default="")
+    parser.add_argument("--runtime-command-file", default="")
+    parser.add_argument("--runtime-command-result-file", default="")
     parser.add_argument("--layout-file", default="")
     args = parser.parse_args()
 
@@ -240,6 +360,16 @@ def main() -> int:
         Path(args.runtime_state_file).resolve()
         if str(args.runtime_state_file).strip()
         else _default_runtime_state_path(root)
+    )
+    runtime_command_path = (
+        Path(args.runtime_command_file).resolve()
+        if str(args.runtime_command_file).strip()
+        else _default_runtime_command_path(root)
+    )
+    runtime_command_result_path = (
+        Path(args.runtime_command_result_file).resolve()
+        if str(args.runtime_command_result_file).strip()
+        else _default_runtime_command_result_path(root)
     )
     layout_path = (
         Path(args.layout_file).resolve()
@@ -251,6 +381,8 @@ def main() -> int:
         port=args.port,
         root=root,
         runtime_state_path=runtime_state_path,
+        runtime_command_path=runtime_command_path,
+        runtime_command_result_path=runtime_command_result_path,
         layout_path=layout_path,
     )
     print(f"Serving dispatcher webclient at http://{args.host}:{args.port}")

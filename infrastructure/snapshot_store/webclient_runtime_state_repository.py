@@ -10,6 +10,8 @@ from typing import Any
 
 
 WEBCLIENT_RUNTIME_STATE_FILENAME = "webclient_runtime_state.json"
+WEBCLIENT_RUNTIME_COMMANDS_FILENAME = "webclient_commands.jsonl"
+WEBCLIENT_RUNTIME_COMMAND_RESULTS_FILENAME = "webclient_command_results.jsonl"
 
 
 class WebclientRuntimeStateRepository:

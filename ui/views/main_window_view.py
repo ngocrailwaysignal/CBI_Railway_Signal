@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from collections import deque
+import json
+import os
 from pathlib import Path
 import sys
+import time
 from typing import Optional
 
 from PyQt6.QtCore import QProcess, QTimer, Qt, QUrl
@@ -38,7 +41,11 @@ from runtime.application import AppMode
 from core.domain.model.elements import PointPosition, TrackSection
 from core.compiler.interlocking_table import InterlockingTableRow
 from core.domain.model.route import Route
-from infrastructure.snapshot_store import WEBCLIENT_RUNTIME_STATE_FILENAME
+from infrastructure.snapshot_store import (
+    WEBCLIENT_RUNTIME_COMMAND_RESULTS_FILENAME,
+    WEBCLIENT_RUNTIME_COMMANDS_FILENAME,
+    WEBCLIENT_RUNTIME_STATE_FILENAME,
+)
 from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
 from runtime.specific_application import SpecificLayoutEditorService, StationLayout
 from ui.controllers import (
@@ -686,10 +693,23 @@ class MainWindow(QMainWindow):
             journal_dir = self._repo_root() / journal_dir
         return journal_dir / WEBCLIENT_RUNTIME_STATE_FILENAME
 
+    def _webclient_runtime_command_path(self) -> Path:
+        journal_dir = Path(getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"))
+        if not journal_dir.is_absolute():
+            journal_dir = self._repo_root() / journal_dir
+        return journal_dir / WEBCLIENT_RUNTIME_COMMANDS_FILENAME
+
+    def _webclient_runtime_command_result_path(self) -> Path:
+        journal_dir = Path(getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"))
+        if not journal_dir.is_absolute():
+            journal_dir = self._repo_root() / journal_dir
+        return journal_dir / WEBCLIENT_RUNTIME_COMMAND_RESULTS_FILENAME
+
     def _publish_webclient_runtime_state(self) -> None:
-        if self._operating_mode is not OperatingMode.RUNTIME:
+        if self._operating_mode not in {OperatingMode.SIMULATION, OperatingMode.RUNTIME}:
             return
         try:
+            self._process_webclient_runtime_commands()
             runtime_snapshot = self.controller.build_runtime_snapshot() if self.controller.has_runtime_session else None
             payload = self.application_service.build_webclient_runtime_state(
                 topology=self.canvas.topology,
@@ -704,8 +724,148 @@ class MainWindow(QMainWindow):
                 self.status.showMessage(f"Webclient runtime export failed: {message}", 5000)
                 self._last_webclient_runtime_export_error = message
 
+    def _drain_webclient_runtime_commands(self) -> list[dict]:
+        command_path = self._webclient_runtime_command_path()
+        if not command_path.exists():
+            return []
+        processing_path = command_path.with_name(f"{command_path.name}.{os.getpid()}.processing")
+        try:
+            os.replace(command_path, processing_path)
+        except FileNotFoundError:
+            return []
+        except OSError as exc:
+            self.status.showMessage(f"Webclient command inbox unavailable: {exc}", 5000)
+            return []
+
+        commands: list[dict] = []
+        try:
+            for line in processing_path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    self.status.showMessage(f"Invalid webclient command ignored: {exc}", 5000)
+                    continue
+                if isinstance(payload, dict):
+                    commands.append(payload)
+        finally:
+            try:
+                processing_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return commands
+
+    def _process_webclient_runtime_commands(self) -> None:
+        for command in self._drain_webclient_runtime_commands():
+            kind = str(command.get("kind", "")).strip()
+            payload = command.get("payload", {})
+            if not isinstance(payload, dict):
+                payload = {}
+            try:
+                if kind == "set_route":
+                    result_payload = self._set_route_from_webclient(payload)
+                elif kind == "cancel_active_routes":
+                    result_payload = self._cancel_active_routes_from_webclient()
+                else:
+                    raise RuntimeError(f"Unsupported webclient command: {kind or '<missing>'}")
+            except Exception as exc:
+                message = str(exc)
+                self._record_webclient_runtime_command_result(command, status="rejected", message=message)
+                self.status.showMessage(f"Webclient command rejected: {message}", 5000)
+            else:
+                self._record_webclient_runtime_command_result(
+                    command,
+                    status="applied",
+                    message="",
+                    payload=result_payload,
+                )
+
+    def _record_webclient_runtime_command_result(
+        self,
+        command: dict,
+        *,
+        status: str,
+        message: str,
+        payload: dict | None = None,
+    ) -> None:
+        result_path = self._webclient_runtime_command_result_path()
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        result = {
+            "command_id": str(command.get("command_id", "")),
+            "kind": str(command.get("kind", "")),
+            "source_id": str(command.get("source_id", "webclient")),
+            "status": status,
+            "message": message,
+            "payload": payload or {},
+            "ts": time.time(),
+        }
+        try:
+            with result_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(result, ensure_ascii=False, sort_keys=True) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+        except OSError as exc:
+            self.status.showMessage(f"Webclient command result write failed: {exc}", 5000)
+
+    def _set_route_from_webclient(self, payload: dict) -> dict:
+        if not self.mode_policy.capabilities(self._operating_mode).can_set_route:
+            raise RuntimeError(self._t("status.set_route_disabled"))
+        entry_signal_id = str(payload.get("entry_signal_id", "")).strip()
+        exit_signal_id = str(payload.get("exit_signal_id", "")).strip()
+        if not entry_signal_id or not exit_signal_id:
+            raise RuntimeError(self._t("dialog.find_route.select_both"))
+        if entry_signal_id == exit_signal_id:
+            raise RuntimeError(self._t("dialog.find_route.same_signal"))
+        route_result = self.controller.set_or_reuse_route(
+            topology=self.canvas.topology,
+            entry_signal_id=entry_signal_id,
+            exit_signal_id=exit_signal_id,
+            overlap_length=0,
+            approach_time_lock_seconds=float(getattr(self.application_profile, "time_lock_seconds", 0.0)),
+            overlap_release_seconds=float(getattr(self.application_profile, "overlap_release_seconds", 0.0)),
+        )
+        route = route_result.route
+        search_order, _ = self._build_search_trace(route.path[0], route.path[-1])
+        self.preview_route = route
+        self._write_search_log(route, search_order)
+        self.canvas.set_runtime_view_state(self.controller.runtime_view_state())
+        self.canvas.refresh_visual_state()
+        self._sync_ui_state()
+        self._refresh_interlocking_table()
+        self.status.showMessage(
+            self._t(
+                "status.route_set" if route_result.created else "status.route_already_active",
+                entry=entry_signal_id,
+                exit=exit_signal_id,
+            ),
+            5000,
+        )
+        return {"route_id": route.id, "created": route_result.created}
+
+    def _cancel_active_routes_from_webclient(self) -> dict:
+        if not self.mode_policy.capabilities(self._operating_mode).can_cancel_route:
+            raise RuntimeError(self._t("status.cancel_route_disabled"))
+        if not self.controller.has_runtime_session or not self.controller.has_active_routes():
+            self.status.showMessage(self._t("status.no_active_routes"), 5000)
+            return {"attempted_routes": 0, "cancelled_routes": 0, "failures": []}
+        cancel_result = self.controller.cancel_active_routes()
+        self.canvas.clear_route_visualization()
+        self.canvas.refresh_visual_state()
+        self._sync_ui_state()
+        self._refresh_interlocking_table()
+        if cancel_result.failures:
+            self.status.showMessage("; ".join(cancel_result.failures), 5000)
+        else:
+            self.status.showMessage(self._t("status.cancelled_all_active_routes"), 5000)
+        return {
+            "attempted_routes": cancel_result.attempted_routes,
+            "cancelled_routes": cancel_result.cancelled_routes,
+            "failures": list(cancel_result.failures),
+        }
+
     def _sync_webclient_runtime_export_for_mode(self, mode: OperatingMode) -> None:
-        if mode is OperatingMode.RUNTIME:
+        if mode in {OperatingMode.SIMULATION, OperatingMode.RUNTIME}:
             self._webclient_runtime_timer.start()
             self._publish_webclient_runtime_state()
             return
@@ -948,6 +1108,10 @@ class MainWindow(QMainWindow):
                     "8091",
                     "--layout-file",
                     str(self._webclient_layout_path()),
+                    "--runtime-command-file",
+                    str(self._webclient_runtime_command_path()),
+                    "--runtime-command-result-file",
+                    str(self._webclient_runtime_command_result_path()),
                 ]
             )
             process.setWorkingDirectory(str(self._repo_root()))

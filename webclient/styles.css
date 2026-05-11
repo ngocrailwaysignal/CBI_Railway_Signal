@@ -257,6 +257,88 @@ button:disabled {
   color: var(--text);
 }
 
+.dispatcher-command-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(5, 7, 10, 0.72);
+}
+
+.command-field {
+  display: grid;
+  gap: 6px;
+  min-width: 260px;
+}
+
+.command-field span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.command-field select,
+.command-field input {
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: #10151b;
+  color: var(--text);
+  padding: 7px 10px;
+}
+
+.command-field option {
+  background: #10151b;
+  color: var(--text);
+}
+
+.route-readout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 6px 12px;
+  max-width: 560px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.route-readout span {
+  min-width: 0;
+}
+
+.route-readout strong {
+  color: #9eb8ff;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  margin-right: 6px;
+  text-transform: uppercase;
+}
+
+.route-readout em {
+  color: var(--text);
+  font-style: normal;
+  overflow-wrap: anywhere;
+}
+
+.command-status {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  min-width: 180px;
+  overflow-wrap: anywhere;
+}
+
+.command-status[data-kind="ok"] {
+  color: #93ffad;
+}
+
+.command-status[data-kind="error"] {
+  color: #ffbbb5;
+}
+
 .legend span {
   display: inline-flex;
   align-items: center;
@@ -282,7 +364,13 @@ button:disabled {
   position: relative;
   min-height: 680px;
   background: rgba(0, 0, 0, 0.45);
+  cursor: grab;
   overflow: auto;
+}
+
+.board-frame.is-dragging {
+  cursor: grabbing;
+  user-select: none;
 }
 
 .editor-frame {
@@ -295,6 +383,10 @@ button:disabled {
   width: 100%;
   min-width: 960px;
   min-height: 680px;
+}
+
+#dispatcherBoard {
+  transform-origin: 0 0;
 }
 
 .editor-frame #editorBoard {
@@ -525,6 +617,15 @@ button:disabled {
 
 .track-base {
   stroke-width: 4;
+}
+
+.track-base.is-occupied,
+.dispatcher-occupied-line {
+  stroke: var(--red);
+}
+
+.dispatcher-occupied-line {
+  pointer-events: none;
 }
 
 .dispatcher-point-stock,

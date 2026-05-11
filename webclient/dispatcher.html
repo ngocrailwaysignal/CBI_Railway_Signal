@@ -11,8 +11,7 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">CBI RAILWAY SIGNAL</p>
-        <h1>Dispatcher Viewer</h1>
-        <p class="subtitle">Board-first runtime view for dispatcher schematic state and active routes.</p>
+        <h1>Dispatcher</h1>
       </div>
       <div class="topbar-actions">
         <a class="nav-button" href="/dispatcher/editor">Open Editor</a>
@@ -20,7 +19,7 @@
         <button id="debugLabelsBtn" type="button" class="ghost">Show Debug</button>
         <span class="status-pill waiting" id="connectionPill">WAITING RUNTIME</span>
         <div class="clock-block">
-          <span class="clock-label">BANGKOK</span>
+          <span class="clock-label">VN</span>
           <strong id="clockText">--:--:--</strong>
         </div>
       </div>
@@ -41,6 +40,21 @@
             <span><strong id="occupancyMetric">0</strong> occupied</span>
             <span>updated <strong id="updatedAtText">--</strong></span>
           </div>
+        </div>
+        <div class="dispatcher-command-panel" aria-label="Dispatcher route controls">
+          <label class="command-field">
+            <span>Route</span>
+            <select id="routeSelect"></select>
+          </label>
+          <div class="route-readout">
+            <span><strong>Entry</strong> <em id="routeEntryText">--</em></span>
+            <span><strong>Exit</strong> <em id="routeExitText">--</em></span>
+            <span><strong>Tracks</strong> <em id="routeTracksText">--</em></span>
+            <span><strong>Points</strong> <em id="routePointsText">--</em></span>
+          </div>
+          <button id="setRouteBtn" type="button" class="primary-button">Set Route</button>
+          <button id="cancelRoutesBtn" type="button" class="danger-button">Cancel Routes</button>
+          <span id="commandStatusText" class="command-status">Runtime controls waiting...</span>
         </div>
         <div class="board-frame">
           <svg id="dispatcherBoard" aria-label="Dispatcher viewer board"></svg>

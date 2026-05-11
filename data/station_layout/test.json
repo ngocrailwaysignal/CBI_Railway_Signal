@@ -408,6 +408,27 @@
         }
       },
       {
+        "id": "signal-7",
+        "kind": "signal",
+        "position": {
+          "x": 940.0,
+          "y": 440.0
+        },
+        "rotation": 180.0,
+        "geometry": {
+          "mast": 18.0,
+          "arm": 14.0,
+          "head_radius": 5.5,
+          "label_offset": 20.0
+        },
+        "style": {},
+        "z_index": 15,
+        "binding": {
+          "cbi_type": "signal",
+          "cbi_id": "ENTRY_RIGHT_A"
+        }
+      },
+      {
         "id": "signal-8",
         "kind": "signal",
         "position": {
@@ -426,6 +447,27 @@
         "binding": {
           "cbi_type": "signal",
           "cbi_id": "EXTI_RIGHT_B"
+        }
+      },
+      {
+        "id": "signal-8-17",
+        "kind": "signal",
+        "position": {
+          "x": 540.0,
+          "y": 440.0
+        },
+        "rotation": 180.0,
+        "geometry": {
+          "mast": 18.0,
+          "arm": 14.0,
+          "head_radius": 5.5,
+          "label_offset": 20.0
+        },
+        "style": {},
+        "z_index": 16,
+        "binding": {
+          "cbi_type": "signal",
+          "cbi_id": "EXIT_LEFT_A"
         }
       },
       {
