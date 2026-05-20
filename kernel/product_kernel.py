@@ -36,7 +36,7 @@ class GenericProductKernel:
         exit_signal_id: str,
         *,
         overlap_length: int | None = None,
-        runtime_session: "RuntimeSessionPort | None" = None,
+        runtime_session: RuntimeSessionPort | None = None,
     ) -> Route:
         """Compute a route candidate using generic route-finding rules."""
         route_engine = RouteEngine(topology)
@@ -48,15 +48,13 @@ class GenericProductKernel:
             exit_signal_id=exit_signal_id,
             active_routes=active_routes,
             overlap_length=(
-                self.rules.default_overlap_length
-                if overlap_length is None
-                else overlap_length
+                self.rules.default_overlap_length if overlap_length is None else overlap_length
             ),
         )
 
     def set_route(
         self,
-        runtime_session: "RuntimeSessionPort",
+        runtime_session: RuntimeSessionPort,
         entry_signal_id: str,
         exit_signal_id: str,
         *,
@@ -67,9 +65,7 @@ class GenericProductKernel:
             entry_signal_id=entry_signal_id,
             exit_signal_id=exit_signal_id,
             overlap_length=(
-                self.rules.default_overlap_length
-                if overlap_length is None
-                else overlap_length
+                self.rules.default_overlap_length if overlap_length is None else overlap_length
             ),
         )
 
@@ -80,11 +76,7 @@ class GenericProductKernel:
         overlap_length: int | None = None,
     ) -> list[InterlockingTableRow]:
         """Generate interlocking rows for all signal pairs."""
-        overlap = (
-            self.rules.default_overlap_length
-            if overlap_length is None
-            else overlap_length
-        )
+        overlap = self.rules.default_overlap_length if overlap_length is None else overlap_length
         generator = InterlockingTableGenerator(topology=topology, overlap_length=overlap)
         signals = sorted(topology.signals.keys())
         return generator.generate(entry_signal_ids=signals, exit_signal_ids=signals)

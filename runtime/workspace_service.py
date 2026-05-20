@@ -6,26 +6,8 @@ import time
 from dataclasses import replace
 from typing import Any
 
-from runtime.application.runtime_helpers import get_active_route_for_pair, has_active_routes
-from runtime.application.serialization import build_runtime_snapshot, build_topology_revision
-from runtime.application.use_cases import (
-    CancelActiveRoutesUseCase,
-    CancelRoutesResult,
-    EmergencyReleaseRoutesUseCase,
-    SimulationManualOverrideResult,
-    SimulationManualOverrideUseCase,
-    SetOrReuseRouteUseCase,
-    SetRouteResult,
-    StartRouteSimulationUseCase,
-    StartSimulationResult,
-)
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
-from kernel.product_kernel import GenericProductKernel
-from runtime.read_model import RuntimeViewState, build_runtime_view_state
-from runtime.runtime_controller import RuntimeSession
-
-from .profile import GenericApplicationProfile
 from infrastructure.event_store import (
     RuntimeCommand,
     RuntimeCommandResult,
@@ -34,6 +16,24 @@ from infrastructure.event_store import (
     RuntimeJournal,
     RuntimeRecoveryService,
 )
+from kernel.product_kernel import GenericProductKernel
+from runtime.application.runtime_helpers import get_active_route_for_pair, has_active_routes
+from runtime.application.serialization import build_runtime_snapshot, build_topology_revision
+from runtime.application.use_cases import (
+    CancelActiveRoutesUseCase,
+    CancelRoutesResult,
+    EmergencyReleaseRoutesUseCase,
+    SetOrReuseRouteUseCase,
+    SetRouteResult,
+    SimulationManualOverrideResult,
+    SimulationManualOverrideUseCase,
+    StartRouteSimulationUseCase,
+    StartSimulationResult,
+)
+from runtime.read_model import RuntimeViewState, build_runtime_view_state
+from runtime.runtime_controller import RuntimeSession
+
+from .profile import GenericApplicationProfile
 
 
 class RuntimeWorkspaceService:
@@ -146,7 +146,11 @@ class RuntimeWorkspaceService:
         exit_signal_id: str,
         overlap_length: int | None = None,
     ) -> Route:
-        session = self._session if self._session is not None and self._session.topology is topology else None
+        session = (
+            self._session
+            if self._session is not None and self._session.topology is topology
+            else None
+        )
         return self.kernel.find_route(
             topology=topology,
             entry_signal_id=entry_signal_id,
@@ -471,7 +475,9 @@ class RuntimeWorkspaceService:
                 train_speed=float(payload.get("train_speed", 1.0) or 1.0),
             )
             self._session = session
-            return {"start_simulation_result": replace(result, view_state=self.runtime_view_state())}
+            return {
+                "start_simulation_result": replace(result, view_state=self.runtime_view_state())
+            }
 
         if kind == "set_section_occupied":
             section_id = str(payload.get("section_id", "")).strip()
@@ -496,7 +502,11 @@ class RuntimeWorkspaceService:
                 route_id=(str(payload.get("route_id", "")).strip() or None),
                 speed=float(payload.get("speed", 0.0) or 0.0),
             )
-            return {"train_id": train.id, "current_section": train.current_section, "route_id": train.route_id}
+            return {
+                "train_id": train.id,
+                "current_section": train.current_section,
+                "route_id": train.route_id,
+            }
 
         if kind == "remove_train":
             train_id = str(payload.get("train_id", "")).strip()
@@ -510,7 +520,9 @@ class RuntimeWorkspaceService:
             snapshot = payload.get("snapshot", {})
             if not isinstance(snapshot, dict):
                 raise ValueError("hydrate_snapshot requires snapshot object")
-            session.hydrate_snapshot(snapshot=snapshot, strict_route_ids=bool(payload.get("strict_route_ids", True)))
+            session.hydrate_snapshot(
+                snapshot=snapshot, strict_route_ids=bool(payload.get("strict_route_ids", True))
+            )
             return {"tick": session.tick}
 
         if kind == "apply_state_update":
@@ -518,7 +530,9 @@ class RuntimeWorkspaceService:
 
         raise RuntimeError(f"INVALID_COMMAND: Unsupported runtime command {kind}")
 
-    def _apply_state_update_command(self, session: RuntimeSession, payload: dict[str, Any]) -> dict[str, Any]:
+    def _apply_state_update_command(
+        self, session: RuntimeSession, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         changed_sections: list[str] = []
         for point_item in payload.get("points", []):
             if not isinstance(point_item, dict):
@@ -580,7 +594,9 @@ class RuntimeWorkspaceService:
             if not isinstance(signal_item, dict):
                 continue
             if "aspect" in signal_item or "route_id" in signal_item:
-                raise RuntimeError("SAFETY_REJECTED: Direct signal aspect/route_id updates are blocked")
+                raise RuntimeError(
+                    "SAFETY_REJECTED: Direct signal aspect/route_id updates are blocked"
+                )
 
         normalized_removed_train_ids = []
         if isinstance(removed_train_ids, list):

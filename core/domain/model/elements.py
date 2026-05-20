@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Dict, Optional
+from enum import StrEnum
 
 
-class PointPosition(str, Enum):
+class PointPosition(StrEnum):
     """Point machine position."""
 
     NORMAL = "NORMAL"
     REVERSE = "REVERSE"
 
 
-class PointSymbolOrientation(str, Enum):
+class PointSymbolOrientation(StrEnum):
     """UI orientation of point symbol."""
 
     RIGHT = "RIGHT"
@@ -23,14 +22,14 @@ class PointSymbolOrientation(str, Enum):
     DOWN = "DOWN"
 
 
-class SignalAspect(str, Enum):
+class SignalAspect(StrEnum):
     """Signal aspect state."""
 
     STOP = "STOP"
     PROCEED = "PROCEED"
 
 
-class SignalDirection(str, Enum):
+class SignalDirection(StrEnum):
     """Operational running direction represented by a signal."""
 
     LEFT = "LEFT"
@@ -43,7 +42,7 @@ class TrackSection:
 
     id: str
     occupied: bool = False
-    locked_by: Optional[str] = None
+    locked_by: str | None = None
     length: float = 100.0
 
 
@@ -59,8 +58,8 @@ class Point:
     id: str
     position: PointPosition = PointPosition.NORMAL
     symbol_orientation: PointSymbolOrientation = PointSymbolOrientation.RIGHT
-    locked_by: Optional[str] = None
-    facing_connections: Dict[PointPosition, str] = field(default_factory=dict)
+    locked_by: str | None = None
+    facing_connections: dict[PointPosition, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -72,7 +71,17 @@ class Signal:
     direction: SignalDirection = SignalDirection.RIGHT
     protects: str = ""
     approach_section: str = ""
-    route_id: Optional[str] = None
+    route_id: str | None = None
+
+
+@dataclass(slots=True)
+class DisplayLabel:
+    """A visual text label placed on the design layout."""
+
+    id: str
+    text: str = "LABEL"
+    font_size: float = 18.0
 
 
 RailElement = TrackSection | ApproachSection | Point | Signal
+LayoutElement = RailElement | DisplayLabel

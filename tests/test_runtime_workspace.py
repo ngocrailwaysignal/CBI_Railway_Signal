@@ -5,14 +5,18 @@ from pathlib import Path
 
 from PyQt6.QtCore import QObject
 
+from core.domain.model.elements import PointPosition, TrackSection
+from integration.smartio_adapter.runtime_bridge import SmartIORuntimeBridge
+from runtime import (
+    GenericApplicationProfile,
+    GenericApplicationService,
+    RuntimeSession,
+    RuntimeWorkspaceService,
+)
 from runtime.application import AppMode
 from runtime.application.runtime_session_port import RuntimeSessionPort
-from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
 from runtime.application.serialization import build_runtime_snapshot
-from integration.smartio_adapter.runtime_bridge import SmartIORuntimeBridge
-from runtime import RuntimeSession
 from ui.controllers.runtime_workspace_controller import SmartIORuntimeCoordinator
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LAYOUT_PATH = REPO_ROOT / "data" / "station_layout" / "main_layout.json"
@@ -20,7 +24,9 @@ TEST_LAYOUT_PATH = REPO_ROOT / "data" / "station_layout" / "test.json"
 
 
 def build_services() -> tuple[GenericApplicationService, RuntimeWorkspaceService]:
-    profile = GenericApplicationProfile(runtime_journal_dir=tempfile.mkdtemp(prefix="cbi-runtime-journal-"))
+    profile = GenericApplicationProfile(
+        runtime_journal_dir=tempfile.mkdtemp(prefix="cbi-runtime-journal-")
+    )
     application_service = GenericApplicationService(profile=profile)
     runtime_workspace = RuntimeWorkspaceService(
         profile=profile,
@@ -64,6 +70,38 @@ def first_route_pair(application_service: GenericApplicationService, topology):
                 continue
             return entry_signal_id, exit_signal_id, route
     raise AssertionError("No valid route pair found in sample topology")
+
+
+def test_route_point_isolates_occupied_flank_branch_for_a_to_g2() -> None:
+    application_service, runtime_workspace = build_services()
+    topology = load_topology(application_service)
+
+    s14 = topology.get_element("S14")
+    assert isinstance(s14, TrackSection)
+    s14.occupied = True
+
+    route = application_service.find_route(
+        topology,
+        "A",
+        "G2",
+        overlap_length=1,
+    )
+
+    assert route.required_point_positions["P2"] == PointPosition.REVERSE
+    assert "S14" not in route.monitored_flank_sections
+
+    result = runtime_workspace.set_or_reuse_route(
+        topology=topology,
+        entry_signal_id="A",
+        exit_signal_id="G2",
+        overlap_length=1,
+        approach_time_lock_seconds=1.0,
+        overlap_release_seconds=1.0,
+    )
+
+    assert result.created is True
+    assert result.route.entry_signal_id == "A"
+    assert result.route.exit_signal_id == "G2"
 
 
 def test_runtime_workspace_route_lifecycle_and_view_state() -> None:
@@ -633,7 +671,9 @@ def test_active_route_train_move_still_applies_when_web_route_id_is_missing() ->
 
 
 def test_runtime_workspace_recovers_from_checkpoint_journal() -> None:
-    profile = GenericApplicationProfile(runtime_journal_dir=tempfile.mkdtemp(prefix="cbi-runtime-journal-"))
+    profile = GenericApplicationProfile(
+        runtime_journal_dir=tempfile.mkdtemp(prefix="cbi-runtime-journal-")
+    )
     application_service = GenericApplicationService(profile=profile)
     runtime_workspace = RuntimeWorkspaceService(profile=profile, kernel=application_service.kernel)
     topology = load_topology(application_service)
@@ -677,5 +717,7 @@ def test_architecture_boundaries_do_not_regress() -> None:
     for path in (REPO_ROOT / "core").rglob("*.py"):
         text = path.read_text()
         assert "PyQt6" not in text, f"Qt import leaked into core: {path}"
-        assert "integration.smartio_adapter" not in text, f"SmartIO integration leaked into core: {path}"
+        assert "integration.smartio_adapter" not in text, (
+            f"SmartIO integration leaked into core: {path}"
+        )
         assert "simulation.session" not in text, f"Simulation session leaked back into core: {path}"

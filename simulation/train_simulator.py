@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class RuntimeTrainLifecycle:
     """Handle train upsert/remove operations against runtime state."""
 
-    runtime_session: "RuntimeSession"
+    runtime_session: RuntimeSession
 
     def upsert_train(
         self,
@@ -57,7 +57,10 @@ class RuntimeTrainLifecycle:
                 self.runtime_session.add_train(train, route)
                 return train
 
-            if train.route_id == normalized_route_id and train.current_section == normalized_section:
+            if (
+                train.route_id == normalized_route_id
+                and train.current_section == normalized_section
+            ):
                 train.speed = normalized_speed
                 return train
 
@@ -182,14 +185,14 @@ class RuntimeTrainLifecycle:
 
         release_route_id = previous_route_id
         new_route = self.runtime_session.locking_engine.active_routes.get(str(new_route_id).strip())
-        if new_route is not None:
-            if previous_token in new_route.full_path:
-                release_route_id = new_route.id
-            elif (
+        if new_route is not None and (
+            previous_token in new_route.full_path
+            or (
                 new_route.approach_locking_section
                 and previous_token == new_route.approach_locking_section
-            ):
-                release_route_id = new_route.id
+            )
+        ):
+            release_route_id = new_route.id
 
         try:
             self.runtime_session.locking_engine.set_section_occupied(

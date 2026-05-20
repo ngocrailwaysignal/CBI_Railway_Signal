@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from urllib.parse import urlparse
 from typing import Any
+from urllib.parse import urlparse
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
-from runtime.application import AppMode
 from core.domain.model.topology import RailwayTopology
-from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
 from integration.smartio_adapter import (
     SmartIOProtocolError,
     SmartIORuntimeBridge,
     SmartIOWebSocketClient,
 )
+from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
+from runtime.application import AppMode
 
 
 class SmartIORuntimeCoordinator(QObject):
@@ -77,7 +77,9 @@ class SmartIORuntimeCoordinator(QObject):
     def runtime_health(self) -> dict[str, Any]:
         health = self._runtime_workspace_service.runtime_health()
         now = time.time()
-        stale_after = max(1.0, float(getattr(self._profile, "smart_io_runtime_stale_seconds", 15.0)))
+        stale_after = max(
+            1.0, float(getattr(self._profile, "smart_io_runtime_stale_seconds", 15.0))
+        )
         snapshot_age = (
             max(0.0, now - self._last_snapshot_published_at)
             if self._last_snapshot_published_at is not None
@@ -155,11 +157,6 @@ class SmartIORuntimeCoordinator(QObject):
         normalized_url = str(ws_url).strip()
         if normalized_url == self._ws_url:
             return
-        next_is_local = False
-        if normalized_url:
-            parsed = urlparse(normalized_url)
-            next_is_local = str(parsed.hostname or "").strip().lower() in {"127.0.0.1", "localhost"}
-        current_mode = self._operating_mode_provider()
         should_reconnect = bool(normalized_url)
         self.disconnect()
         if self._smartio_client is not None:
@@ -266,9 +263,7 @@ class SmartIORuntimeCoordinator(QObject):
                 else ""
             )
             source_id = (
-                str(payload.get("source_id", "")).strip()
-                if isinstance(payload, dict)
-                else ""
+                str(payload.get("source_id", "")).strip() if isinstance(payload, dict) else ""
             ) or "smartio-web"
             if event_type in {"command", "state_update"} and command_id:
                 self._send_command_result(

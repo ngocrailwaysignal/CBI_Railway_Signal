@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from runtime.application.runtime_session_port import RuntimeSessionPort
 from core.domain.model.route import Route
 from core.domain.model.train import Train
+from runtime.application.runtime_session_port import RuntimeSessionPort
 
 
 def get_active_route_for_pair(

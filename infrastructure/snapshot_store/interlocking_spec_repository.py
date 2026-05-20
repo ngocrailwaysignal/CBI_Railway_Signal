@@ -24,4 +24,3 @@ class InterlockingSpecRepository:
         if not isinstance(payload, dict):
             raise ValueError("Invalid interlocking spec payload")
         return InterlockingSpec.from_dict(payload)
-

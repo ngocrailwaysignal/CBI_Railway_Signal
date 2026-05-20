@@ -18,4 +18,3 @@ class MonotonicClock:
 
     def now(self) -> float:
         return monotonic()
-

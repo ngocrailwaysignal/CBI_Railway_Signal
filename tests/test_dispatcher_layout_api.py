@@ -8,11 +8,8 @@ import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 
-import pytest
-
 from webclient import serve
 from webclient.dispatcher_layout import build_bindable_catalog, normalize_dispatcher_view
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEST_LAYOUT_PATH = REPO_ROOT / "data" / "station_layout" / "test.json"
@@ -20,7 +17,9 @@ TEST_LAYOUT_PATH = REPO_ROOT / "data" / "station_layout" / "test.json"
 
 @contextmanager
 def running_server(*, layout_path: Path):
-    runtime_state_path = Path(tempfile.mkdtemp(prefix="dispatcher-layout-api-")) / "runtime_state.json"
+    runtime_state_path = (
+        Path(tempfile.mkdtemp(prefix="dispatcher-layout-api-")) / "runtime_state.json"
+    )
     server = serve.create_server(
         host="127.0.0.1",
         port=0,
@@ -50,7 +49,9 @@ def test_normalize_dispatcher_view_migrates_legacy_segments() -> None:
                     "state_source_ids": ["S1"],
                 }
             ],
-            "signal_symbols": [{"signal_id": "ENTRY_RIGHT_A", "x": 40, "y": 0, "direction": "RIGHT"}],
+            "signal_symbols": [
+                {"signal_id": "ENTRY_RIGHT_A", "x": 40, "y": 0, "direction": "RIGHT"}
+            ],
         },
         bindable_catalog={
             "sections": ["S1"],
@@ -84,9 +85,11 @@ def test_get_dispatcher_layout_returns_normalized_view_and_bindable_ids(tmp_path
     }
     layout_path.write_text(json.dumps(layout_document), encoding="utf-8")
 
-    with running_server(layout_path=layout_path) as base_url:
-        with urllib.request.urlopen(f"{base_url}/api/dispatcher-layout") as response:
-            payload = json.loads(response.read().decode("utf-8"))
+    with (
+        running_server(layout_path=layout_path) as base_url,
+        urllib.request.urlopen(f"{base_url}/api/dispatcher-layout") as response,
+    ):
+        payload = json.loads(response.read().decode("utf-8"))
 
     assert payload["dispatcher_view"]["canvas"]["width"] == 1400
     assert payload["bindable"] == build_bindable_catalog(layout_document)
@@ -125,7 +128,9 @@ def test_put_dispatcher_layout_persists_view(tmp_path: Path) -> None:
             response_payload = json.loads(response.read().decode("utf-8"))
 
     saved_document = json.loads(layout_path.read_text(encoding="utf-8"))
-    assert response_payload["dispatcher_view"]["elements"][0]["binding"]["cbi_id"] == "ENTRY_RIGHT_A"
+    assert (
+        response_payload["dispatcher_view"]["elements"][0]["binding"]["cbi_id"] == "ENTRY_RIGHT_A"
+    )
     assert saved_document["dispatcher_view"]["elements"][0]["binding"]["cbi_id"] == "ENTRY_RIGHT_A"
 
 
@@ -232,7 +237,11 @@ def test_put_dispatcher_layout_accepts_duplicate_signal_binding(tmp_path: Path) 
             response_payload = json.loads(response.read().decode("utf-8"))
 
     saved_document = json.loads(layout_path.read_text(encoding="utf-8"))
-    assert response_payload["dispatcher_view"]["elements"][0]["binding"]["cbi_id"] == "ENTRY_RIGHT_A"
-    assert response_payload["dispatcher_view"]["elements"][1]["binding"]["cbi_id"] == "ENTRY_RIGHT_A"
+    assert (
+        response_payload["dispatcher_view"]["elements"][0]["binding"]["cbi_id"] == "ENTRY_RIGHT_A"
+    )
+    assert (
+        response_payload["dispatcher_view"]["elements"][1]["binding"]["cbi_id"] == "ENTRY_RIGHT_A"
+    )
     assert saved_document["dispatcher_view"]["elements"][0]["binding"]["cbi_id"] == "ENTRY_RIGHT_A"
     assert saved_document["dispatcher_view"]["elements"][1]["binding"]["cbi_id"] == "ENTRY_RIGHT_A"

@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from runtime.application.runtime_session_port import RuntimeSessionPort
 from integration.smartio_adapter.protocol import SmartIOProtocolError
+from runtime.application.runtime_session_port import RuntimeSessionPort
 
 
 @dataclass(slots=True)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from PyQt6.QtCore import QMimeData, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QDrag, QIcon, QPainter, QPen, QPixmap
@@ -21,7 +21,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.domain.model.elements import PointPosition, PointSymbolOrientation, SignalAspect, SignalDirection
+from core.domain.model.elements import (
+    PointPosition,
+    PointSymbolOrientation,
+    SignalAspect,
+    SignalDirection,
+)
 from ui.i18n import UITranslator
 
 POINT_SYMBOL_CHOICES: tuple[tuple[str, PointSymbolOrientation], ...] = (
@@ -30,6 +35,7 @@ POINT_SYMBOL_CHOICES: tuple[tuple[str, PointSymbolOrientation], ...] = (
     ("3", PointSymbolOrientation.LEFT),
     ("4", PointSymbolOrientation.UP),
 )
+ANNOTATION_LABEL_TYPES = {"AnnotationLabel", "Label"}
 
 
 class PaletteListWidget(QListWidget):
@@ -43,7 +49,7 @@ class PaletteListWidget(QListWidget):
         ("palette.component.signal", "Signal"),
     )
 
-    def __init__(self, translator: UITranslator, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, translator: UITranslator, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._translator = translator
         self.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
@@ -101,7 +107,12 @@ class PaletteListWidget(QListWidget):
             panel_left, panel_top, panel_w, panel_h = 10, 4, 24, 20
             panel_mid_y = panel_top + panel_h / 2
             painter.drawRect(panel_left, panel_top, panel_w, panel_h)
-            painter.drawLine(int(panel_left + 1), int(panel_mid_y), int(panel_left + panel_w - 1), int(panel_mid_y))
+            painter.drawLine(
+                int(panel_left + 1),
+                int(panel_mid_y),
+                int(panel_left + panel_w - 1),
+                int(panel_mid_y),
+            )
             painter.drawLine(
                 int(panel_left + 1),
                 int(panel_mid_y),
@@ -149,13 +160,13 @@ class PropertiesPanel(QWidget):
 
     properties_applied = pyqtSignal(str, dict)
 
-    def __init__(self, translator: UITranslator, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, translator: UITranslator, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._translator = translator
-        self._selected_id: Optional[str] = None
-        self._selected_type: Optional[str] = None
+        self._selected_id: str | None = None
+        self._selected_type: str | None = None
         self._inputs: dict[str, Any] = {}
-        self._current_payload: Optional[dict[str, Any]] = None
+        self._current_payload: dict[str, Any] | None = None
 
         self.title = QLabel()
         self.title.setStyleSheet("font-weight: 600;")
@@ -197,7 +208,7 @@ class PropertiesPanel(QWidget):
         placeholder.setWordWrap(True)
         self.form_layout.addRow(placeholder)
 
-    def set_element(self, payload: Optional[dict[str, Any]]) -> None:
+    def set_element(self, payload: dict[str, Any] | None) -> None:
         """Populate panel from selected node payload."""
         self._current_payload = payload
         self._clear_form()
@@ -290,6 +301,16 @@ class PropertiesPanel(QWidget):
             self.form_layout.addRow(self._t("field.direction"), direction_input)
             self.form_layout.addRow(self._t("field.aspect"), aspect_input)
 
+        elif self._selected_type in ANNOTATION_LABEL_TYPES:
+            text_input = QLineEdit(str(properties.get("text", "LABEL")))
+            font_size_input = QDoubleSpinBox()
+            font_size_input.setRange(6.0, 96.0)
+            font_size_input.setValue(float(properties.get("font_size", 18.0)))
+            self._inputs["text"] = text_input
+            self._inputs["font_size"] = font_size_input
+            self.form_layout.addRow(self._t("field.text"), text_input)
+            self.form_layout.addRow(self._t("field.font_size"), font_size_input)
+
         self.apply_button.setEnabled(True)
 
     def _clear_form(self) -> None:
@@ -324,6 +345,9 @@ class PropertiesPanel(QWidget):
                 self._inputs["direction"].currentData() or SignalDirection.RIGHT.value
             )
             updated["aspect"] = str(self._inputs["aspect"].currentData() or SignalAspect.STOP.value)
+        elif self._selected_type in ANNOTATION_LABEL_TYPES:
+            updated["text"] = str(self._inputs["text"].text()).strip() or "LABEL"
+            updated["font_size"] = float(self._inputs["font_size"].value())
         updated["id"] = str(self._inputs["id"].text()).strip()
         self.properties_applied.emit(self._selected_id, updated)
 
@@ -332,9 +356,10 @@ class ComponentsPalette(QWidget):
     """Combined component palette and selected component properties."""
 
     component_insert_requested = pyqtSignal(str)
+    label_insert_requested = pyqtSignal()
     properties_applied = pyqtSignal(str, dict)
 
-    def __init__(self, translator: UITranslator, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, translator: UITranslator, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._translator = translator
 
@@ -342,6 +367,9 @@ class ComponentsPalette(QWidget):
         self.title_label.setStyleSheet("font-size: 14px; font-weight: 600;")
         self.component_list = PaletteListWidget(self._translator)
         self.component_list.itemDoubleClicked.connect(self._on_component_double_clicked)
+
+        self.add_label_button = QPushButton()
+        self.add_label_button.clicked.connect(self.label_insert_requested.emit)
 
         self.hint_label = QLabel()
         self.hint_label.setWordWrap(True)
@@ -353,6 +381,7 @@ class ComponentsPalette(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.title_label)
         layout.addWidget(self.component_list)
+        layout.addWidget(self.add_label_button)
         layout.addWidget(self.hint_label)
         layout.addWidget(self.properties_panel)
 
@@ -369,9 +398,10 @@ class ComponentsPalette(QWidget):
 
     def retranslate_ui(self) -> None:
         self.title_label.setText(self._t("palette.components"))
+        self.add_label_button.setText(self._t("palette.add_label"))
         self.hint_label.setText(self._t("palette.hint"))
 
-    def set_selected_element(self, payload: Optional[dict[str, Any]]) -> None:
+    def set_selected_element(self, payload: dict[str, Any] | None) -> None:
         """Update properties pane for selected node."""
         self.properties_panel.set_element(payload)
 

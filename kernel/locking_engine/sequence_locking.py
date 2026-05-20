@@ -74,8 +74,7 @@ class SequenceLockingTracker:
 
         if section_id not in seen_occupied:
             raise RuntimeError(
-                f"Sequence locking violation on {section_id}: "
-                "section occupancy was never confirmed"
+                f"Sequence locking violation on {section_id}: section occupancy was never confirmed"
             )
 
         next_section_id = track_sections[section_index + 1]
@@ -100,4 +99,3 @@ class SequenceLockingTracker:
     @staticmethod
     def is_sequence_track_section(element: object) -> bool:
         return isinstance(element, TrackSection) and not isinstance(element, ApproachSection)
-

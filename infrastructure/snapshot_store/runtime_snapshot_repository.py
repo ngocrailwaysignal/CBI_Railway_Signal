@@ -20,4 +20,3 @@ class RuntimeSnapshotRepository:
         if not isinstance(payload, dict):
             raise ValueError("Invalid runtime snapshot payload")
         return payload
-

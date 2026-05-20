@@ -36,7 +36,7 @@ class InterlockingRouteSpec:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "InterlockingRouteSpec":
+    def from_dict(cls, data: dict[str, Any]) -> InterlockingRouteSpec:
         return cls(
             route_name=str(data.get("route_name", "")).strip(),
             entry_signal=str(data.get("entry_signal", "")).strip(),
@@ -77,7 +77,7 @@ class InterlockingSpec:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "InterlockingSpec":
+    def from_dict(cls, data: dict[str, Any]) -> InterlockingSpec:
         raw_routes = data.get("routes", [])
         routes = [
             InterlockingRouteSpec.from_dict(route_data)
@@ -86,9 +86,7 @@ class InterlockingSpec:
         ]
         raw_groups = data.get("clearance_conflict_groups", [])
         groups = [
-            [str(node_id) for node_id in group]
-            for group in raw_groups
-            if isinstance(group, list)
+            [str(node_id) for node_id in group] for group in raw_groups if isinstance(group, list)
         ]
         return cls(
             schema_version=int(data.get("schema_version", 1)),
@@ -98,4 +96,3 @@ class InterlockingSpec:
             clearance_conflict_groups=groups,
             routes=routes,
         )
-

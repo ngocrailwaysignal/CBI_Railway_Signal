@@ -55,4 +55,3 @@ class WorkspaceStateCoordinator:
             runtime_override_enabled=capabilities.can_manual_state_override,
             route_timing_enabled=capabilities.can_set_route,
         )
-

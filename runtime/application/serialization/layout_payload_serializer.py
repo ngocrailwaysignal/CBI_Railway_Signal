@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 import hashlib
 import json
+from copy import deepcopy
 
 from core.domain.model.topology import RailwayTopology
 
@@ -15,6 +15,7 @@ def build_layout_payload(topology: RailwayTopology) -> dict:
         "sections": [],
         "points": [],
         "signals": [],
+        "labels": [],
         "edges": [],
         "signal_links": [],
         "clearance_conflict_groups": [],
@@ -71,11 +72,18 @@ def build_layout_payload(topology: RailwayTopology) -> dict:
             }
         )
 
+    for label in getattr(topology, "labels", {}).values():
+        payload["labels"].append(
+            {
+                "id": label.id,
+                "text": label.text,
+                "font_size": float(label.font_size),
+            }
+        )
+
     virtual_edges = set(getattr(topology, "_signal_virtual_edges", set()))
     payload["edges"] = [
-        [src, dst]
-        for src, dst in topology.graph.edges
-        if (src, dst) not in virtual_edges
+        [src, dst] for src, dst in topology.graph.edges if (src, dst) not in virtual_edges
     ]
     payload["signal_links"] = [
         [src, dst]
@@ -90,8 +98,7 @@ def build_layout_payload(topology: RailwayTopology) -> dict:
         )
     ]
     payload["ui_positions"] = {
-        key: [float(value[0]), float(value[1])]
-        for key, value in topology.ui_positions.items()
+        key: [float(value[0]), float(value[1])] for key, value in topology.ui_positions.items()
     }
     return payload
 
@@ -101,4 +108,3 @@ def build_topology_revision(topology: RailwayTopology) -> str:
     payload = build_layout_payload(topology)
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
-

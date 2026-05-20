@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from runtime.application.runtime_session_port import RuntimeSessionPort
-
 from runtime.application.dto import CancelRoutesResult
+from runtime.application.runtime_session_port import RuntimeSessionPort
 
 
 class EmergencyReleaseRoutesUseCase:

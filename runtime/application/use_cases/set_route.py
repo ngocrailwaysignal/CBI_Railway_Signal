@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from runtime.application.runtime_session_port import RuntimeSessionPort
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
 from kernel.product_kernel import GenericProductKernel
-
 from runtime.application.dto import SetRouteResult
+from runtime.application.runtime_session_port import RuntimeSessionPort
 
 
 class SetOrReuseRouteUseCase:
@@ -23,10 +22,7 @@ class SetOrReuseRouteUseCase:
         exit_signal_id: str,
     ) -> Route | None:
         for route in simulation.locking_engine.active_routes.values():
-            if (
-                route.entry_signal_id == entry_signal_id
-                and route.exit_signal_id == exit_signal_id
-            ):
+            if route.entry_signal_id == entry_signal_id and route.exit_signal_id == exit_signal_id:
                 return route
         return None
 

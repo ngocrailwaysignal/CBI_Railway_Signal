@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class SetRouteResult:
-    route: "Route"
+    route: Route
     created: bool
     view_state: Any | None = None
 
@@ -30,8 +30,8 @@ class CancelRoutesResult:
 
 @dataclass(slots=True)
 class StartSimulationResult:
-    route: "Route"
-    train: "Train"
+    route: Route
+    train: Train
     created_route: bool
     created_train: bool
     simulation_start_section: str

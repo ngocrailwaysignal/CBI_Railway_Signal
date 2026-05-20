@@ -2,6 +2,8 @@
 
 from .elements import (
     ApproachSection,
+    DisplayLabel,
+    LayoutElement,
     Point,
     PointPosition,
     PointSymbolOrientation,
@@ -17,6 +19,8 @@ from .train import Train
 
 __all__ = [
     "ApproachSection",
+    "DisplayLabel",
+    "LayoutElement",
     "Point",
     "PointPosition",
     "PointSymbolOrientation",
@@ -29,4 +33,3 @@ __all__ = [
     "RailwayTopology",
     "Train",
 ]
-

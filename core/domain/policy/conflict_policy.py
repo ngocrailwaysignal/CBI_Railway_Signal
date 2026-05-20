@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 from core.domain.model.elements import Point, PointPosition, TrackSection
 from core.domain.model.topology import RailwayTopology
@@ -62,7 +62,9 @@ class ConflictPolicy:
         candidate_route: object,
         active_routes: Iterable[object],
     ) -> bool:
-        candidate_nodes = set(candidate_route.full_path).union(candidate_route.monitored_flank_sections)
+        candidate_nodes = set(candidate_route.full_path).union(
+            candidate_route.monitored_flank_sections
+        )
         candidate_points = set(candidate_route.all_required_point_positions)
         for active_route in active_routes:
             active_nodes = set(active_route.full_path).union(active_route.monitored_flank_sections)
@@ -74,4 +76,3 @@ class ConflictPolicy:
             if candidate_points.intersection(active_points):
                 return True
         return False
-

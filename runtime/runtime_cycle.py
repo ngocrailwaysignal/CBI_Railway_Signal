@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class SimulationEngine:
     """Advance a runtime session through time without owning runtime orchestration."""
 
-    runtime_session: "RuntimeSession"
+    runtime_session: RuntimeSession
 
     def step(self) -> None:
         """Advance the simulation by one tick."""

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from core.domain.model.elements import TrackSection
 from core.domain.model.topology import RailwayTopology
 
 
-class OverlapSelectionPolicy(str, Enum):
+class OverlapSelectionPolicy(StrEnum):
     """Supported overlap policies for route compilation/dispatching."""
 
     STANDARD = "STANDARD"
@@ -43,8 +43,12 @@ class OverlapPolicy:
             if counted_sections >= max(0, overlap_length):
                 break
             neighbors = sorted(node for node in route_graph.successors(current) if node != previous)
-            preferred = [node for node in neighbors if node not in route_nodes and node not in overlap]
-            candidates = preferred if preferred else [node for node in neighbors if node not in overlap]
+            preferred = [
+                node for node in neighbors if node not in route_nodes and node not in overlap
+            ]
+            candidates = (
+                preferred if preferred else [node for node in neighbors if node not in overlap]
+            )
             if not candidates:
                 break
 

@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import uuid
+from contextlib import suppress
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -16,10 +17,10 @@ repo_root_text = str(REPO_ROOT)
 if repo_root_text not in sys.path:
     sys.path.insert(0, repo_root_text)
 
-from infrastructure.snapshot_store import (
-    WEBCLIENT_RUNTIME_COMMAND_RESULTS_FILENAME,
-    WEBCLIENT_RUNTIME_COMMANDS_FILENAME,
-    WEBCLIENT_RUNTIME_STATE_FILENAME,
+from runtime.journal_paths import (
+    webclient_runtime_command_path,
+    webclient_runtime_command_result_path,
+    webclient_runtime_state_path,
 )
 from webclient.dispatcher_layout import (
     build_bindable_catalog,
@@ -29,15 +30,15 @@ from webclient.dispatcher_layout import (
 
 
 def _default_runtime_state_path(root: Path) -> Path:
-    return root.parent / "data" / "runtime_journal" / WEBCLIENT_RUNTIME_STATE_FILENAME
+    return webclient_runtime_state_path(root.parent)
 
 
 def _default_runtime_command_path(root: Path) -> Path:
-    return root.parent / "data" / "runtime_journal" / WEBCLIENT_RUNTIME_COMMANDS_FILENAME
+    return webclient_runtime_command_path(root.parent)
 
 
 def _default_runtime_command_result_path(root: Path) -> Path:
-    return root.parent / "data" / "runtime_journal" / WEBCLIENT_RUNTIME_COMMAND_RESULTS_FILENAME
+    return webclient_runtime_command_result_path(root.parent)
 
 
 def _default_layout_path(root: Path) -> Path:
@@ -69,10 +70,8 @@ def _save_layout_document(path: Path, payload: dict) -> None:
             os.fsync(handle.fileno())
         os.replace(temp_path, path)
     except Exception:
-        try:
+        with suppress(OSError):
             Path(temp_path).unlink(missing_ok=True)
-        except OSError:
-            pass
         raise
 
 
@@ -215,7 +214,9 @@ def create_handler(
             try:
                 records = _read_jsonl_objects(runtime_command_result_path)
             except Exception as exc:
-                self._send_json(503, {"error": "runtime_command_results_unavailable", "detail": str(exc)})
+                self._send_json(
+                    503, {"error": "runtime_command_results_unavailable", "detail": str(exc)}
+                )
                 return
             self._send_json(200, {"results": records})
 
@@ -236,7 +237,9 @@ def create_handler(
             except Exception as exc:
                 self._send_json(400, {"error": "invalid_request", "detail": str(exc)})
                 return
-            dispatcher_view_payload = payload.get("dispatcher_view") if isinstance(payload, dict) else None
+            dispatcher_view_payload = (
+                payload.get("dispatcher_view") if isinstance(payload, dict) else None
+            )
             if dispatcher_view_payload is None:
                 dispatcher_view_payload = payload
             try:
@@ -279,17 +282,23 @@ def create_handler(
                 self._send_json(400, {"error": "invalid_json", "detail": str(exc)})
                 return
             if not isinstance(payload, dict):
-                self._send_json(400, {"error": "invalid_request", "detail": "Command payload must be an object"})
+                self._send_json(
+                    400, {"error": "invalid_request", "detail": "Command payload must be an object"}
+                )
                 return
             kind = str(payload.get("kind", "")).strip()
             if kind not in {"set_route", "cancel_active_routes"}:
-                self._send_json(400, {"error": "unsupported_command", "detail": kind or "missing kind"})
+                self._send_json(
+                    400, {"error": "unsupported_command", "detail": kind or "missing kind"}
+                )
                 return
             command_payload = payload.get("payload", {})
             if command_payload is None:
                 command_payload = {}
             if not isinstance(command_payload, dict):
-                self._send_json(400, {"error": "invalid_request", "detail": "Command payload must be an object"})
+                self._send_json(
+                    400, {"error": "invalid_request", "detail": "Command payload must be an object"}
+                )
                 return
             command_ts = time.time()
             command = {
@@ -302,9 +311,13 @@ def create_handler(
             try:
                 _append_runtime_command(runtime_command_path, command)
             except Exception as exc:
-                self._send_json(500, {"error": "runtime_command_enqueue_failed", "detail": str(exc)})
+                self._send_json(
+                    500, {"error": "runtime_command_enqueue_failed", "detail": str(exc)}
+                )
                 return
-            self._send_json(202, {"status": "queued", "command_id": command["command_id"], "kind": kind})
+            self._send_json(
+                202, {"status": "queued", "command_id": command["command_id"], "kind": kind}
+            )
 
         def _send_json(self, status: int, payload: dict) -> None:
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")

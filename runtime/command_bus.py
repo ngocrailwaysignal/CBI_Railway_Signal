@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class RuntimeCommandHandler:
     """Dispatch runtime operations to the stateful runtime session."""
 
-    runtime_session: "RuntimeSession"
+    runtime_session: RuntimeSession
 
     def execute(self, op: str, payload: dict[str, Any] | None = None) -> Any:
         command = str(op).strip().lower()

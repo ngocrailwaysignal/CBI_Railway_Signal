@@ -1,1 +1,0 @@
-{"command_id": "local-1", "source_id": "local", "kind": "set_route", "payload": {"entry_signal_id": "ENTRY_RIGHT_A", "exit_signal_id": "EXTI_RIGHT_B", "overlap_length": 0, "approach_time_lock_seconds": 2.0, "overlap_release_seconds": 2.0}, "ts": 1778490713.4408276}

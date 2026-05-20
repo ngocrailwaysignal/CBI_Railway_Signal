@@ -264,6 +264,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Aspect",
         "vi": "Chỉ thị",
     },
+    "field.text": {
+        "en": "Text",
+        "vi": "Nội dung",
+    },
+    "field.font_size": {
+        "en": "Font size",
+        "vi": "Cỡ chữ",
+    },
     "field.element_id_placeholder": {
         "en": "Element ID",
         "vi": "Mã phần tử",
@@ -345,8 +353,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "vi": "Thành phần",
     },
     "palette.hint": {
-        "en": "Drag modules to canvas (or double-click to add). Use Connect Mode (2 clicks) or Connect Selected. Right-click or use Delete/F2 to edit.",
-        "vi": "Kéo thả phần tử vào canvas (hoặc nhấp đôi để thêm). Dùng chế độ Nối (2 lần nhấp) hoặc Nối các phần tử đã chọn. Bấm chuột phải hoặc Delete/F2 để sửa.",
+        "en": "Drag modules to canvas (or double-click to add). Use Add text label for drawing notes. Right-click or use Delete/F2 to edit.",
+        "vi": "Kéo thả phần tử vào canvas (hoặc nhấp đôi để thêm). Dùng Nhãn chữ để ghi chú bản vẽ. Bấm chuột phải hoặc Delete/F2 để sửa.",
     },
     "palette.component.section": {
         "en": "Section",
@@ -363,6 +371,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "palette.component.signal": {
         "en": "Signal",
         "vi": "Tín hiệu",
+    },
+    "palette.add_label": {
+        "en": "Add text label",
+        "vi": "Thêm nhãn chữ",
     },
     "properties.title": {
         "en": "Properties",
@@ -391,6 +403,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "dialog.cannot_add_component.title": {
         "en": "Cannot add component",
         "vi": "Không thể thêm phần tử",
+    },
+    "dialog.cannot_add_label.title": {
+        "en": "Cannot add text label",
+        "vi": "Không thể thêm nhãn chữ",
     },
     "dialog.property_update_failed.title": {
         "en": "Property update failed",
@@ -539,6 +555,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "status.component_added": {
         "en": "Added {element_type}",
         "vi": "Đã thêm {element_type}",
+    },
+    "status.label_added": {
+        "en": "Added text label",
+        "vi": "Đã thêm nhãn chữ",
     },
     "status.simulation_stopped_workspace": {
         "en": "Simulation stopped after leaving Simulation workspace.",
@@ -820,6 +840,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Cannot self-connect",
         "vi": "Không thể tự nối với chính nó",
     },
+    "canvas.error.cannot_connect_label": {
+        "en": "Text labels are visual only and cannot be connected.",
+        "vi": "Nhãn chữ chỉ dùng để hiển thị và không thể nối.",
+    },
     "canvas.error.unknown_element": {
         "en": "Unknown element {element_id}",
         "vi": "Không tìm thấy phần tử {element_id}",
@@ -966,6 +990,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
 }
 
+
 def normalize_language(language: str | None) -> str:
     if language is None:
         return DEFAULT_LANGUAGE
@@ -973,6 +998,7 @@ def normalize_language(language: str | None) -> str:
     if language_code.startswith("vi"):
         return "vi"
     return "en"
+
 
 class UITranslator:
     """Translate UI text with keyed messages."""

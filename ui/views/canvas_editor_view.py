@@ -1,16 +1,17 @@
-﻿"""Interactive drag-and-drop canvas for topology editing."""
+"""Interactive drag-and-drop canvas for topology editing."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
-from math import hypot
 from dataclasses import asdict
-from typing import Any, Callable, Optional
+from math import hypot
+from typing import Any
 
 from PyQt6.QtCore import QEasingCurve, QPointF, QPropertyAnimation, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import (
-    QColor,
     QBrush,
+    QColor,
     QKeySequence,
     QPainter,
     QPainterPath,
@@ -37,6 +38,7 @@ from PyQt6.QtWidgets import (
 
 from core.domain.model.elements import (
     ApproachSection,
+    DisplayLabel,
     Point,
     PointPosition,
     PointSymbolOrientation,
@@ -61,6 +63,7 @@ POINT_SYMBOL_CHOICES: tuple[tuple[str, PointSymbolOrientation], ...] = (
     ("3", PointSymbolOrientation.LEFT),
     ("4", PointSymbolOrientation.UP),
 )
+ANNOTATION_LABEL_NODE_TYPE = "AnnotationLabel"
 
 
 class NodeItem(QGraphicsObject):
@@ -74,7 +77,7 @@ class NodeItem(QGraphicsObject):
         self.element_id = element_id
         self.element_type = element_type
         self.payload = payload
-        self.editor: Optional["CanvasEditor"] = None
+        self.editor: CanvasEditor | None = None
         self.setFlags(
             QGraphicsItem.GraphicsItemFlag.ItemIsMovable
             | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
@@ -87,13 +90,15 @@ class NodeItem(QGraphicsObject):
     def paint(self, painter: QPainter, _option: Any, _widget: Any = None) -> None:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.boundingRect().adjusted(0.5, 0.5, -0.5, -0.5)
-        if self.element_type != "Point":
+        if self.element_type not in {"Point", ANNOTATION_LABEL_NODE_TYPE}:
             border_pen = QPen(QColor("#111111"), 2.0 if self.isSelected() else 1.2)
             painter.setPen(border_pen)
             painter.setBrush(QBrush(QColor("#ffffff")))
             painter.drawRect(rect)
 
-        if self.element_type in {"TrackSection", "ApproachSection"}:
+        if self.element_type == ANNOTATION_LABEL_NODE_TYPE:
+            self._paint_label(painter, rect)
+        elif self.element_type in {"TrackSection", "ApproachSection"}:
             self._paint_section(painter, rect)
         elif self.element_type == "Point":
             self._paint_point(painter, rect)
@@ -212,7 +217,9 @@ class NodeItem(QGraphicsObject):
             panel.height() / 2.0 - 3.0,
         )
         painter.setPen(QPen(QColor("#111111"), 1.1))
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, label)
+        painter.drawText(
+            text_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, label
+        )
 
     def _paint_signal(self, painter: QPainter, rect: QRectF) -> None:
         painter.save()
@@ -221,7 +228,9 @@ class NodeItem(QGraphicsObject):
         painter.drawRect(outer)
 
         split_y = outer.bottom() - max(24.0, outer.height() * 0.28)
-        painter.drawLine(QPointF(outer.left() + 1.5, split_y), QPointF(outer.right() - 1.5, split_y))
+        painter.drawLine(
+            QPointF(outer.left() + 1.5, split_y), QPointF(outer.right() - 1.5, split_y)
+        )
 
         top_rect = QRectF(
             outer.left() + 5.0,
@@ -238,7 +247,9 @@ class NodeItem(QGraphicsObject):
         # Render LEFT/RIGHT directly by direction value.
         face_left = direction == SignalDirection.LEFT.value
         aspect = self.payload.get("aspect", SignalAspect.STOP.value)
-        lamp_color = QColor("#1f8f48") if aspect == SignalAspect.PROCEED.value else QColor("#c62828")
+        lamp_color = (
+            QColor("#1f8f48") if aspect == SignalAspect.PROCEED.value else QColor("#c62828")
+        )
 
         arm_y = top_rect.top() + top_rect.height() * 0.35
         arm_length = max(16.0, top_rect.width() * 0.32)
@@ -256,7 +267,6 @@ class NodeItem(QGraphicsObject):
             QRectF(
                 head_center_x - head_radius,
                 arm_y - head_radius,
-                
                 head_radius * 2.0,
                 head_radius * 2.0,
             )
@@ -264,8 +274,25 @@ class NodeItem(QGraphicsObject):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawLine(QPointF(stop_bar_x, arm_y - 6.0), QPointF(stop_bar_x, arm_y + 6.0))
 
-        label_rect = QRectF(outer.left() + 3.0, split_y + 2.0, outer.width() - 6.0, outer.bottom() - split_y - 3.0)
+        label_rect = QRectF(
+            outer.left() + 3.0, split_y + 2.0, outer.width() - 6.0, outer.bottom() - split_y - 3.0
+        )
         painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, self.element_id)
+        painter.restore()
+
+    def _paint_label(self, painter: QPainter, rect: QRectF) -> None:
+        painter.save()
+        text = str(self.payload.get("text", "LABEL")) or "LABEL"
+        font = painter.font()
+        font.setPointSizeF(max(6.0, float(self.payload.get("font_size", 18.0))))
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QPen(QColor("#111827"), 1.0))
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, text)
+        if self.isSelected():
+            painter.setPen(QPen(QColor("#2563eb"), 1.2, Qt.PenStyle.DashLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(rect.adjusted(1.0, 1.0, -1.0, -1.0))
         painter.restore()
 
     def _paint_state_marker(self, painter: QPainter, rect: QRectF) -> None:
@@ -308,7 +335,10 @@ class NodeItem(QGraphicsObject):
             and isinstance(value, QPointF)
         ):
             return self.editor.snap_to_grid(value)
-        if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged and self.editor is not None:
+        if (
+            change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged
+            and self.editor is not None
+        ):
             self.editor.handle_node_moved(self)
         return super().itemChange(change, value)
 
@@ -474,11 +504,12 @@ class CanvasEditor(QGraphicsView):
     MAX_ZOOM = 4.0
     editor_message = pyqtSignal(str)
     node_selected = pyqtSignal(object)
+    canvas_selection_changed = pyqtSignal()
     topology_changed = pyqtSignal()
 
     def __init__(
         self,
-        parent: Optional[Any] = None,
+        parent: Any | None = None,
         translator: UITranslator | None = None,
     ) -> None:
         super().__init__(parent)
@@ -498,12 +529,18 @@ class CanvasEditor(QGraphicsView):
         self.nodes: dict[str, NodeItem] = {}
         self.edges: list[EdgeItem] = []
         self.signal_links: set[tuple[str, str]] = self.topology.signal_links
-        self._counter = {"TrackSection": 0, "ApproachSection": 0, "Point": 0, "Signal": 0}
+        self._counter = {
+            "TrackSection": 0,
+            "ApproachSection": 0,
+            "Point": 0,
+            "Signal": 0,
+            "Label": 0,
+        }
 
-        self._connection_start: Optional[NodeItem] = None
+        self._connection_start: NodeItem | None = None
         self._connect_mode = False
-        self._connect_source: Optional[NodeItem] = None
-        self._temporary_edge: Optional[QGraphicsLineItem] = None
+        self._connect_source: NodeItem | None = None
+        self._temporary_edge: QGraphicsLineItem | None = None
         self._search_highlight_nodes: set[str] = set()
         self._route_highlight_nodes: set[str] = set()
         self._overlap_highlight_nodes: set[str] = set()
@@ -671,7 +708,8 @@ class CanvasEditor(QGraphicsView):
         if event.button() == Qt.MouseButton.LeftButton and (
             not self._connect_mode
             and (
-            event.modifiers() & (Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.ControlModifier)
+                event.modifiers()
+                & (Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.ControlModifier)
             )
         ):
             node = self._node_at_view_pos(event.position().toPoint())
@@ -787,7 +825,6 @@ class CanvasEditor(QGraphicsView):
         menu = QMenu(self)
         if node is not None:
             event.accept()
-            return
             edit_action = menu.addAction(self._t("canvas.menu.edit_properties"))
             rename_action = menu.addAction(self._t("canvas.menu.rename"))
             delete_action = menu.addAction(self._t("canvas.menu.delete"))
@@ -853,7 +890,6 @@ class CanvasEditor(QGraphicsView):
 
         if edge is not None:
             event.accept()
-            return
             delete_edge_action = menu.addAction(self._t("canvas.menu.delete_connection"))
             chosen = menu.exec(event.globalPos())
             if chosen == delete_edge_action:
@@ -877,13 +913,12 @@ class CanvasEditor(QGraphicsView):
                 self.editor_message.emit(self._t("canvas.message.nothing_to_redo"))
             event.accept()
             return
-        if event.key() == Qt.Key.Key_Escape:
-            if self._connect_source is not None:
-                self._connect_source = None
-                self.refresh_visual_state()
-                self.editor_message.emit(self._t("canvas.message.connect_mode_canceled_source"))
-                event.accept()
-                return
+        if event.key() == Qt.Key.Key_Escape and self._connect_source is not None:
+            self._connect_source = None
+            self.refresh_visual_state()
+            self.editor_message.emit(self._t("canvas.message.connect_mode_canceled_source"))
+            event.accept()
+            return
         if event.key() == Qt.Key.Key_Delete:
             self.delete_selected_items()
             event.accept()
@@ -898,7 +933,9 @@ class CanvasEditor(QGraphicsView):
         self._connect_mode = bool(enabled)
         self._connect_source = None
         self.setDragMode(
-            QGraphicsView.DragMode.NoDrag if self._connect_mode else QGraphicsView.DragMode.RubberBandDrag
+            QGraphicsView.DragMode.NoDrag
+            if self._connect_mode
+            else QGraphicsView.DragMode.RubberBandDrag
         )
         self.viewport().setCursor(
             Qt.CursorShape.CrossCursor if self._connect_mode else Qt.CursorShape.ArrowCursor
@@ -1002,7 +1039,6 @@ class CanvasEditor(QGraphicsView):
     ) -> NodeItem:
         """Create topology element and visual node."""
         self._ensure_layout_edit_allowed("canvas.action.add_components")
-        self._push_undo_state()
         aliases = {
             "Section": "TrackSection",
             "TrackSection": "TrackSection",
@@ -1058,6 +1094,7 @@ class CanvasEditor(QGraphicsView):
                 )
             )
 
+        self._push_undo_state()
         if element_type == "TrackSection":
             element = TrackSection(id=element_id)
             self.topology.add_section(element, position=(scene_pos.x(), scene_pos.y()))
@@ -1075,14 +1112,42 @@ class CanvasEditor(QGraphicsView):
             self.topology.add_signal(element, position=(scene_pos.x(), scene_pos.y()))
 
         if isinstance(element, Signal):
-            node_type = (
-                "SignalLeft" if element.direction == SignalDirection.LEFT else "SignalRight"
-            )
+            node_type = "SignalLeft" if element.direction == SignalDirection.LEFT else "SignalRight"
         elif isinstance(element, Point):
             node_type = "Point"
         else:
             node_type = element_type
         node = NodeItem(element_id, node_type, self._element_payload(element_id))
+        node.setPos(scene_pos)
+        self.scene_ref.addItem(node)
+        node.editor = self
+        self.nodes[element_id] = node
+        self.topology_changed.emit()
+        return node
+
+    def add_text_label(self, scene_pos: QPointF, element_id: str | None = None) -> NodeItem:
+        """Create a drawing-only text annotation."""
+        self._ensure_layout_edit_allowed("canvas.action.add_components")
+        scene_pos = self.snap_to_grid(scene_pos)
+        if element_id is None:
+            self._counter["Label"] += 1
+            element_id = f"LBL{self._counter['Label']}"
+        if element_id in self.nodes or self.topology.get_element(element_id):
+            raise ValueError(
+                self._t(
+                    "canvas.error.element_id_exists",
+                    element_id=element_id,
+                )
+            )
+
+        self._push_undo_state()
+        element = DisplayLabel(id=element_id)
+        self.topology.add_label(element, position=(scene_pos.x(), scene_pos.y()))
+        node = NodeItem(
+            element_id,
+            ANNOTATION_LABEL_NODE_TYPE,
+            self._element_payload(element_id),
+        )
         node.setPos(scene_pos)
         self.scene_ref.addItem(node)
         node.editor = self
@@ -1097,6 +1162,11 @@ class CanvasEditor(QGraphicsView):
             raise KeyError(self._t("canvas.error.connection_requires_existing_nodes"))
         if source_id == target_id:
             raise ValueError(self._t("canvas.error.cannot_self_connect"))
+        if ANNOTATION_LABEL_NODE_TYPE in {
+            self.nodes[source_id].element_type,
+            self.nodes[target_id].element_type,
+        }:
+            raise ValueError(self._t("canvas.error.cannot_connect_label"))
 
         # Guard UI connect flows from accidentally overwriting protects:
         # when user starts from a signal that already protects another node,
@@ -1119,10 +1189,10 @@ class CanvasEditor(QGraphicsView):
         elif self._is_signal_type_name(target.element_type):
             if (source_id, target_id) in self.signal_links:
                 return
-        elif (
-            (source_id, target_id) in self.topology.graph.edges
-            or (target_id, source_id) in self.topology.graph.edges
-        ):
+        elif (source_id, target_id) in self.topology.graph.edges or (
+            target_id,
+            source_id,
+        ) in self.topology.graph.edges:
             return
 
         self._push_undo_state()
@@ -1182,6 +1252,10 @@ class CanvasEditor(QGraphicsView):
             import networkx as nx
 
             nx.relabel_nodes(self.topology.graph, {old_id: new_id}, copy=False)
+        elif old_id in self.topology.labels:
+            label = self.topology.labels.pop(old_id)
+            label.id = new_id
+            self.topology.labels[new_id] = label
         else:
             signal = self.topology.signals.pop(old_id)
             signal.id = new_id
@@ -1282,6 +1356,8 @@ class CanvasEditor(QGraphicsView):
 
         if node_id in self.topology.graph.nodes:
             self.topology.graph.remove_node(node_id)
+        elif node_id in self.topology.labels:
+            self.topology.labels.pop(node_id, None)
         else:
             self.topology.signals.pop(node_id, None)
 
@@ -1345,7 +1421,9 @@ class CanvasEditor(QGraphicsView):
             self._t("canvas.dialog.edit_element.title", element_id=node.element_id)
         )
         form = QFormLayout(dialog)
-        layout_lock_hint = self._layout_edit_lock_reason or self._t("canvas.lock.layout_editing_locked")
+        layout_lock_hint = self._layout_edit_lock_reason or self._t(
+            "canvas.lock.layout_editing_locked"
+        )
 
         id_input = QLineEdit(node.element_id, dialog)
         form.addRow(self._t("field.id"), id_input)
@@ -1404,6 +1482,20 @@ class CanvasEditor(QGraphicsView):
                 symbol_orientation.setToolTip(layout_lock_hint)
                 normal.setToolTip(layout_lock_hint)
                 reverse.setToolTip(layout_lock_hint)
+        elif node.element_type == ANNOTATION_LABEL_NODE_TYPE:
+            text = QLineEdit(str(node.payload.get("text", "LABEL")), dialog)
+            font_size = QDoubleSpinBox(dialog)
+            font_size.setRange(6.0, 96.0)
+            font_size.setValue(float(node.payload.get("font_size", 18.0)))
+            controls["text"] = text
+            controls["font_size"] = font_size
+            form.addRow(self._t("field.text"), text)
+            form.addRow(self._t("field.font_size"), font_size)
+            if self._layout_edit_locked:
+                text.setEnabled(False)
+                font_size.setEnabled(False)
+                text.setToolTip(layout_lock_hint)
+                font_size.setToolTip(layout_lock_hint)
         else:
             protects = QLineEdit(str(node.payload.get("protects", "")), dialog)
             approach_section = QLineEdit(str(node.payload.get("approach_section", "")), dialog)
@@ -1438,7 +1530,8 @@ class CanvasEditor(QGraphicsView):
                 aspect.setToolTip(layout_lock_hint)
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, parent=dialog
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            parent=dialog,
         )
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -1479,7 +1572,9 @@ class CanvasEditor(QGraphicsView):
         element = self.topology.get_element(element_id)
         if element is None:
             raise KeyError(self._t("canvas.error.unknown_element", element_id=element_id))
-        track_occupied_before = bool(element.occupied) if isinstance(element, TrackSection) else None
+        track_occupied_before = (
+            bool(element.occupied) if isinstance(element, TrackSection) else None
+        )
         self._validate_layout_property_updates(element, updates)
         self._validate_runtime_state_updates(element, updates)
         if updates:
@@ -1558,9 +1653,7 @@ class CanvasEditor(QGraphicsView):
             if "protects" in updates:
                 new_protects = str(updates["protects"]).strip()
                 if new_protects and new_protects not in self.topology.graph.nodes:
-                    raise ValueError(
-                        self._t("canvas.error.protects_invalid")
-                    )
+                    raise ValueError(self._t("canvas.error.protects_invalid"))
                 element.protects = new_protects
                 self.topology.sync_signal_virtual_routes()
                 self._rebuild_edge_items()
@@ -1570,13 +1663,9 @@ class CanvasEditor(QGraphicsView):
                 if approach_section:
                     approach_element = self.topology.get_element(approach_section)
                     if not isinstance(approach_element, ApproachSection):
-                        raise ValueError(
-                            self._t("canvas.error.approach_section_invalid")
-                        )
+                        raise ValueError(self._t("canvas.error.approach_section_invalid"))
                     if not self.topology.is_signal_back_side_node(element_id, approach_section):
-                        raise ValueError(
-                            self._t("canvas.error.approach_section_rear_side")
-                        )
+                        raise ValueError(self._t("canvas.error.approach_section_rear_side"))
                 element.approach_section = approach_section
             if "direction" in updates:
                 element.direction = SignalDirection(str(updates["direction"]))
@@ -1587,6 +1676,12 @@ class CanvasEditor(QGraphicsView):
                     )
             if "aspect" in updates:
                 element.aspect = SignalAspect(str(updates["aspect"]))
+        elif isinstance(element, DisplayLabel):
+            if "text" in updates:
+                element.text = str(updates["text"]).strip() or "LABEL"
+            if "font_size" in updates:
+                element.font_size = max(6.0, float(updates["font_size"]))
+            emit_topology_change = True
 
         self.refresh_visual_state()
         if emit_topology_change:
@@ -1631,14 +1726,17 @@ class CanvasEditor(QGraphicsView):
             return
         reason = self._layout_edit_lock_reason or self._t("main.lock.layout_edit_reason")
 
-        if isinstance(element, TrackSection) and "length" in updates:
-            if float(updates["length"]) != float(element.length):
-                raise RuntimeError(
-                    self._t(
-                        "canvas.error.cannot_edit_length_locked",
-                        reason=reason,
-                    )
+        if (
+            isinstance(element, TrackSection)
+            and "length" in updates
+            and float(updates["length"]) != float(element.length)
+        ):
+            raise RuntimeError(
+                self._t(
+                    "canvas.error.cannot_edit_length_locked",
+                    reason=reason,
                 )
+            )
 
         if isinstance(element, Point):
             if "symbol_orientation" in updates:
@@ -1703,7 +1801,9 @@ class CanvasEditor(QGraphicsView):
     def _validate_runtime_state_updates(self, element: Any, updates: dict[str, Any]) -> None:
         if not updates:
             return
-        runtime_reason = self._runtime_edit_lock_reason or self._t("canvas.lock.runtime_lock_active")
+        runtime_reason = self._runtime_edit_lock_reason or self._t(
+            "canvas.lock.runtime_lock_active"
+        )
         layout_reason = self._layout_edit_lock_reason or self._t("main.lock.layout_edit_reason")
 
         if isinstance(element, TrackSection):
@@ -1751,13 +1851,15 @@ class CanvasEditor(QGraphicsView):
                 next_aspect = SignalAspect(str(updates["aspect"]))
                 if next_aspect != element.aspect:
                     raise RuntimeError(
-                        f"Manual signal aspect editing is blocked outside Design Layout workspace ({layout_reason})."
+                        "Manual signal aspect editing is blocked outside "
+                        f"Design Layout workspace ({layout_reason})."
                     )
             if "route_id" in updates:
                 next_route_id = str(updates["route_id"]).strip() or None
                 if next_route_id != element.route_id:
                     raise RuntimeError(
-                        f"Manual signal route editing is blocked outside Design Layout workspace ({layout_reason})."
+                        "Manual signal route editing is blocked outside "
+                        f"Design Layout workspace ({layout_reason})."
                     )
 
     def handle_node_moved(self, node: NodeItem) -> None:
@@ -1768,7 +1870,10 @@ class CanvasEditor(QGraphicsView):
                 edge.update_geometry()
 
     def _on_selection_changed(self) -> None:
-        selected_items = [item for item in self.scene_ref.selectedItems() if isinstance(item, NodeItem)]
+        self.canvas_selection_changed.emit()
+        selected_items = [
+            item for item in self.scene_ref.selectedItems() if isinstance(item, NodeItem)
+        ]
         if not selected_items:
             self.node_selected.emit(None)
             return
@@ -1781,13 +1886,13 @@ class CanvasEditor(QGraphicsView):
             }
         )
 
-    def _node_at_view_pos(self, pos: Any) -> Optional[NodeItem]:
+    def _node_at_view_pos(self, pos: Any) -> NodeItem | None:
         scene_pos = self.mapToScene(pos)
         item = self.scene_ref.itemAt(scene_pos, self.transform())
         return self._extract_node_item(item)
 
     @staticmethod
-    def _extract_node_item(item: Any) -> Optional[NodeItem]:
+    def _extract_node_item(item: Any) -> NodeItem | None:
         while item is not None and not isinstance(item, NodeItem):
             item = item.parentItem()
         return item if isinstance(item, NodeItem) else None
@@ -1808,6 +1913,8 @@ class CanvasEditor(QGraphicsView):
             payload["aspect"] = element.aspect.value
             payload["direction"] = element.direction.value
             return payload
+        if isinstance(element, DisplayLabel):
+            return asdict(element)
         return {}
 
     def _node_scene_anchor(self, node_id: str) -> QPointF | None:
@@ -1834,7 +1941,9 @@ class CanvasEditor(QGraphicsView):
             self.scene_ref.removeItem(sprite)
         self._train_last_sections.pop(train_id, None)
 
-    def _animate_train_item(self, train_id: str, sprite: TrainSpriteItem, target_pos: QPointF) -> None:
+    def _animate_train_item(
+        self, train_id: str, sprite: TrainSpriteItem, target_pos: QPointF
+    ) -> None:
         duration_ms = max(0, int(self._train_animation_duration_ms))
         if duration_ms <= 0:
             sprite.setPos(target_pos)
@@ -1888,7 +1997,9 @@ class CanvasEditor(QGraphicsView):
                 self._train_items[train_id] = sprite
 
             previous_section = self._train_last_sections.get(train_id)
-            previous_anchor = self._node_scene_anchor(previous_section) if previous_section else None
+            previous_anchor = (
+                self._node_scene_anchor(previous_section) if previous_section else None
+            )
             if previous_anchor is not None and abs(anchor.x() - previous_anchor.x()) > 1.0:
                 sprite.set_facing_left(anchor.x() < previous_anchor.x())
 
@@ -1955,19 +2066,31 @@ class CanvasEditor(QGraphicsView):
         self.topology = topology
         self.signal_links = self.topology.signal_links
         self.topology.sync_signal_virtual_routes()
-        self._counter = {"TrackSection": 0, "ApproachSection": 0, "Point": 0, "Signal": 0}
+        self._counter = {
+            "TrackSection": 0,
+            "ApproachSection": 0,
+            "Point": 0,
+            "Signal": 0,
+            "Label": 0,
+        }
 
         for node_id in topology.graph.nodes:
             element = topology.graph.nodes[node_id]["element"]
             if isinstance(element, ApproachSection):
                 element_type = "ApproachSection"
-                self._counter[element_type] = max(self._counter[element_type], self._extract_suffix(node_id))
+                self._counter[element_type] = max(
+                    self._counter[element_type], self._extract_suffix(node_id)
+                )
             elif isinstance(element, TrackSection):
                 element_type = "TrackSection"
-                self._counter[element_type] = max(self._counter[element_type], self._extract_suffix(node_id))
+                self._counter[element_type] = max(
+                    self._counter[element_type], self._extract_suffix(node_id)
+                )
             elif isinstance(element, Point):
                 element_type = "Point"
-                self._counter[element_type] = max(self._counter[element_type], self._extract_suffix(node_id))
+                self._counter[element_type] = max(
+                    self._counter[element_type], self._extract_suffix(node_id)
+                )
             else:
                 continue
             position = topology.ui_positions.get(node_id, (0.0, 0.0))
@@ -1981,12 +2104,23 @@ class CanvasEditor(QGraphicsView):
             self._counter["Signal"] = max(self._counter["Signal"], self._extract_suffix(signal_id))
             position = topology.ui_positions.get(signal_id, (0.0, 0.0))
             signal = topology.signals[signal_id]
-            signal_type = "SignalLeft" if signal.direction == SignalDirection.LEFT else "SignalRight"
+            signal_type = (
+                "SignalLeft" if signal.direction == SignalDirection.LEFT else "SignalRight"
+            )
             node = NodeItem(signal_id, signal_type, self._element_payload(signal_id))
             node.setPos(QPointF(position[0], position[1]))
             self.scene_ref.addItem(node)
             node.editor = self
             self.nodes[signal_id] = node
+
+        for label_id in topology.labels:
+            self._counter["Label"] = max(self._counter["Label"], self._extract_suffix(label_id))
+            position = topology.ui_positions.get(label_id, (0.0, 0.0))
+            node = NodeItem(label_id, ANNOTATION_LABEL_NODE_TYPE, self._element_payload(label_id))
+            node.setPos(QPointF(position[0], position[1]))
+            self.scene_ref.addItem(node)
+            node.editor = self
+            self.nodes[label_id] = node
 
         self._rebuild_edge_items()
         self._apply_layout_edit_flags()
@@ -2040,4 +2174,3 @@ class CanvasEditor(QGraphicsView):
         self._search_highlight_nodes.add(self._search_sequence[self._search_index])
         self._search_index += 1
         self.refresh_visual_state()
-

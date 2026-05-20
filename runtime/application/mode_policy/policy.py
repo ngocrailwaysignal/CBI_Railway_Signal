@@ -3,23 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class AppMode(str, Enum):
+class AppMode(StrEnum):
     """Logical operating modes used across UI and application layer."""
 
     DESIGN_LAYOUT = "design_layout"
     SIMULATION = "simulation"
     RUNTIME = "runtime"
-
-    @property
-    def title(self) -> str:
-        if self is AppMode.DESIGN_LAYOUT:
-            return "Design Layout"
-        if self is AppMode.SIMULATION:
-            return "Simulation"
-        return "Runtime"
 
 
 @dataclass(slots=True, frozen=True)
@@ -109,4 +101,3 @@ class ModePolicy:
 
     def sync_contract(self, mode: AppMode) -> ModeSyncContract:
         return self._SYNC_AUDIT_MATRIX.get(mode, self._SYNC_AUDIT_MATRIX[AppMode.DESIGN_LAYOUT])
-

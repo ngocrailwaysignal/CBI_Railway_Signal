@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class RouteLifecycleState(str, Enum):
+class RouteLifecycleState(StrEnum):
     """Lifecycle states for one locked route."""
 
     RESERVED = "RESERVED"
@@ -42,8 +42,9 @@ class RouteLifecycleFSM:
         return target in cls._ALLOWED.get(current, set())
 
     @classmethod
-    def transition(cls, current: RouteLifecycleState, target: RouteLifecycleState) -> RouteLifecycleState:
+    def transition(
+        cls, current: RouteLifecycleState, target: RouteLifecycleState
+    ) -> RouteLifecycleState:
         if not cls.can_transition(current, target):
             raise ValueError(f"Invalid lifecycle transition {current.value} -> {target.value}")
         return target
-

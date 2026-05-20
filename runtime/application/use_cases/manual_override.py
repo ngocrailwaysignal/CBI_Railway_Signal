@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from runtime.application.runtime_session_port import RuntimeSessionPort
 from core.domain.model.elements import TrackSection
+from runtime.application.runtime_session_port import RuntimeSessionPort
 
 
 @dataclass(slots=True)

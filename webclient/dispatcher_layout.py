@@ -5,7 +5,6 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-
 ELEMENT_KINDS = {"track_section", "signal", "point", "label", "block_marker"}
 DEFAULT_CANVAS = {
     "width": 1920.0,
@@ -55,8 +54,12 @@ def normalize_dispatcher_view(
         raw_view = _migrate_legacy_dispatcher_view(raw_view)
     canvas_source = raw_view.get("canvas", {})
     canvas = {
-        "width": _coerce_float(_pick(canvas_source, "width"), DEFAULT_CANVAS["width"], minimum=640.0),
-        "height": _coerce_float(_pick(canvas_source, "height"), DEFAULT_CANVAS["height"], minimum=480.0),
+        "width": _coerce_float(
+            _pick(canvas_source, "width"), DEFAULT_CANVAS["width"], minimum=640.0
+        ),
+        "height": _coerce_float(
+            _pick(canvas_source, "height"), DEFAULT_CANVAS["height"], minimum=480.0
+        ),
         "grid_size": _coerce_float(
             _pick(canvas_source, "grid_size"),
             DEFAULT_CANVAS["grid_size"],
@@ -103,7 +106,9 @@ def _normalize_element(
     }
     rotation = _coerce_float(raw_element.get("rotation"), 0.0)
     z_index = int(_coerce_float(raw_element.get("z_index"), float(index)))
-    style = deepcopy(raw_element.get("style", {})) if isinstance(raw_element.get("style"), dict) else {}
+    style = (
+        deepcopy(raw_element.get("style", {})) if isinstance(raw_element.get("style"), dict) else {}
+    )
     geometry = _normalize_geometry(kind, raw_element.get("geometry", {}))
     binding = _normalize_binding(kind, raw_element.get("binding"), bindable_catalog)
     return {
@@ -199,7 +204,11 @@ def _migrate_legacy_dispatcher_view(raw_view: dict[str, Any]) -> dict[str, Any]:
     for segment in raw_view.get("segments", []):
         if not isinstance(segment, dict):
             continue
-        points = [_normalize_point(point) for point in segment.get("points", []) if isinstance(point, dict)]
+        points = [
+            _normalize_point(point)
+            for point in segment.get("points", [])
+            if isinstance(point, dict)
+        ]
         if len(points) < 2:
             continue
         xs = [point["x"] for point in points]
@@ -208,9 +217,7 @@ def _migrate_legacy_dispatcher_view(raw_view: dict[str, Any]) -> dict[str, Any]:
         min_y = min(ys)
         relative_points = [{"x": point["x"] - min_x, "y": point["y"] - min_y} for point in points]
         state_source_ids = [
-            str(item).strip()
-            for item in segment.get("state_source_ids", [])
-            if str(item).strip()
+            str(item).strip() for item in segment.get("state_source_ids", []) if str(item).strip()
         ]
         binding = None
         if len(state_source_ids) == 1:
@@ -263,7 +270,10 @@ def _migrate_legacy_dispatcher_view(raw_view: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(annotation, dict):
             continue
         kind = str(annotation.get("kind", "text")).strip().lower()
-        element_id = str(annotation.get("id", f"annotation-{z_index + 1}")).strip() or f"annotation-{z_index + 1}"
+        element_id = (
+            str(annotation.get("id", f"annotation-{z_index + 1}")).strip()
+            or f"annotation-{z_index + 1}"
+        )
         position = {
             "x": _coerce_float(annotation.get("x"), 0.0),
             "y": _coerce_float(annotation.get("y"), 0.0),
@@ -280,7 +290,9 @@ def _migrate_legacy_dispatcher_view(raw_view: dict[str, Any]) -> dict[str, Any]:
                         "height": 18.0,
                         "radius": 8.0,
                     },
-                    "style": {"tone": str(annotation.get("tone", "steel")).strip().lower() or "steel"},
+                    "style": {
+                        "tone": str(annotation.get("tone", "steel")).strip().lower() or "steel"
+                    },
                     "z_index": 700 + z_index,
                     "binding": None,
                 }
@@ -297,7 +309,9 @@ def _migrate_legacy_dispatcher_view(raw_view: dict[str, Any]) -> dict[str, Any]:
                         "font_size": _size_token_to_font(annotation.get("size")),
                         "align": _align_token(annotation.get("align")),
                     },
-                    "style": {"tone": str(annotation.get("tone", "bright")).strip().lower() or "bright"},
+                    "style": {
+                        "tone": str(annotation.get("tone", "bright")).strip().lower() or "bright"
+                    },
                     "z_index": 650 + z_index,
                     "binding": None,
                 }
@@ -326,7 +340,10 @@ def _normalize_point(raw_point: Any) -> dict[str, float]:
     if "node_id" in raw_point:
         # Legacy dispatcher_view could reference topology nodes directly. The web editor v1 stores
         # only concrete coordinates, so unknown node references degrade to origin until edited.
-        return {"x": _coerce_float(raw_point.get("x"), 0.0), "y": _coerce_float(raw_point.get("y"), 0.0)}
+        return {
+            "x": _coerce_float(raw_point.get("x"), 0.0),
+            "y": _coerce_float(raw_point.get("y"), 0.0),
+        }
     return {
         "x": _coerce_float(raw_point.get("x"), 0.0),
         "y": _coerce_float(raw_point.get("y"), 0.0),

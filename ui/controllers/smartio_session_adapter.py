@@ -70,4 +70,3 @@ class SmartIOSessionAdapter:
         if token == "disabled":
             return "smartio.state.disabled"
         return "smartio.state.disconnected"
-

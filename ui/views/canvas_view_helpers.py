@@ -88,4 +88,3 @@ def resolve_connection_direction(
     if not protected:
         return signal_id, node_id
     return node_id, signal_id
-

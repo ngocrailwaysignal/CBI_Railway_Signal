@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from runtime.application import AppMode, ModePolicy
-from runtime.application.serialization import build_layout_payload, build_webclient_runtime_state
 from core.compiler import InterlockingSpec, RouteCompiler
 from core.compiler.interlocking_table import InterlockingTableRow
 from core.domain.model.route import Route
@@ -17,6 +15,8 @@ from infrastructure.snapshot_store import (
     WebclientRuntimeStateRepository,
 )
 from kernel.product_kernel import GenericProductKernel
+from runtime.application import AppMode, ModePolicy
+from runtime.application.serialization import build_layout_payload, build_webclient_runtime_state
 
 from .profile import GenericApplicationProfile
 
@@ -56,9 +56,7 @@ class GenericApplicationService:
                 else load_runtime_state
             ),
             load_occupancy=(
-                self.profile.load_occupancy
-                if load_occupancy is None
-                else load_occupancy
+                self.profile.load_occupancy if load_occupancy is None else load_occupancy
             ),
         )
 
@@ -79,9 +77,7 @@ class GenericApplicationService:
                 else include_runtime_state
             ),
             include_occupancy=(
-                self.profile.include_occupancy
-                if include_occupancy is None
-                else include_occupancy
+                self.profile.include_occupancy if include_occupancy is None else include_occupancy
             ),
         )
 
@@ -92,7 +88,7 @@ class GenericApplicationService:
         exit_signal_id: str,
         *,
         overlap_length: int | None = None,
-        runtime_session: "RuntimeSessionPort | None" = None,
+        runtime_session: RuntimeSessionPort | None = None,
     ) -> Route:
         """Find one route candidate using application defaults."""
         return self.kernel.find_route(
@@ -136,9 +132,7 @@ class GenericApplicationService:
             topology=topology,
             station_id=station_id,
             overlap_length=(
-                self.profile.default_overlap_length
-                if overlap_length is None
-                else overlap_length
+                self.profile.default_overlap_length if overlap_length is None else overlap_length
             ),
         )
 

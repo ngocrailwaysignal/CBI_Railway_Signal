@@ -1,16 +1,16 @@
-﻿"""Main application window for the geographical interlocking simulator."""
+"""Main application window for the geographical interlocking simulator."""
 
 from __future__ import annotations
 
-from collections import deque
 import json
 import os
-from pathlib import Path
 import sys
 import time
-from typing import Optional
+from collections import deque
+from contextlib import suppress
+from pathlib import Path
 
-from PyQt6.QtCore import QProcess, QTimer, Qt, QUrl
+from PyQt6.QtCore import QProcess, Qt, QTimer, QUrl
 from PyQt6.QtGui import QCloseEvent, QDesktopServices
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -24,8 +24,8 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
-    QPushButton,
     QPlainTextEdit,
+    QPushButton,
     QSpinBox,
     QSplitter,
     QStatusBar,
@@ -37,16 +37,16 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from runtime.application import AppMode
-from core.domain.model.elements import PointPosition, TrackSection
 from core.compiler.interlocking_table import InterlockingTableRow
+from core.domain.model.elements import PointPosition, TrackSection
 from core.domain.model.route import Route
-from infrastructure.snapshot_store import (
-    WEBCLIENT_RUNTIME_COMMAND_RESULTS_FILENAME,
-    WEBCLIENT_RUNTIME_COMMANDS_FILENAME,
-    WEBCLIENT_RUNTIME_STATE_FILENAME,
-)
 from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
+from runtime.application import AppMode
+from runtime.journal_paths import (
+    webclient_runtime_command_path,
+    webclient_runtime_command_result_path,
+    webclient_runtime_state_path,
+)
 from runtime.specific_application import SpecificLayoutEditorService, StationLayout
 from ui.controllers import (
     MainWindowController,
@@ -58,7 +58,6 @@ from ui.i18n import SUPPORTED_LANGUAGES, UITranslator, normalize_language
 from ui.presenters import RoutePresenter
 from ui.views.canvas_editor_view import CanvasEditor
 from ui.views.components_palette_view import ComponentsPalette
-
 
 OperatingMode = AppMode
 
@@ -100,7 +99,9 @@ class MainWindow(QMainWindow):
         self.right_panel = self._build_right_panel()
         self.palette.properties_applied.connect(self._on_properties_applied)
         self.palette.component_insert_requested.connect(self._insert_component_from_palette)
+        self.palette.label_insert_requested.connect(self._insert_text_label)
         self.canvas.node_selected.connect(self.palette.set_selected_element)
+        self.canvas.canvas_selection_changed.connect(self._sync_ui_state)
         self.canvas.topology_changed.connect(self._on_topology_changed)
 
         splitter = QSplitter(self)
@@ -122,7 +123,7 @@ class MainWindow(QMainWindow):
         self._apply_visual_theme()
 
         self.canvas.set_runtime_view_state(None)
-        self.preview_route: Optional[Route] = None
+        self.preview_route: Route | None = None
         self.interlocking_rows: list[InterlockingTableRow] = []
         self.valid_route_pairs: set[tuple[str, str]] = set()
         self._simulation_timer = QTimer(self)
@@ -144,9 +145,7 @@ class MainWindow(QMainWindow):
                     load_occupancy=True,
                 )
             )
-            self.status.showMessage(
-                self._t("status.loaded_sample_layout", path=sample_path)
-            )
+            self.status.showMessage(self._t("status.loaded_sample_layout", path=sample_path))
         else:
             self.canvas.load_topology(self.current_layout.topology)
         self._set_operating_mode(OperatingMode.RUNTIME, announce=False)
@@ -173,11 +172,7 @@ class MainWindow(QMainWindow):
         self.language_combo.blockSignals(True)
         self.language_combo.clear()
         for language_code in options:
-            option_key = (
-                "language.option.vi"
-                if language_code == "vi"
-                else "language.option.en"
-            )
+            option_key = "language.option.vi" if language_code == "vi" else "language.option.en"
             self.language_combo.addItem(self._t(option_key), language_code)
         selected_index = self.language_combo.findData(current_language)
         self.language_combo.setCurrentIndex(selected_index if selected_index >= 0 else 0)
@@ -394,14 +389,14 @@ class MainWindow(QMainWindow):
         self.cancel_route_action.triggered.connect(lambda: self._cancel_active_routes())
 
         self.emergency_release_action = self.toolbar.addAction(self._t("toolbar.emergency_release"))
-        self.emergency_release_action.triggered.connect(
-            lambda: self._emergency_release_routes()
-        )
+        self.emergency_release_action.triggered.connect(lambda: self._emergency_release_routes())
 
         self.simulation_action = self.toolbar.addAction(self._t("toolbar.start_simulation"))
         self.simulation_action.triggered.connect(self._start_simulation)
 
-        self.open_smartio_local_action = self.toolbar.addAction(self._t("toolbar.open_smartio_local"))
+        self.open_smartio_local_action = self.toolbar.addAction(
+            self._t("toolbar.open_smartio_local")
+        )
         self.open_smartio_local_action.triggered.connect(self._open_smartio_local)
 
         self.toolbar.addSeparator()
@@ -461,6 +456,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 self._t("dialog.cannot_add_component.title"),
+                str(exc),
+            )
+
+    def _insert_text_label(self) -> None:
+        try:
+            center = self.canvas.mapToScene(self.canvas.viewport().rect().center())
+            self.canvas.add_text_label(center)
+            self.status.showMessage(self._t("status.label_added"))
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                self._t("dialog.cannot_add_label.title"),
                 str(exc),
             )
 
@@ -586,9 +593,7 @@ class MainWindow(QMainWindow):
         emergency_row.addStretch(1)
         self.emergency_release_button = QPushButton(self._t("button.emergency_release"))
         self.emergency_release_button.setObjectName("emergencyReleaseButton")
-        self.emergency_release_button.clicked.connect(
-            lambda: self._emergency_release_routes()
-        )
+        self.emergency_release_button.clicked.connect(lambda: self._emergency_release_routes())
         emergency_row.addWidget(self.emergency_release_button)
         route_layout.addLayout(emergency_row)
 
@@ -688,35 +693,41 @@ class MainWindow(QMainWindow):
         self.smartio_coordinator.publish_runtime_snapshot()
 
     def _webclient_runtime_state_path(self) -> Path:
-        journal_dir = Path(getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"))
-        if not journal_dir.is_absolute():
-            journal_dir = self._repo_root() / journal_dir
-        return journal_dir / WEBCLIENT_RUNTIME_STATE_FILENAME
+        return webclient_runtime_state_path(
+            self._repo_root(),
+            getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"),
+        )
 
     def _webclient_runtime_command_path(self) -> Path:
-        journal_dir = Path(getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"))
-        if not journal_dir.is_absolute():
-            journal_dir = self._repo_root() / journal_dir
-        return journal_dir / WEBCLIENT_RUNTIME_COMMANDS_FILENAME
+        return webclient_runtime_command_path(
+            self._repo_root(),
+            getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"),
+        )
 
     def _webclient_runtime_command_result_path(self) -> Path:
-        journal_dir = Path(getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"))
-        if not journal_dir.is_absolute():
-            journal_dir = self._repo_root() / journal_dir
-        return journal_dir / WEBCLIENT_RUNTIME_COMMAND_RESULTS_FILENAME
+        return webclient_runtime_command_result_path(
+            self._repo_root(),
+            getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"),
+        )
 
     def _publish_webclient_runtime_state(self) -> None:
         if self._operating_mode not in {OperatingMode.SIMULATION, OperatingMode.RUNTIME}:
             return
         try:
             self._process_webclient_runtime_commands()
-            runtime_snapshot = self.controller.build_runtime_snapshot() if self.controller.has_runtime_session else None
+            runtime_snapshot = (
+                self.controller.build_runtime_snapshot()
+                if self.controller.has_runtime_session
+                else None
+            )
             payload = self.application_service.build_webclient_runtime_state(
                 topology=self.canvas.topology,
                 workspace_mode=self._operating_mode,
                 runtime_snapshot=runtime_snapshot,
             )
-            self.application_service.save_webclient_runtime_state(payload, self._webclient_runtime_state_path())
+            self.application_service.save_webclient_runtime_state(
+                payload, self._webclient_runtime_state_path()
+            )
             self._last_webclient_runtime_export_error = ""
         except Exception as exc:
             message = str(exc).strip()
@@ -750,10 +761,8 @@ class MainWindow(QMainWindow):
                 if isinstance(payload, dict):
                     commands.append(payload)
         finally:
-            try:
+            with suppress(OSError):
                 processing_path.unlink(missing_ok=True)
-            except OSError:
-                pass
         return commands
 
     def _process_webclient_runtime_commands(self) -> None:
@@ -771,7 +780,9 @@ class MainWindow(QMainWindow):
                     raise RuntimeError(f"Unsupported webclient command: {kind or '<missing>'}")
             except Exception as exc:
                 message = str(exc)
-                self._record_webclient_runtime_command_result(command, status="rejected", message=message)
+                self._record_webclient_runtime_command_result(
+                    command, status="rejected", message=message
+                )
                 self.status.showMessage(f"Webclient command rejected: {message}", 5000)
             else:
                 self._record_webclient_runtime_command_result(
@@ -822,8 +833,12 @@ class MainWindow(QMainWindow):
             entry_signal_id=entry_signal_id,
             exit_signal_id=exit_signal_id,
             overlap_length=0,
-            approach_time_lock_seconds=float(getattr(self.application_profile, "time_lock_seconds", 0.0)),
-            overlap_release_seconds=float(getattr(self.application_profile, "overlap_release_seconds", 0.0)),
+            approach_time_lock_seconds=float(
+                getattr(self.application_profile, "time_lock_seconds", 0.0)
+            ),
+            overlap_release_seconds=float(
+                getattr(self.application_profile, "overlap_release_seconds", 0.0)
+            ),
         )
         route = route_result.route
         search_order, _ = self._build_search_trace(route.path[0], route.path[-1])
@@ -903,16 +918,18 @@ class MainWindow(QMainWindow):
             f"min-height: 12px; max-height: 12px; {presentation.badge_style}"
         )
         self.runtime_connection_label.setText(
-            (
-                self._t(
+            self._t(
                 "runtime.smartio.status",
                 state=self._smartio_state_text(),
-            )
             )
         )
 
     def _runtime_health_text_suffix(self) -> str:
-        health = self._runtime_transport_health if isinstance(self._runtime_transport_health, dict) else {}
+        health = (
+            self._runtime_transport_health
+            if isinstance(self._runtime_transport_health, dict)
+            else {}
+        )
         stream_seq = int(health.get("stream_seq", 0) or 0)
         snapshot_age = health.get("snapshot_age_seconds")
         command_age = health.get("command_age_seconds")
@@ -1037,7 +1054,9 @@ class MainWindow(QMainWindow):
             process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
             process.start()
             if not process.waitForStarted(3000):
-                error_text = str(process.errorString()).strip() or self._t("status.smartio_local_failed")
+                error_text = str(process.errorString()).strip() or self._t(
+                    "status.smartio_local_failed"
+                )
                 QMessageBox.critical(
                     self,
                     self._t("dialog.smartio_local_failed.title"),
@@ -1202,9 +1221,7 @@ class MainWindow(QMainWindow):
         self._sync_ui_state()
         self._update_runtime_connection_label()
         if announce and previous_mode is not mode:
-            self.status.showMessage(
-                self._t("status.workspace_mode", mode=self._mode_text(mode))
-            )
+            self.status.showMessage(self._t("status.workspace_mode", mode=self._mode_text(mode)))
 
     def _on_properties_applied(self, element_id: str, updates: dict) -> None:
         try:
@@ -1408,8 +1425,13 @@ class MainWindow(QMainWindow):
             self.entry_combo.setCurrentText(previous_entry)
         if previous_exit in signals:
             self.exit_combo.setCurrentText(previous_exit)
-        if self.entry_combo.count() > 1 and self.entry_combo.currentIndex() == self.exit_combo.currentIndex():
-            self.exit_combo.setCurrentIndex((self.entry_combo.currentIndex() + 1) % self.exit_combo.count())
+        if (
+            self.entry_combo.count() > 1
+            and self.entry_combo.currentIndex() == self.exit_combo.currentIndex()
+        ):
+            self.exit_combo.setCurrentIndex(
+                (self.entry_combo.currentIndex() + 1) % self.exit_combo.count()
+            )
 
     def _refresh_interlocking_table(self) -> None:
         signals = sorted(self.canvas.topology.signals.keys())
@@ -1425,9 +1447,7 @@ class MainWindow(QMainWindow):
         )
         rows.sort(key=lambda item: item.route_name)
         self.interlocking_rows = rows
-        self.valid_route_pairs = {
-            (row.entry_signal, row.exit_signal) for row in rows
-        }
+        self.valid_route_pairs = {(row.entry_signal, row.exit_signal) for row in rows}
 
         self.table_widget.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
@@ -1722,7 +1742,9 @@ class MainWindow(QMainWindow):
         exit_signal = self.canvas.topology.signals.get(route.exit_signal_id)
         lifecycle = route.lifecycle_state.value if getattr(route, "lifecycle_state", None) else "-"
 
-        approach_lock_state, approach_lock_remaining = self.controller.approach_lock_details(route.id)
+        approach_lock_state, approach_lock_remaining = self.controller.approach_lock_details(
+            route.id
+        )
 
         self.search_log.setPlainText(
             self.route_presenter.build_route_search_log(
@@ -1808,7 +1830,6 @@ class MainWindow(QMainWindow):
             if row.entry_signal == entry_signal_id and row.exit_signal == exit_signal_id:
                 return sorted(set(row.conflicting_routes))
         return []
-
 
     def _format_seconds(self, value_seconds: float) -> str:
         return f"{value_seconds:.1f}{self._t('unit.seconds_suffix')}"
@@ -2015,9 +2036,7 @@ class MainWindow(QMainWindow):
         if not ok:
             return
 
-        expected_password = str(
-            getattr(self.application_profile, "emergency_release_password", "")
-        )
+        expected_password = str(getattr(self.application_profile, "emergency_release_password", ""))
         if str(password) != expected_password:
             QMessageBox.warning(
                 self,
@@ -2046,9 +2065,7 @@ class MainWindow(QMainWindow):
             )
             return
         if show_message:
-            self.status.showMessage(
-                self._t("status.emergency_released_all_active_routes")
-            )
+            self.status.showMessage(self._t("status.emergency_released_all_active_routes"))
 
     def _cancel_active_routes(self, show_message: bool = True) -> None:
         if not self.mode_policy.capabilities(self._operating_mode).can_cancel_route:
@@ -2113,9 +2130,8 @@ class MainWindow(QMainWindow):
             has_active_routes=has_active_routes,
             simulation_running=simulation_running,
         )
-        runtime_degraded = (
-            self._operating_mode is OperatingMode.RUNTIME
-            and bool(self._runtime_transport_health.get("degraded", False))
+        runtime_degraded = self._operating_mode is OperatingMode.RUNTIME and bool(
+            self._runtime_transport_health.get("degraded", False)
         )
         runtime_edit_lock_reason = self._t("main.lock.runtime_edit_reason")
         self.canvas.set_runtime_edit_lock(
@@ -2139,8 +2155,12 @@ class MainWindow(QMainWindow):
         self.open_smartio_local_action.setEnabled(simulation_workspace)
         self.set_route_button.setEnabled(workspace_state.set_route_enabled and not runtime_degraded)
         self.set_route_action.setEnabled(workspace_state.set_route_enabled and not runtime_degraded)
-        self.cancel_route_button.setEnabled(workspace_state.cancel_route_enabled and not runtime_degraded)
-        self.cancel_route_action.setEnabled(workspace_state.cancel_route_enabled and not runtime_degraded)
+        self.cancel_route_button.setEnabled(
+            workspace_state.cancel_route_enabled and not runtime_degraded
+        )
+        self.cancel_route_action.setEnabled(
+            workspace_state.cancel_route_enabled and not runtime_degraded
+        )
         self.emergency_release_button.setEnabled(
             workspace_state.cancel_route_enabled and not runtime_degraded
         )
@@ -2155,7 +2175,9 @@ class MainWindow(QMainWindow):
             if workspace_state.simulation_running
             else self._t("toolbar.start_simulation")
         )
-        self.simulation_action.setEnabled(workspace_state.simulation_enabled and not runtime_degraded)
+        self.simulation_action.setEnabled(
+            workspace_state.simulation_enabled and not runtime_degraded
+        )
         self.simulate_button.setText(
             self._t("button.stop_sim_short")
             if workspace_state.simulation_running
@@ -2171,8 +2193,8 @@ class MainWindow(QMainWindow):
         design_mode = self._operating_mode is OperatingMode.DESIGN_LAYOUT
         simulation_mode = self._operating_mode is OperatingMode.SIMULATION
         # Left editor workspace is not used in Runtime operations.
-        self.palette.setVisible(not runtime_mode and not simulation_mode )
-        
+        self.palette.setVisible(not runtime_mode and not simulation_mode)
+
         # Toolbar profile by workspace.
         self.new_layout_action.setVisible(not runtime_mode and not simulation_mode)
         self.save_layout_action.setVisible(not runtime_mode and not simulation_mode)
@@ -2192,7 +2214,7 @@ class MainWindow(QMainWindow):
         self.find_route_button.setVisible(not runtime_mode and not design_mode)
         self.simulate_button.setVisible(not runtime_mode and not design_mode)
 
-        # Runtime keeps monitoring/summary widgets visible, while hiding local search/timing controls.
+        # Runtime keeps monitoring widgets visible while hiding local search/timing controls.
         self.route_help_label.setVisible(not runtime_mode)
         self.overlap_label.setVisible(not runtime_mode)
         self.overlap_spin.setVisible(not runtime_mode)
@@ -2208,4 +2230,3 @@ class MainWindow(QMainWindow):
         self._stop_smartio_local_process()
         self._stop_webclient_server_process()
         super().closeEvent(event)
-

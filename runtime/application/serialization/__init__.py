@@ -10,4 +10,3 @@ __all__ = [
     "build_topology_revision",
     "build_webclient_runtime_state",
 ]
-

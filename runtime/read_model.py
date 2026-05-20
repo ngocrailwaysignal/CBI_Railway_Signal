@@ -58,7 +58,7 @@ class RuntimeViewState:
 _EMPTY_VIEW_STATE = RuntimeViewState()
 
 
-def build_runtime_view_state(runtime_session: "RuntimeSession | None") -> RuntimeViewState:
+def build_runtime_view_state(runtime_session: RuntimeSession | None) -> RuntimeViewState:
     if runtime_session is None:
         return _EMPTY_VIEW_STATE
 
@@ -68,7 +68,9 @@ def build_runtime_view_state(runtime_session: "RuntimeSession | None") -> Runtim
         element = topology.get_element(node_id)
         if element is None:
             continue
-        occupied = bool(getattr(element, "occupied", False)) if hasattr(element, "occupied") else None
+        occupied = (
+            bool(getattr(element, "occupied", False)) if hasattr(element, "occupied") else None
+        )
         position = getattr(element, "position", None)
         occupancy.append(
             RuntimeOccupancyState(

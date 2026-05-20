@@ -21,7 +21,11 @@ def build_webclient_runtime_state(
     generated_at: float | None = None,
 ) -> dict[str, Any]:
     """Build one webclient-friendly runtime payload from layout + runtime snapshot."""
-    snapshot = dict(runtime_snapshot) if isinstance(runtime_snapshot, dict) else build_runtime_snapshot(None)
+    snapshot = (
+        dict(runtime_snapshot)
+        if isinstance(runtime_snapshot, dict)
+        else build_runtime_snapshot(None)
+    )
     payload = dict(snapshot)
     payload["layout"] = build_layout_payload(topology)
     payload["interlocking_rows"] = _build_interlocking_rows(topology)

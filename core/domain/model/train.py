@@ -28,18 +28,26 @@ class Train:
     _occupied_track_section: str = field(default="", init=False, repr=False)
 
     def _rebuild_active_path(self, route: Route) -> list[str]:
-        approach_section = route.approach_locking_section.strip() if route.approach_locking_section else ""
+        approach_section = (
+            route.approach_locking_section.strip() if route.approach_locking_section else ""
+        )
         route_path = list(route.full_path if self.traverse_overlap else route.path)
-        if approach_section and self.current_section == approach_section and approach_section not in route_path:
+        if (
+            approach_section
+            and self.current_section == approach_section
+            and approach_section not in route_path
+        ):
             return [approach_section, *route_path]
         return route_path
 
     def assign_route(
-        self, route: Route, topology: RailwayTopology, locking_engine: "LockingEngine"
+        self, route: Route, topology: RailwayTopology, locking_engine: LockingEngine
     ) -> None:
         """Bind this train to a route and initialize occupancy."""
         self.route_id = route.id
-        approach_section = route.approach_locking_section.strip() if route.approach_locking_section else ""
+        approach_section = (
+            route.approach_locking_section.strip() if route.approach_locking_section else ""
+        )
         self._active_path = self._rebuild_active_path(route)
 
         if self.current_section not in self._active_path:
@@ -69,7 +77,7 @@ class Train:
         self,
         route: Route,
         topology: RailwayTopology,
-        locking_engine: "LockingEngine",
+        locking_engine: LockingEngine,
         *,
         new_section: str,
         speed: float | None = None,
@@ -99,7 +107,9 @@ class Train:
         """Advance according to speed; return True if movement occurred."""
         if self.route_id != route.id:
             return False
-        active_path = self._active_path or list(route.full_path if self.traverse_overlap else route.path)
+        active_path = self._active_path or list(
+            route.full_path if self.traverse_overlap else route.path
+        )
         if self._cursor >= len(active_path) - 1:
             # Route complete: keep destination occupancy, release route locking if eligible.
             completion_section = self._occupied_track_section or self.current_section
@@ -110,7 +120,6 @@ class Train:
         moved = False
         self._movement_credit += max(0.0, self.speed)
         while self._movement_credit >= 1.0 and self._cursor < len(active_path) - 1:
-            prev_node = active_path[self._cursor]
             next_node = active_path[self._cursor + 1]
 
             locking_engine.enter_train_section(route.id, next_node)
@@ -127,4 +136,3 @@ class Train:
             moved = True
 
         return moved
-

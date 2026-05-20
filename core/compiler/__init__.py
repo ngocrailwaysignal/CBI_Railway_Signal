@@ -16,5 +16,8 @@ def __getattr__(name: str) -> Any:
     if name in {"InterlockingRouteSpec", "InterlockingSpec"}:
         from .spec_models import InterlockingRouteSpec, InterlockingSpec
 
-        return {"InterlockingRouteSpec": InterlockingRouteSpec, "InterlockingSpec": InterlockingSpec}[name]
+        return {
+            "InterlockingRouteSpec": InterlockingRouteSpec,
+            "InterlockingSpec": InterlockingSpec,
+        }[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 
 def _jsonable(value: Any) -> Any:
@@ -17,7 +18,7 @@ def _jsonable(value: Any) -> Any:
     if isinstance(value, (list, tuple, set)):
         return [_jsonable(item) for item in value]
     if hasattr(value, "value"):
-        token = getattr(value, "value")
+        token = value.value
         if isinstance(token, (str, int, float, bool)) or token is None:
             return token
     if isinstance(value, Path):
@@ -153,11 +154,7 @@ class RuntimeJournal:
         truncate_invalid_tail: bool = True,
     ) -> list[dict[str, Any]]:
         records = self._read_jsonl(self.events_path, truncate_invalid_tail=truncate_invalid_tail)
-        return [
-            item
-            for item in records
-            if int(item.get("stream_seq", 0) or 0) > int(stream_seq)
-        ]
+        return [item for item in records if int(item.get("stream_seq", 0) or 0) > int(stream_seq)]
 
     def load_processed_command_results(
         self,
@@ -248,7 +245,8 @@ class RuntimeRecoveryService:
                 topology_revision=topology_revision,
                 last_stream_seq=int(latest_snapshot.get("stream_seq", 0) or 0),
                 degraded_reason=(
-                    f"REVISION_MISMATCH: checkpoint {snapshot_revision} != current {topology_revision}"
+                    "REVISION_MISMATCH: "
+                    f"checkpoint {snapshot_revision} != current {topology_revision}"
                 ),
             )
 
@@ -256,7 +254,9 @@ class RuntimeRecoveryService:
             simulation.hydrate_snapshot(snapshot=latest_snapshot, strict_route_ids=True)
             replayed_events = 0
             last_stream_seq = int(latest_snapshot.get("stream_seq", 0) or 0)
-            for event_item in self._journal.load_events_after(last_stream_seq, truncate_invalid_tail=True):
+            for event_item in self._journal.load_events_after(
+                last_stream_seq, truncate_invalid_tail=True
+            ):
                 last_stream_seq = max(last_stream_seq, int(event_item.get("stream_seq", 0) or 0))
                 if str(event_item.get("command_status", "")).strip().lower() != "applied":
                     continue

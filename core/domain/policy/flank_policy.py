@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 import networkx as nx
 
@@ -54,6 +54,12 @@ class FlankProtectionEngine:
                 continue
             for branch_node in sorted(graph.neighbors(protected_node)):
                 if branch_node in route_node_set:
+                    continue
+                if self._branch_is_isolated_by_route_point(
+                    protected_node=protected_node,
+                    branch_node=branch_node,
+                    route_point_positions=route_point_positions,
+                ):
                     continue
                 if self._should_skip_entry_rear_branch(
                     protected_node=protected_node,
@@ -126,15 +132,38 @@ class FlankProtectionEngine:
             return False
         return branch_start in entry_rear_sections
 
+    def _branch_is_isolated_by_route_point(
+        self,
+        *,
+        protected_node: str,
+        branch_node: str,
+        route_point_positions: dict[str, PointPosition],
+    ) -> bool:
+        element = self.topology.get_element(protected_node)
+        if not isinstance(element, Point):
+            return False
+
+        route_position = route_point_positions.get(element.id)
+        if route_position is None:
+            return False
+
+        branch_position = next(
+            (
+                position
+                for position, target in element.facing_connections.items()
+                if target == branch_node
+            ),
+            None,
+        )
+        return branch_position is not None and route_position != branch_position
+
     @staticmethod
     def _protective_position(
         point: Point,
         toward_route: PointPosition,
     ) -> PointPosition | None:
         opposite = (
-            PointPosition.REVERSE
-            if toward_route == PointPosition.NORMAL
-            else PointPosition.NORMAL
+            PointPosition.REVERSE if toward_route == PointPosition.NORMAL else PointPosition.NORMAL
         )
         if opposite in point.facing_connections:
             return opposite

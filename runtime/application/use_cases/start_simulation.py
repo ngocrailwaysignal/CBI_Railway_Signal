@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 from core.domain.model.elements import TrackSection
+from core.domain.model.route import Route
+from core.domain.model.topology import RailwayTopology
+from core.domain.model.train import Train
+from kernel.product_kernel import GenericProductKernel
+from runtime.application.dto import StartSimulationResult
 from runtime.application.runtime_helpers import (
     find_idle_train_on_section,
     find_train_for_route,
     next_train_id,
 )
 from runtime.application.runtime_session_port import RuntimeSessionPort
-from core.domain.model.route import Route
-from core.domain.model.topology import RailwayTopology
-from core.domain.model.train import Train
-from kernel.product_kernel import GenericProductKernel
 
-from runtime.application.dto import StartSimulationResult
 from .set_route import SetOrReuseRouteUseCase
 
 

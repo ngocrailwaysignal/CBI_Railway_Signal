@@ -10,7 +10,12 @@ __pycache__/
 # Virtual environments
 .venv/
 venv/
+*.egg-info/
 
 # Generated runtime-state feed for the dispatcher webclient
+data/runtime_journal/*.jsonl
 data/runtime_journal/webclient_runtime_state.json
+
+# Local Codex skill checkout
+awesome-codex-skills/
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Iterable
+from collections.abc import Iterable
 
 from core.domain.model.elements import Point, PointPosition, SignalAspect, TrackSection
 from core.domain.model.topology import RailwayTopology
@@ -26,7 +26,8 @@ class SafetyMonitor:
             current = topology.get_element(train.current_section)
             if isinstance(current, TrackSection) and not current.occupied:
                 issues.append(
-                    f"Train {train.id} reports section {train.current_section} but section not occupied"
+                    f"Train {train.id} reports section {train.current_section} "
+                    "but section not occupied"
                 )
 
         for section_id, count in section_counter.items():
@@ -39,9 +40,14 @@ class SafetyMonitor:
 
         for node_id in topology.graph.nodes:
             element = topology.graph.nodes[node_id]["element"]
-            if isinstance(element, Point) and element.locked_by and element.position not in (
-                PointPosition.NORMAL,
-                PointPosition.REVERSE,
+            if (
+                isinstance(element, Point)
+                and element.locked_by
+                and element.position
+                not in (
+                    PointPosition.NORMAL,
+                    PointPosition.REVERSE,
+                )
             ):
                 issues.append(f"Point {element.id} has invalid position while locked")
 
@@ -52,4 +58,3 @@ class SafetyMonitor:
         for signal in topology.signals.values():
             signal.aspect = SignalAspect.STOP
             signal.route_id = None
-

@@ -68,12 +68,14 @@ class RouteEngine:
         entry_protected = self.topology.signal_protected_node(entry_signal_id)
         if entry_protected is None:
             raise ValueError(
-                f"Entry signal {entry_signal.id} protects an invalid node for direction {entry_signal.direction.value}"
+                f"Entry signal {entry_signal.id} protects an invalid node "
+                f"for direction {entry_signal.direction.value}"
             )
         exit_protected = self.topology.signal_protected_node(exit_signal_id)
         if exit_protected is None:
             raise ValueError(
-                f"Exit signal {exit_signal.id} protects an invalid node for direction {exit_signal.direction.value}"
+                f"Exit signal {exit_signal.id} protects an invalid node "
+                f"for direction {exit_signal.direction.value}"
             )
         if entry_protected == exit_protected:
             raise ValueError(
@@ -86,14 +88,14 @@ class RouteEngine:
         source_node = entry_protected
         exit_approach_nodes = self.topology.signal_approach_nodes(exit_signal_id)
         if not exit_approach_nodes:
-            raise ValueError(
-                f"Exit signal {exit_signal.id} has no incoming track/point link"
-            )
+            raise ValueError(f"Exit signal {exit_signal.id} has no incoming track/point link")
 
         reachable_targets: list[tuple[int, str]] = []
         for target_node in exit_approach_nodes:
             try:
-                distance = nx.shortest_path_length(route_graph, source=source_node, target=target_node)
+                distance = nx.shortest_path_length(
+                    route_graph, source=source_node, target=target_node
+                )
             except nx.NetworkXNoPath:
                 continue
             reachable_targets.append((distance, target_node))
@@ -131,7 +133,9 @@ class RouteEngine:
                             raise ValueError(
                                 f"Front protection conflict at target boundary {target_node}"
                             )
-                        required_points = self.compute_required_point_positions([*path, *overlap_path])
+                        required_points = self.compute_required_point_positions(
+                            [*path, *overlap_path]
+                        )
                         flank_result = self.compute_flank_requirements(
                             [*path, *overlap_path],
                             required_points,
@@ -177,7 +181,9 @@ class RouteEngine:
                         last_reason = f"Route unavailable: {reason}"
                         continue
 
-                    if active_routes and ConflictPolicy.has_conflict(self.topology, route, active_routes.values()):
+                    if active_routes and ConflictPolicy.has_conflict(
+                        self.topology, route, active_routes.values()
+                    ):
                         last_reason = "Route conflicts with an already locked route"
                         continue
 
@@ -291,7 +297,8 @@ class RouteEngine:
             existing = required.get(element.id)
             if existing is not None and existing != selected_position:
                 raise ValueError(
-                    f"Point {element.id} requires conflicting positions {existing.value}/{selected_position.value}"
+                    f"Point {element.id} requires conflicting positions "
+                    f"{existing.value}/{selected_position.value}"
                 )
             required[element.id] = selected_position
 
@@ -308,11 +315,19 @@ class RouteEngine:
             return None
 
         next_position = next(
-            (position for position, successor in facing.items() if next_node and successor == next_node),
+            (
+                position
+                for position, successor in facing.items()
+                if next_node and successor == next_node
+            ),
             None,
         )
         prev_position = next(
-            (position for position, successor in facing.items() if previous_node and successor == previous_node),
+            (
+                position
+                for position, successor in facing.items()
+                if previous_node and successor == previous_node
+            ),
             None,
         )
 
@@ -363,9 +378,8 @@ class RouteEngine:
         configured = signal.approach_section.strip()
         if configured:
             element = self.topology.get_element(configured)
-            if (
-                isinstance(element, ApproachSection)
-                and self.topology.is_signal_back_side_node(entry_signal_id, configured)
+            if isinstance(element, ApproachSection) and self.topology.is_signal_back_side_node(
+                entry_signal_id, configured
             ):
                 return configured
 

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import networkx as nx
 
@@ -108,10 +108,13 @@ class InterlockingTableGenerator:
             point_text = self._format_points(row.required_point_positions)
             tracks = " -> ".join(row.locked_sections) if row.locked_sections else "-"
             overlap = " -> ".join(row.overlap) if row.overlap else "-"
-            conflicts = ", ".join(sorted(set(row.conflicting_routes))) if row.conflicting_routes else "-"
+            conflicts = (
+                ", ".join(sorted(set(row.conflicting_routes))) if row.conflicting_routes else "-"
+            )
             lines.append(
                 f"| {row.route_name} | {row.entry_signal} ({row.entry_element}) | "
-                f"{row.exit_signal} ({row.exit_element}) | {point_text} | {tracks} | {overlap} | {conflicts} |"
+                f"{row.exit_signal} ({row.exit_element}) | {point_text} | "
+                f"{tracks} | {overlap} | {conflicts} |"
             )
         return "\n".join(lines)
 

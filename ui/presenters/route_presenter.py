@@ -105,19 +105,26 @@ class RoutePresenter:
         flank_points = self.format_point_locks(route.flank_point_positions)
         flank_sections = self._format_items(route.monitored_flank_sections)
         direction_text = (
-            self._translate_signal_direction(direction) if direction and direction != "-" else (direction or "-")
+            self._translate_signal_direction(direction)
+            if direction and direction != "-"
+            else (direction or "-")
         )
         lifecycle_text = (
-            self._translate_route_lifecycle(lifecycle) if lifecycle and lifecycle != "-" else (lifecycle or "-")
+            self._translate_route_lifecycle(lifecycle)
+            if lifecycle and lifecycle != "-"
+            else (lifecycle or "-")
         )
         overlap_release_text = (
-            f"{float(overlap_release_seconds):.1f}s"
-            if overlap_release_seconds is not None
-            else "-"
+            f"{float(overlap_release_seconds):.1f}s" if overlap_release_seconds is not None else "-"
         )
         if approach_lock_state:
-            translated_approach_lock_state = self._translate_approach_lock_state(approach_lock_state)
-            if approach_lock_remaining_seconds is not None and approach_lock_remaining_seconds > 0.0:
+            translated_approach_lock_state = self._translate_approach_lock_state(
+                approach_lock_state
+            )
+            if (
+                approach_lock_remaining_seconds is not None
+                and approach_lock_remaining_seconds > 0.0
+            ):
                 approach_lock_text = self._t(
                     "route_log.approach_lock_remaining",
                     state=translated_approach_lock_state,
@@ -159,9 +166,18 @@ class RoutePresenter:
                 f"{self._t('route_log.label.flank_monitored_sections')}: {flank_sections}",
                 "",
                 self._t("route_log.section.safety_conflict"),
-                f"{self._t('route_log.label.opposing_signals')}: {self._format_items(opposing_signals)}",
-                f"{self._t('route_log.label.conflicting_routes')}: {self._format_items(conflicting_routes)}",
-                f"{self._t('route_log.label.approach_locking_section')}: {route.approach_locking_section or '-'}",
+                (
+                    f"{self._t('route_log.label.opposing_signals')}: "
+                    f"{self._format_items(opposing_signals)}"
+                ),
+                (
+                    f"{self._t('route_log.label.conflicting_routes')}: "
+                    f"{self._format_items(conflicting_routes)}"
+                ),
+                (
+                    f"{self._t('route_log.label.approach_locking_section')}: "
+                    f"{route.approach_locking_section or '-'}"
+                ),
                 f"{self._t('route_log.label.approach_lock_state')}: {approach_lock_text}",
                 f"{self._t('route_log.label.overlap_release')}: {overlap_release_text}",
             ]
@@ -215,4 +231,3 @@ class RoutePresenter:
             approach_lock_remaining_seconds=None,
             overlap_release_seconds=overlap_release_seconds,
         )
-

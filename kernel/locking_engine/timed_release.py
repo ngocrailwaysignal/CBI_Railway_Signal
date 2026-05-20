@@ -40,4 +40,3 @@ class TimedReleaseScheduler:
     def pending_due_times(self) -> dict[str, float]:
         """Return a shallow copy of all pending overlap-release deadlines."""
         return dict(self.pending_overlap_releases)
-

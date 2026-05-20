@@ -53,7 +53,9 @@ class MainWindowController:
         self.runtime_workspace_service.configure_timing(**kwargs)
 
     def get_active_route_for_pair(self, entry_signal_id: str, exit_signal_id: str) -> Route | None:
-        return self.runtime_workspace_service.get_active_route_for_pair(entry_signal_id, exit_signal_id)
+        return self.runtime_workspace_service.get_active_route_for_pair(
+            entry_signal_id, exit_signal_id
+        )
 
     def has_active_routes(self) -> bool:
         return self.runtime_workspace_service.has_active_routes()

@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
-
 
 WEBCLIENT_RUNTIME_STATE_FILENAME = "webclient_runtime_state.json"
 WEBCLIENT_RUNTIME_COMMANDS_FILENAME = "webclient_commands.jsonl"
@@ -20,7 +20,9 @@ class WebclientRuntimeStateRepository:
     def save(self, payload: dict[str, Any], path: str | Path) -> None:
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        fd, temp_path = tempfile.mkstemp(prefix=f"{target.stem}-", suffix=".tmp", dir=str(target.parent))
+        fd, temp_path = tempfile.mkstemp(
+            prefix=f"{target.stem}-", suffix=".tmp", dir=str(target.parent)
+        )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle, ensure_ascii=False, sort_keys=True)
@@ -28,10 +30,8 @@ class WebclientRuntimeStateRepository:
                 os.fsync(handle.fileno())
             os.replace(temp_path, target)
         except Exception:
-            try:
+            with suppress(OSError):
                 Path(temp_path).unlink(missing_ok=True)
-            except OSError:
-                pass
             raise
 
     def load(self, path: str | Path) -> dict[str, Any]:

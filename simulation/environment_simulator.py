@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class RuntimeSnapshotHydrator:
     """Replay runtime snapshot artifacts through runtime-session commands."""
 
-    runtime_session: "RuntimeSession"
+    runtime_session: RuntimeSession
 
     def hydrate_snapshot(
         self,
@@ -59,7 +59,9 @@ class RuntimeSnapshotHydrator:
             if expected_path and list(route.path) != expected_path:
                 raise RuntimeError(f"Route path mismatch for {entry_signal_id}->{exit_signal_id}")
             if overlap_path and list(route.overlap_path) != overlap_path:
-                raise RuntimeError(f"Route overlap mismatch for {entry_signal_id}->{exit_signal_id}")
+                raise RuntimeError(
+                    f"Route overlap mismatch for {entry_signal_id}->{exit_signal_id}"
+                )
             if strict_route_ids and incoming_route_id and route.id != incoming_route_id:
                 raise RuntimeError(
                     f"Route ID mismatch for {entry_signal_id}->{exit_signal_id}: "
@@ -162,10 +164,14 @@ class RuntimeSnapshotHydrator:
             actual_route_id = route_id_map.get(incoming_route_id, incoming_route_id)
             route = self.runtime_session.locking_engine.active_routes.get(actual_route_id)
             if route is None:
-                raise RuntimeError(f"Missing route after hydrate: {incoming_route_id or actual_route_id}")
+                raise RuntimeError(
+                    f"Missing route after hydrate: {incoming_route_id or actual_route_id}"
+                )
             if list(route.path) != self._normalize_node_list(route_item.get("path")):
                 raise RuntimeError(f"Path mismatch after hydrate for route {actual_route_id}")
-            if list(route.overlap_path) != self._normalize_node_list(route_item.get("overlap_path")):
+            if list(route.overlap_path) != self._normalize_node_list(
+                route_item.get("overlap_path")
+            ):
                 raise RuntimeError(f"Overlap mismatch after hydrate for route {actual_route_id}")
 
         for occupancy_item in snapshot.get("occupancy", []):

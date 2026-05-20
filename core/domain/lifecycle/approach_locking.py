@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from time import monotonic
 
 
-class ApproachLockState(str, Enum):
+class ApproachLockState(StrEnum):
     """Lifecycle states of approach locking for one active route."""
 
     ROUTE_SET = "ROUTE_SET"

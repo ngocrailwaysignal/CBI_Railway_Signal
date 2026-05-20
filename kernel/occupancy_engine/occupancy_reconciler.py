@@ -18,7 +18,7 @@ class OccupancyReconciler:
     def reconcile_manual_free_section(
         *,
         topology: RailwayTopology,
-        trains: dict[str, "Train"],
+        trains: dict[str, Train],
         section_id: str,
     ) -> list[str]:
         section = topology.get_element(section_id)

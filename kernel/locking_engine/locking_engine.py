@@ -3,24 +3,29 @@
 from __future__ import annotations
 
 from threading import RLock
-from typing import Dict
 
 from core.domain.lifecycle import (
-    ApproachLockState,
     ApproachLockingStateMachine,
+    ApproachLockState,
     RouteLifecycleFSM,
     RouteLifecycleState,
 )
-from core.domain.model.elements import ApproachSection, Point, PointPosition, SignalAspect, TrackSection
+from core.domain.model.elements import (
+    ApproachSection,
+    Point,
+    PointPosition,
+    SignalAspect,
+    TrackSection,
+)
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
 from core.domain.policy import ConflictPolicy
 from infrastructure.clocks import Clock, MonotonicClock
-from kernel.locking_engine.sequence_locking import SequenceLockingTracker
 from kernel.locking_engine.release_update_scheduler import (
     ReleaseUpdateScheduler,
     ThreadedReleaseUpdateScheduler,
 )
+from kernel.locking_engine.sequence_locking import SequenceLockingTracker
 from kernel.locking_engine.timed_release import TimedReleaseScheduler
 
 
@@ -36,12 +41,14 @@ class LockingEngine:
         release_update_scheduler: ReleaseUpdateScheduler | None = None,
     ) -> None:
         self.topology = topology
-        self.active_routes: Dict[str, Route] = {}
+        self.active_routes: dict[str, Route] = {}
         self.approach_locking = ApproachLockingStateMachine(time_lock_seconds=time_lock_seconds)
         self.overlap_release_seconds = max(0.0, float(overlap_release_seconds))
         self.clock: Clock = clock or MonotonicClock()
         self._lock = RLock()
-        self._release_update_scheduler = release_update_scheduler or ThreadedReleaseUpdateScheduler()
+        self._release_update_scheduler = (
+            release_update_scheduler or ThreadedReleaseUpdateScheduler()
+        )
         self._timed_release = TimedReleaseScheduler(
             overlap_release_seconds=self.overlap_release_seconds
         )
@@ -56,7 +63,9 @@ class LockingEngine:
         """Update runtime timing values used by locking release logic."""
         with self._lock:
             if approach_time_lock_seconds is not None:
-                self.approach_locking.time_lock_seconds = max(0.0, float(approach_time_lock_seconds))
+                self.approach_locking.time_lock_seconds = max(
+                    0.0, float(approach_time_lock_seconds)
+                )
             self._timed_release.configure_overlap_release(overlap_release_seconds)
             self.overlap_release_seconds = self._timed_release.overlap_release_seconds
 
@@ -218,9 +227,7 @@ class LockingEngine:
             occupied_sections = self._occupied_route_sections(route)
             if occupied_sections:
                 joined = ", ".join(occupied_sections)
-                raise RuntimeError(
-                    f"Route {route_id} is occupied by train on sections: {joined}"
-                )
+                raise RuntimeError(f"Route {route_id} is occupied by train on sections: {joined}")
             self._transition_route_state(route, RouteLifecycleState.RELEASING)
             self._unlock_route(route_id)
 
@@ -342,13 +349,14 @@ class LockingEngine:
 
         destination_section = body_track_sections[-1]
         destination = self.topology.get_element(destination_section)
-        destination_occupied = (
-            isinstance(destination, TrackSection) and bool(destination.occupied)
-        )
-        if isinstance(destination, TrackSection):
-            if destination.locked_by == route_id and not destination_occupied:
-                # Train has not yet reached destination section.
-                return
+        destination_occupied = isinstance(destination, TrackSection) and bool(destination.occupied)
+        if (
+            isinstance(destination, TrackSection)
+            and destination.locked_by == route_id
+            and not destination_occupied
+        ):
+            # Train has not yet reached destination section.
+            return
 
         for section_id in body_track_sections:
             section = self.topology.get_element(section_id)
@@ -388,7 +396,9 @@ class LockingEngine:
         for node_id in route.full_path:
             element = self.topology.get_element(node_id)
             if isinstance(element, TrackSection):
-                force_unlock = force_unlock_sections is not None and node_id in force_unlock_sections
+                force_unlock = (
+                    force_unlock_sections is not None and node_id in force_unlock_sections
+                )
                 if element.locked_by == route_id and (force_unlock or not element.occupied):
                     element.locked_by = None
             elif isinstance(element, Point):
@@ -405,9 +415,12 @@ class LockingEngine:
                 signal.aspect = SignalAspect.STOP
                 signal.route_id = None
 
-        if route.lifecycle_state != RouteLifecycleState.RELEASING and RouteLifecycleFSM.can_transition(
-            route.lifecycle_state,
-            RouteLifecycleState.RELEASING,
+        if (
+            route.lifecycle_state != RouteLifecycleState.RELEASING
+            and RouteLifecycleFSM.can_transition(
+                route.lifecycle_state,
+                RouteLifecycleState.RELEASING,
+            )
         ):
             self._transition_route_state(route, RouteLifecycleState.RELEASING)
         self._transition_route_state(route, RouteLifecycleState.RELEASED)
@@ -432,7 +445,9 @@ class LockingEngine:
                 force_unlock_sections=(force_unlock_sections or None),
             )
 
-    def _schedule_overlap_release_check(self, route_id: str, *, due_time: float, now: float) -> None:
+    def _schedule_overlap_release_check(
+        self, route_id: str, *, due_time: float, now: float
+    ) -> None:
         # Add a small cushion so callback does not fire slightly before due_time.
         delay_seconds = max(0.05, due_time - now + 0.05)
         self._release_update_scheduler.schedule(
