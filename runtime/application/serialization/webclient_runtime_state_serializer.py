@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from core.compiler.interlocking_table import InterlockingTableGenerator
+from core.domain.model.elements import PointPosition
 from core.domain.model.topology import RailwayTopology
 from runtime.application.mode_policy.policy import AppMode
 
@@ -53,11 +54,23 @@ def _build_interlocking_rows(topology: RailwayTopology) -> list[dict[str, Any]]:
             "route_name": row.route_name,
             "entry_signal": row.entry_signal,
             "exit_signal": row.exit_signal,
+            "entry_element": row.entry_element,
+            "exit_element": row.exit_element,
             "locked_sections": list(row.locked_sections),
+            "entry_protected_section": row.entry_protected_section,
+            "exit_protected_section": row.exit_protected_section,
             "required_points": {
                 point_id: str(getattr(position, "value", position))
                 for point_id, position in row.required_point_positions.items()
             },
+            "normal_points": InterlockingTableGenerator.point_ids_for_position(
+                row.required_point_positions,
+                PointPosition.NORMAL,
+            ),
+            "reverse_points": InterlockingTableGenerator.point_ids_for_position(
+                row.required_point_positions,
+                PointPosition.REVERSE,
+            ),
             "conflicting_routes": list(row.conflicting_routes),
         }
         for row in rows

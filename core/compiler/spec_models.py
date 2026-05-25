@@ -16,6 +16,8 @@ class InterlockingRouteSpec:
     entry_element: str
     exit_element: str
     path: list[str]
+    entry_protected_section: str | None = None
+    exit_protected_section: str | None = None
     overlap: list[str] = field(default_factory=list)
     required_point_positions: dict[str, str] = field(default_factory=dict)
     locked_sections: list[str] = field(default_factory=list)
@@ -28,6 +30,8 @@ class InterlockingRouteSpec:
             "exit_signal": self.exit_signal,
             "entry_element": self.entry_element,
             "exit_element": self.exit_element,
+            "entry_protected_section": self.entry_protected_section,
+            "exit_protected_section": self.exit_protected_section,
             "path": list(self.path),
             "overlap": list(self.overlap),
             "required_point_positions": dict(self.required_point_positions),
@@ -43,6 +47,8 @@ class InterlockingRouteSpec:
             exit_signal=str(data.get("exit_signal", "")).strip(),
             entry_element=str(data.get("entry_element", "")).strip(),
             exit_element=str(data.get("exit_element", "")).strip(),
+            entry_protected_section=_optional_token(data.get("entry_protected_section")),
+            exit_protected_section=_optional_token(data.get("exit_protected_section")),
             path=[str(node_id) for node_id in data.get("path", [])],
             overlap=[str(node_id) for node_id in data.get("overlap", [])],
             required_point_positions={
@@ -53,6 +59,11 @@ class InterlockingRouteSpec:
             locked_sections=[str(node_id) for node_id in data.get("locked_sections", [])],
             conflicting_routes=[str(name) for name in data.get("conflicting_routes", [])],
         )
+
+
+def _optional_token(value: Any) -> str | None:
+    token = str(value or "").strip()
+    return token or None
 
 
 @dataclass(slots=True)

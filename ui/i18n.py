@@ -164,6 +164,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Point",
         "vi": "Ghi",
     },
+    "interlocking_table.header.normal": {
+        "en": "Normal",
+        "vi": "Normal",
+    },
+    "interlocking_table.header.reverse": {
+        "en": "Reverse",
+        "vi": "Reverse",
+    },
     "interlocking_table.header.opposing_signal": {
         "en": "Opposing Signal",
         "vi": "Tín hiệu đối hướng",

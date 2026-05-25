@@ -35,6 +35,8 @@ class RouteCompiler:
                 exit_signal=row.exit_signal,
                 entry_element=row.entry_element,
                 exit_element=row.exit_element,
+                entry_protected_section=row.entry_protected_section,
+                exit_protected_section=row.exit_protected_section,
                 path=list(row.path),
                 overlap=list(row.overlap),
                 required_point_positions={

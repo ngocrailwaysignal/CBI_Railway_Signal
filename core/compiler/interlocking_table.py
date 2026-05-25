@@ -24,6 +24,8 @@ class InterlockingTableRow:
     exit_signal: str
     entry_element: str
     exit_element: str
+    entry_protected_section: str | None
+    exit_protected_section: str | None
     path: list[str]
     overlap: list[str]
     required_point_positions: dict[str, PointPosition]
@@ -71,6 +73,14 @@ class InterlockingTableGenerator:
             exit_signal = self.topology.signals[route.exit_signal_id]
             entry_element = entry_signal.protects
             exit_element = exit_signal.protects
+            entry_protected_section = self.route_engine.resolve_effective_protected_section(
+                route.entry_signal_id,
+                route.path,
+            )
+            exit_protected_section = self.route_engine.resolve_effective_protected_section(
+                route.exit_signal_id,
+                route.path,
+            )
             route_name = f"{route.entry_signal_id}->{route.exit_signal_id}"
 
             locked_sections = [
@@ -86,6 +96,8 @@ class InterlockingTableGenerator:
                     exit_signal=route.exit_signal_id,
                     entry_element=entry_element,
                     exit_element=exit_element,
+                    entry_protected_section=entry_protected_section,
+                    exit_protected_section=exit_protected_section,
                     path=route.path,
                     overlap=route.overlap_path,
                     required_point_positions=all_points,
@@ -101,19 +113,29 @@ class InterlockingTableGenerator:
     def to_markdown(self, rows: list[InterlockingTableRow]) -> str:
         """Render rows as a markdown interlocking table."""
         lines = [
-            "| Route | Entry | Exit | Point locks | Track locks | Overlap | Conflicts |",
-            "|---|---|---|---|---|---|---|",
+            "| Route | Entry | Exit | Entry protected section | Exit protected section | Normal | Reverse | Track locks | Overlap | Conflicts |",
+            "|---|---|---|---|---|---|---|---|---|---|",
         ]
         for row in rows:
-            point_text = self._format_points(row.required_point_positions)
+            normal_points = self._format_points_for_position(
+                row.required_point_positions,
+                PointPosition.NORMAL,
+            )
+            reverse_points = self._format_points_for_position(
+                row.required_point_positions,
+                PointPosition.REVERSE,
+            )
             tracks = " -> ".join(row.locked_sections) if row.locked_sections else "-"
             overlap = " -> ".join(row.overlap) if row.overlap else "-"
+            entry_protected_section = row.entry_protected_section or "-"
+            exit_protected_section = row.exit_protected_section or "-"
             conflicts = (
                 ", ".join(sorted(set(row.conflicting_routes))) if row.conflicting_routes else "-"
             )
             lines.append(
                 f"| {row.route_name} | {row.entry_signal} ({row.entry_element}) | "
-                f"{row.exit_signal} ({row.exit_element}) | {point_text} | "
+                f"{row.exit_signal} ({row.exit_element}) | {entry_protected_section} | "
+                f"{exit_protected_section} | {normal_points} | {reverse_points} | "
                 f"{tracks} | {overlap} | {conflicts} |"
             )
         return "\n".join(lines)
@@ -137,7 +159,10 @@ class InterlockingTableGenerator:
                     "entry_element",
                     "exit_signal",
                     "exit_element",
-                    "point_locks",
+                    "entry_protected_section",
+                    "exit_protected_section",
+                    "normal_points",
+                    "reverse_points",
                     "track_locks",
                     "overlap",
                     "conflicts",
@@ -151,7 +176,18 @@ class InterlockingTableGenerator:
                         row.entry_element,
                         row.exit_signal,
                         row.exit_element,
-                        self._format_points(row.required_point_positions),
+                        row.entry_protected_section or "",
+                        row.exit_protected_section or "",
+                        self._format_points_for_position(
+                            row.required_point_positions,
+                            PointPosition.NORMAL,
+                            empty="",
+                        ),
+                        self._format_points_for_position(
+                            row.required_point_positions,
+                            PointPosition.REVERSE,
+                            empty="",
+                        ),
                         " -> ".join(row.locked_sections),
                         " -> ".join(row.overlap),
                         ", ".join(sorted(set(row.conflicting_routes))),
@@ -275,3 +311,25 @@ class InterlockingTableGenerator:
             return "-"
         tokens = [f"{point}:{position.value}" for point, position in sorted(required.items())]
         return ", ".join(tokens)
+
+    @staticmethod
+    def point_ids_for_position(
+        required: dict[str, PointPosition],
+        position: PointPosition,
+    ) -> list[str]:
+        return sorted(
+            point_id
+            for point_id, required_position in required.items()
+            if required_position == position
+        )
+
+    @classmethod
+    def _format_points_for_position(
+        cls,
+        required: dict[str, PointPosition],
+        position: PointPosition,
+        *,
+        empty: str = "-",
+    ) -> str:
+        points = cls.point_ids_for_position(required, position)
+        return ", ".join(points) if points else empty

@@ -38,6 +38,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.compiler.interlocking_table import InterlockingTableRow
+from core.compiler.interlocking_table import InterlockingTableGenerator
 from core.domain.model.elements import PointPosition, TrackSection
 from core.domain.model.route import Route
 from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
@@ -184,7 +185,8 @@ class MainWindow(QMainWindow):
                 self._t("interlocking_table.header.no"),
                 self._t("interlocking_table.header.route"),
                 self._t("interlocking_table.header.signal"),
-                self._t("interlocking_table.header.point"),
+                self._t("interlocking_table.header.normal"),
+                self._t("interlocking_table.header.reverse"),
                 self._t("interlocking_table.header.opposing_signal"),
                 self._t("interlocking_table.header.track"),
                 self._t("interlocking_table.header.approach_lock_track"),
@@ -599,7 +601,7 @@ class MainWindow(QMainWindow):
 
         self.table_group = QGroupBox(self._t("interlocking_table.group"))
         table_layout = QVBoxLayout(self.table_group)
-        self.table_widget = QTableWidget(0, 12, self.table_group)
+        self.table_widget = QTableWidget(0, 13, self.table_group)
         self._set_table_headers()
         self.table_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table_widget.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -1461,7 +1463,14 @@ class MainWindow(QMainWindow):
                 str(row_index + 1),
                 self._format_route_label(row),
                 row.entry_signal,
-                self._format_point_locks(row.required_point_positions),
+                self._format_points_for_position(
+                    row.required_point_positions,
+                    PointPosition.NORMAL,
+                ),
+                self._format_points_for_position(
+                    row.required_point_positions,
+                    PointPosition.REVERSE,
+                ),
                 self._format_opposing_signals(row),
                 " -> ".join(row.locked_sections) if row.locked_sections else "-",
                 approach_section,
@@ -1770,8 +1779,16 @@ class MainWindow(QMainWindow):
         return self.route_presenter.format_point_locks(required_points)
 
     @staticmethod
+    def _format_points_for_position(
+        required_points: dict[str, PointPosition],
+        position: PointPosition,
+    ) -> str:
+        points = InterlockingTableGenerator.point_ids_for_position(required_points, position)
+        return ", ".join(points) if points else "-"
+
+    @staticmethod
     def _format_route_label(row: InterlockingTableRow) -> str:
-        return f"{row.entry_element} -> {row.exit_signal}"
+        return f"{row.entry_signal} -> {row.exit_signal}"
 
     def _destination_track_from_path(self, path: list[str], fallback: str = "-") -> str:
         for node_id in reversed(path):
@@ -1816,6 +1833,8 @@ class MainWindow(QMainWindow):
             exit_element=self.canvas.topology.signals.get(route.exit_signal_id).protects
             if self.canvas.topology.signals.get(route.exit_signal_id) is not None
             else "",
+            entry_protected_section=None,
+            exit_protected_section=None,
             path=list(route.path),
             overlap=list(route.overlap_path),
             required_point_positions=dict(route.required_point_positions),

@@ -11,6 +11,7 @@ from core.domain.model.elements import (
     Point,
     PointPosition,
     SignalDirection,
+    TrackSection,
 )
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
@@ -271,6 +272,33 @@ class RouteEngine:
     def resolve_approach_locking_section(self, entry_signal_id: str) -> str | None:
         """Public helper to resolve approach section for one entry signal."""
         return self._resolve_approach_locking_section(entry_signal_id)
+
+    def resolve_effective_protected_section(
+        self,
+        signal_id: str,
+        route_path: list[str],
+    ) -> str | None:
+        """Resolve the route-specific track section protected by a signal."""
+        signal = self.topology.signals.get(signal_id)
+        if signal is None:
+            return None
+
+        protected_node = signal.protects.strip()
+        protected_element = self.topology.get_element(protected_node)
+        if isinstance(protected_element, TrackSection):
+            return protected_node
+        if not isinstance(protected_element, Point):
+            return None
+
+        try:
+            start_index = route_path.index(protected_node) + 1
+        except ValueError:
+            return None
+
+        for node_id in route_path[start_index:]:
+            if isinstance(self.topology.get_element(node_id), TrackSection):
+                return node_id
+        return None
 
     def _compute_required_point_positions(self, path: list[str]) -> dict[str, PointPosition]:
         """Compute all point positions needed to traverse the path."""
