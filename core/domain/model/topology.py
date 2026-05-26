@@ -14,6 +14,7 @@ import networkx as nx
 from core.domain.model.elements import (
     ApproachSection,
     DisplayLabel,
+    DisplayLine,
     LayoutElement,
     Point,
     PointPosition,
@@ -22,7 +23,14 @@ from core.domain.model.elements import (
     SignalAspect,
     SignalDirection,
     TrackSection,
+    normalize_signal_aspect,
 )
+
+ROUTE_TYPE_CALLING_ON = "CALLING_ON"
+ROUTE_TYPE_REVERSE = "REVERSE"
+ROUTE_TYPE_VALUES = {ROUTE_TYPE_CALLING_ON, ROUTE_TYPE_REVERSE}
+ROUTE_SIGNAL_ASPECT_NORMAL_VALUES = {SignalAspect.GREEN, SignalAspect.YELLOW}
+ROUTE_SIGNAL_ASPECT_REVERSE_VALUES = {SignalAspect.YELLOW_BLUE, SignalAspect.GREEN_BLUE}
 
 
 class RailwayTopology:
@@ -38,8 +46,11 @@ class RailwayTopology:
         # Metadata for special (profile/clearance) route conflicts.
         self.clearance_conflict_groups: list[set[str]] = []
         self.labels: dict[str, DisplayLabel] = {}
+        self.annotation_lines: dict[str, DisplayLine] = {}
         self.ui_positions: dict[str, tuple[float, float]] = {}
         self.dispatcher_view: dict[str, Any] = {}
+        self.route_types: dict[str, str] = {}
+        self.route_signal_aspects: dict[str, SignalAspect] = {}
 
     def add_section(
         self, section: TrackSection, position: tuple[float, float] | None = None
@@ -75,6 +86,10 @@ class RailwayTopology:
         if position is not None:
             self.ui_positions[label.id] = position
 
+    def add_annotation_line(self, line: DisplayLine) -> None:
+        """Add a visual layout arrow line that does not participate in routing."""
+        self.annotation_lines[line.id] = line
+
     def connect(self, source_id: str, target_id: str) -> None:
         """Connect two elements with directed adjacency."""
         source = self.get_element(source_id)
@@ -83,6 +98,8 @@ class RailwayTopology:
             raise KeyError(f"Unknown element in connection: {source_id} -> {target_id}")
         if isinstance(source, DisplayLabel) or isinstance(target, DisplayLabel):
             raise ValueError("Display labels cannot be connected")
+        if isinstance(source, DisplayLine) or isinstance(target, DisplayLine):
+            raise ValueError("Display annotation lines cannot be connected")
 
         if isinstance(source, Signal):
             if target_id not in self.graph.nodes:
@@ -166,6 +183,8 @@ class RailwayTopology:
             return self.signals[element_id]
         if element_id in self.labels:
             return self.labels[element_id]
+        if element_id in self.annotation_lines:
+            return self.annotation_lines[element_id]
         if element_id in self.graph.nodes:
             node_data = self.graph.nodes[element_id]
             return node_data["element"]
@@ -221,6 +240,106 @@ class RailwayTopology:
         if node_id not in self.graph.nodes:
             return None
         return node_id
+
+    def is_calling_on_pair(self, entry_signal_id: str, exit_signal_id: str) -> bool:
+        """Return True when the route pair is manually marked calling-on."""
+        return self.route_type(entry_signal_id, exit_signal_id) == ROUTE_TYPE_CALLING_ON
+
+    def is_reverse_route_pair(self, entry_signal_id: str, exit_signal_id: str) -> bool:
+        """Return True when the route pair is manually marked reverse."""
+        return self.route_type(entry_signal_id, exit_signal_id) == ROUTE_TYPE_REVERSE
+
+    def configured_calling_on_pairs(self) -> set[tuple[str, str]]:
+        """Return manually marked calling-on route pairs."""
+        return self.configured_route_pairs(ROUTE_TYPE_CALLING_ON)
+
+    def configured_reverse_route_pairs(self) -> set[tuple[str, str]]:
+        """Return manually marked reverse route pairs."""
+        return self.configured_route_pairs(ROUTE_TYPE_REVERSE)
+
+    def configured_route_pairs(self, route_type: str | None = None) -> set[tuple[str, str]]:
+        """Return manually typed route pairs, optionally filtered by type."""
+        expected = self._normalized_route_type(route_type)
+        pairs: set[tuple[str, str]] = set()
+        for route_key, configured_type in self.route_types.items():
+            if expected and configured_type != expected:
+                continue
+            entry_signal_id, separator, exit_signal_id = route_key.partition("->")
+            if not separator:
+                continue
+            if entry_signal_id in self.signals and exit_signal_id in self.signals:
+                pairs.add((entry_signal_id, exit_signal_id))
+        return pairs
+
+    def route_type(self, entry_signal_id: str, exit_signal_id: str) -> str:
+        """Return manual route type for a signal pair, or empty for normal route."""
+        return self.route_types.get(self._route_key(entry_signal_id, exit_signal_id), "")
+
+    def set_route_type(self, entry_signal_id: str, exit_signal_id: str, route_type: str) -> None:
+        """Set manual route type. Empty route_type resets the pair to normal."""
+        route_key = self._route_key(entry_signal_id, exit_signal_id)
+        normalized = self._normalized_route_type(route_type)
+        if not normalized:
+            self.route_types.pop(route_key, None)
+            self.route_signal_aspects[route_key] = self.default_route_signal_aspect("")
+            return
+        self.route_types[route_key] = normalized
+        self.route_signal_aspects[route_key] = self.default_route_signal_aspect(normalized)
+
+    def route_signal_aspect(self, entry_signal_id: str, exit_signal_id: str) -> SignalAspect:
+        """Return the manual route signal aspect, or the default for the route type."""
+        route_key = self._route_key(entry_signal_id, exit_signal_id)
+        route_type = self.route_type(entry_signal_id, exit_signal_id)
+        stored = self.route_signal_aspects.get(route_key)
+        if stored in self.allowed_route_signal_aspects(route_type):
+            return stored
+        return self.default_route_signal_aspect(route_type)
+
+    def set_route_signal_aspect(
+        self,
+        entry_signal_id: str,
+        exit_signal_id: str,
+        aspect: object,
+    ) -> None:
+        """Set one route's manual signal aspect if valid for the route type."""
+        route_key = self._route_key(entry_signal_id, exit_signal_id)
+        route_type = self.route_type(entry_signal_id, exit_signal_id)
+        normalized = normalize_signal_aspect(
+            aspect,
+            default=self.default_route_signal_aspect(route_type),
+        )
+        if normalized not in self.allowed_route_signal_aspects(route_type):
+            normalized = self.default_route_signal_aspect(route_type)
+        self.route_signal_aspects[route_key] = normalized
+
+    @staticmethod
+    def default_route_signal_aspect(route_type: str | None) -> SignalAspect:
+        normalized = RailwayTopology._normalized_route_type(route_type)
+        if normalized == ROUTE_TYPE_CALLING_ON:
+            return SignalAspect.YELLOW
+        if normalized == ROUTE_TYPE_REVERSE:
+            return SignalAspect.YELLOW_BLUE
+        return SignalAspect.GREEN
+
+    @staticmethod
+    def allowed_route_signal_aspects(route_type: str | None) -> tuple[SignalAspect, ...]:
+        normalized = RailwayTopology._normalized_route_type(route_type)
+        if normalized == ROUTE_TYPE_REVERSE:
+            return (SignalAspect.YELLOW_BLUE, SignalAspect.GREEN_BLUE)
+        return (SignalAspect.GREEN, SignalAspect.YELLOW)
+
+    @staticmethod
+    def _route_key(entry_signal_id: str, exit_signal_id: str) -> str:
+        return f"{str(entry_signal_id).strip()}->{str(exit_signal_id).strip()}"
+
+    @staticmethod
+    def _normalized_route_type(value: str | None) -> str:
+        token = str(value or "").strip().upper().replace("-", "_").replace(" ", "_")
+        if token in {"CALLINGON", "CALLING_ON_ROUTE"}:
+            token = ROUTE_TYPE_CALLING_ON
+        elif token in {"REVERSE_ROUTE"}:
+            token = ROUTE_TYPE_REVERSE
+        return token if token in ROUTE_TYPE_VALUES else ""
 
     def is_signal_front_side_node(self, signal_id: str, node_id: str) -> bool:
         """Public wrapper for front-side checks."""
@@ -305,7 +424,7 @@ class RailwayTopology:
                 element.locked_by = None
 
         for signal in self.signals.values():
-            signal.aspect = SignalAspect.STOP
+            signal.aspect = SignalAspect.RED
             signal.route_id = None
 
     def add_clearance_conflict_group(self, nodes: set[str]) -> None:
@@ -400,6 +519,13 @@ class RailwayTopology:
             return [f"Unknown entry signal {entry_signal_id}"]
         if exit_signal is None:
             return [f"Unknown exit signal {exit_signal_id}"]
+        is_calling_on = self.is_calling_on_pair(entry_signal_id, exit_signal_id)
+        if entry_signal.is_blocking:
+            issues.append(f"Blocking signal {entry_signal_id} cannot be used as route entry")
+        if exit_signal.is_blocking and not is_calling_on:
+            issues.append(
+                f"Blocking signal {exit_signal_id} requires a manually marked calling-on route"
+            )
         if entry_signal.direction != exit_signal.direction:
             issues.append(
                 f"Entry {entry_signal_id} and exit {exit_signal_id} have opposite directions "
@@ -462,9 +588,12 @@ class RailwayTopology:
             "points": [],
             "signals": [],
             "labels": [],
+            "annotation_lines": [],
             "edges": [],
             "signal_links": [],
             "clearance_conflict_groups": [],
+            "route_types": {},
+            "route_signal_aspects": {},
             "ui_positions": {},
             "dispatcher_view": deepcopy(self.dispatcher_view),
         }
@@ -495,16 +624,18 @@ class RailwayTopology:
                 )
 
         for signal in self.signals.values():
+            signal_aspect = SignalAspect.RED if signal.is_blocking else signal.aspect
             payload["signals"].append(
                 {
                     "id": signal.id,
                     "aspect": (
-                        signal.aspect.value if include_runtime_state else SignalAspect.STOP.value
+                        signal_aspect.value if include_runtime_state else SignalAspect.RED.value
                     ),
                     "direction": signal.direction.value,
                     "protects": signal.protects,
                     "approach_section": signal.approach_section,
                     "route_id": signal.route_id if include_runtime_state else None,
+                    "is_blocking": bool(signal.is_blocking),
                 }
             )
 
@@ -514,6 +645,20 @@ class RailwayTopology:
                     "id": label.id,
                     "text": label.text,
                     "font_size": label.font_size,
+                    "color": label.color,
+                    "width": float(label.width),
+                    "height": float(label.height),
+                }
+            )
+
+        for line in self.annotation_lines.values():
+            payload["annotation_lines"].append(
+                {
+                    "id": line.id,
+                    "start": [float(line.start[0]), float(line.start[1])],
+                    "end": [float(line.end[0]), float(line.end[1])],
+                    "color": line.color,
+                    "width": float(line.width),
                 }
             )
 
@@ -536,6 +681,16 @@ class RailwayTopology:
         ]
         payload["ui_positions"] = {
             key: [float(value[0]), float(value[1])] for key, value in self.ui_positions.items()
+        }
+        payload["route_types"] = {
+            route_key: route_type
+            for route_key, route_type in sorted(self.route_types.items())
+            if route_type in ROUTE_TYPE_VALUES
+        }
+        payload["route_signal_aspects"] = {
+            route_key: aspect.value
+            for route_key, aspect in sorted(self.route_signal_aspects.items())
+            if route_key.partition("->")[1]
         }
 
         path_obj = Path(path)
@@ -615,26 +770,42 @@ class RailwayTopology:
             signal = Signal(
                 id=signal_data["id"],
                 aspect=(
-                    SignalAspect(signal_data.get("aspect", SignalAspect.STOP.value))
+                    normalize_signal_aspect(signal_data.get("aspect", SignalAspect.RED.value))
                     if load_runtime_state
-                    else SignalAspect.STOP
+                    else SignalAspect.RED
                 ),
                 direction=direction,
                 protects=signal_data.get("protects", ""),
                 approach_section=str(signal_data.get("approach_section", "")).strip(),
                 route_id=signal_data.get("route_id") if load_runtime_state else None,
+                is_blocking=bool(signal_data.get("is_blocking", False)),
             )
+            if signal.is_blocking:
+                signal.aspect = SignalAspect.RED
             signal_pos = positions.get(signal.id)
             topology.add_signal(
                 signal,
                 position=(float(signal_pos[0]), float(signal_pos[1])) if signal_pos else None,
             )
 
+            legacy_calling_on_entry = str(
+                signal_data.get("calling_on_entry_signal", "")
+            ).strip()
+            if signal.is_blocking and legacy_calling_on_entry:
+                topology.set_route_type(
+                    legacy_calling_on_entry,
+                    signal.id,
+                    ROUTE_TYPE_CALLING_ON,
+                )
+
         for label_data in data.get("labels", []):
             label = DisplayLabel(
                 id=str(label_data.get("id", "")).strip(),
                 text=str(label_data.get("text", "LABEL")),
                 font_size=float(label_data.get("font_size", 18.0)),
+                color=str(label_data.get("color", "#111111")).strip() or "#111111",
+                width=max(40.0, float(label_data.get("width", 120.0))),
+                height=max(24.0, float(label_data.get("height", 48.0))),
             )
             if not label.id:
                 continue
@@ -642,6 +813,34 @@ class RailwayTopology:
             topology.add_label(
                 label,
                 position=(float(label_pos[0]), float(label_pos[1])) if label_pos else None,
+            )
+
+        for line_data in data.get("annotation_lines", []):
+            line_id = str(line_data.get("id", "")).strip()
+            if not line_id:
+                continue
+            raw_start = line_data.get("start", [0.0, 0.0])
+            raw_end = line_data.get("end", [120.0, 0.0])
+            try:
+                start = (float(raw_start[0]), float(raw_start[1]))
+            except (TypeError, ValueError, IndexError):
+                start = (0.0, 0.0)
+            try:
+                end = (float(raw_end[0]), float(raw_end[1]))
+            except (TypeError, ValueError, IndexError):
+                end = (start[0] + 120.0, start[1])
+            try:
+                width = max(0.5, float(line_data.get("width", 2.0)))
+            except (TypeError, ValueError):
+                width = 2.0
+            topology.add_annotation_line(
+                DisplayLine(
+                    id=line_id,
+                    start=start,
+                    end=end,
+                    color=str(line_data.get("color", "#111111")).strip() or "#111111",
+                    width=width,
+                )
             )
 
         for source_id, target_id in data.get("edges", []):
@@ -683,6 +882,26 @@ class RailwayTopology:
                 group = {str(node_id).strip() for node_id in raw_group if str(node_id).strip()}
                 group = {node_id for node_id in group if node_id in known_nodes}
                 topology.add_clearance_conflict_group(group)
+
+        raw_route_types = data.get("route_types", {})
+        if isinstance(raw_route_types, dict):
+            for raw_route_key, raw_route_type in raw_route_types.items():
+                route_key = str(raw_route_key).strip()
+                entry_signal_id, separator, exit_signal_id = route_key.partition("->")
+                if not separator:
+                    continue
+                if entry_signal_id in topology.signals and exit_signal_id in topology.signals:
+                    topology.set_route_type(entry_signal_id, exit_signal_id, str(raw_route_type))
+
+        raw_route_signal_aspects = data.get("route_signal_aspects", {})
+        if isinstance(raw_route_signal_aspects, dict):
+            for raw_route_key, raw_aspect in raw_route_signal_aspects.items():
+                route_key = str(raw_route_key).strip()
+                entry_signal_id, separator, exit_signal_id = route_key.partition("->")
+                if not separator:
+                    continue
+                if entry_signal_id in topology.signals and exit_signal_id in topology.signals:
+                    topology.set_route_signal_aspect(entry_signal_id, exit_signal_id, raw_aspect)
 
         topology.sync_signal_virtual_routes()
         if not load_runtime_state:

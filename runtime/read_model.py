@@ -17,6 +17,10 @@ class RuntimeRouteState:
     path: tuple[str, ...]
     overlap_path: tuple[str, ...]
     lifecycle_state: str
+    is_calling_on: bool = False
+    is_reverse: bool = False
+    route_type: str = ""
+    signal_aspect: str = "GREEN"
 
 
 @dataclass(slots=True, frozen=True)
@@ -89,6 +93,10 @@ def build_runtime_view_state(runtime_session: RuntimeSession | None) -> RuntimeV
             path=tuple(route.path),
             overlap_path=tuple(route.overlap_path),
             lifecycle_state=route.lifecycle_state.value,
+            is_calling_on=bool(route.is_calling_on),
+            is_reverse=bool(route.is_reverse),
+            route_type="CALLING_ON" if route.is_calling_on else "REVERSE" if route.is_reverse else "",
+            signal_aspect=route.signal_aspect.value,
         )
         for route in runtime_session.locking_engine.active_routes.values()
     )
@@ -104,7 +112,7 @@ def build_runtime_view_state(runtime_session: RuntimeSession | None) -> RuntimeV
     signal_state = tuple(
         RuntimeSignalState(
             id=signal.id,
-            aspect=signal.aspect.value,
+            aspect="RED" if getattr(signal, "is_blocking", False) else signal.aspect.value,
             route_id=signal.route_id,
         )
         for signal in topology.signals.values()

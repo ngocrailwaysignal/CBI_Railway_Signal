@@ -71,6 +71,11 @@ def _build_interlocking_rows(topology: RailwayTopology) -> list[dict[str, Any]]:
                 row.required_point_positions,
                 PointPosition.REVERSE,
             ),
+            "calling_on_route": bool(row.is_calling_on),
+            "reverse_route": bool(row.is_reverse),
+            "is_calling_on": bool(row.is_calling_on),
+            "is_reverse": bool(row.is_reverse),
+            "signal_aspect": row.signal_aspect.value,
             "conflicting_routes": list(row.conflicting_routes),
         }
         for row in rows

@@ -10,8 +10,8 @@ from collections import deque
 from contextlib import suppress
 from pathlib import Path
 
-from PyQt6.QtCore import QProcess, Qt, QTimer, QUrl
-from PyQt6.QtGui import QCloseEvent, QDesktopServices
+from PyQt6.QtCore import QProcess, QRect, QSize, Qt, QTimer, QUrl
+from PyQt6.QtGui import QCloseEvent, QDesktopServices, QPaintEvent, QPainter
 from PyQt6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -39,8 +39,10 @@ from PyQt6.QtWidgets import (
 
 from core.compiler.interlocking_table import InterlockingTableRow
 from core.compiler.interlocking_table import InterlockingTableGenerator
-from core.domain.model.elements import PointPosition, TrackSection
+from core.domain.model.elements import PointPosition, SignalAspect, TrackSection
 from core.domain.model.route import Route
+from core.domain.model.topology import ROUTE_TYPE_REVERSE
+from kernel.route_dispatcher.route_engine import RouteEngine
 from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
 from runtime.application import AppMode
 from runtime.journal_paths import (
@@ -63,8 +65,106 @@ from ui.views.components_palette_view import ComponentsPalette
 OperatingMode = AppMode
 
 
+class PointGroupedHeader(QHeaderView):
+    """Two-level header for grouped point columns."""
+
+    NORMAL_COLUMN = 4
+    REVERSE_COLUMN = 5
+    FLANK_NORMAL_COLUMN = 13
+    FLANK_REVERSE_COLUMN = 14
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(Qt.Orientation.Horizontal, parent)
+        self._labels: list[str] = []
+        self._groups: list[tuple[str, int, int]] = []
+
+    def set_labels(self, labels: list[str], groups: list[tuple[str, int, int]]) -> None:
+        self._labels = labels
+        self._groups = groups
+        self.viewport().update()
+
+    def sizeHint(self) -> QSize:
+        hint = super().sizeHint()
+        return QSize(hint.width(), max(hint.height(), 52))
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        painter = QPainter(self.viewport())
+        try:
+            painter.fillRect(event.rect(), self.palette().button())
+            painter.setPen(self.palette().mid().color())
+
+            top_height = self.height() // 2
+            bottom_height = self.height() - top_height
+            grouped_columns: set[int] = set()
+            for group_label, first_column, last_column in self._visible_groups():
+                grouped_columns.update(range(first_column, last_column + 1))
+                self._draw_group(painter, group_label, first_column, last_column, top_height)
+
+            for logical_index in range(self.count()):
+                if self.isSectionHidden(logical_index):
+                    continue
+                section_rect = QRect(
+                    self.sectionViewportPosition(logical_index),
+                    0,
+                    self.sectionSize(logical_index),
+                    self.height(),
+                )
+                if logical_index in grouped_columns:
+                    label_rect = QRect(
+                        section_rect.left(),
+                        top_height,
+                        section_rect.width(),
+                        bottom_height,
+                    )
+                else:
+                    label_rect = section_rect
+                self._draw_header_cell(painter, label_rect, self._label_for(logical_index))
+        finally:
+            painter.end()
+
+    def _visible_groups(self) -> list[tuple[str, int, int]]:
+        groups: list[tuple[str, int, int]] = []
+        for label, first_column, last_column in self._groups:
+            if last_column >= self.count():
+                continue
+            if any(self.isSectionHidden(column) for column in range(first_column, last_column + 1)):
+                continue
+            groups.append((label, first_column, last_column))
+        return groups
+
+    def _draw_group(
+        self,
+        painter: QPainter,
+        label: str,
+        first_column: int,
+        last_column: int,
+        height: int,
+    ) -> None:
+        left = self.sectionViewportPosition(first_column)
+        width = sum(self.sectionSize(column) for column in range(first_column, last_column + 1))
+        self._draw_header_cell(painter, QRect(left, 0, width, height), label)
+
+    def _draw_header_cell(self, painter: QPainter, rect: QRect, label: str) -> None:
+        if not rect.isValid():
+            return
+        painter.fillRect(rect, self.palette().button())
+        painter.setPen(self.palette().mid().color())
+        painter.drawRect(rect.adjusted(0, 0, -1, -1))
+        painter.setPen(self.palette().buttonText().color())
+        painter.drawText(rect.adjusted(4, 0, -4, 0), int(Qt.AlignmentFlag.AlignCenter), label)
+
+    def _label_for(self, logical_index: int) -> str:
+        if 0 <= logical_index < len(self._labels):
+            return self._labels[logical_index]
+        return str(logical_index + 1)
+
+
 class MainWindow(QMainWindow):
     """Top-level editor + simulator window."""
+
+    SIGNAL_ASPECT_COLUMN = 3
+    REVERSE_ROUTE_COLUMN = 6
+    CALLING_ON_ROUTE_COLUMN = 7
 
     def __init__(self, application_profile: GenericApplicationProfile | None = None) -> None:
         super().__init__()
@@ -101,6 +201,7 @@ class MainWindow(QMainWindow):
         self.palette.properties_applied.connect(self._on_properties_applied)
         self.palette.component_insert_requested.connect(self._insert_component_from_palette)
         self.palette.label_insert_requested.connect(self._insert_text_label)
+        self.palette.line_insert_requested.connect(self._insert_annotation_line)
         self.canvas.node_selected.connect(self.palette.set_selected_element)
         self.canvas.canvas_selection_changed.connect(self._sync_ui_state)
         self.canvas.topology_changed.connect(self._on_topology_changed)
@@ -180,23 +281,49 @@ class MainWindow(QMainWindow):
         self.language_combo.blockSignals(False)
 
     def _set_table_headers(self) -> None:
-        self.table_widget.setHorizontalHeaderLabels(
-            [
-                self._t("interlocking_table.header.no"),
-                self._t("interlocking_table.header.route"),
-                self._t("interlocking_table.header.signal"),
-                self._t("interlocking_table.header.normal"),
-                self._t("interlocking_table.header.reverse"),
-                self._t("interlocking_table.header.opposing_signal"),
-                self._t("interlocking_table.header.track"),
-                self._t("interlocking_table.header.approach_lock_track"),
-                self._t("interlocking_table.header.approach_lock_release"),
-                self._t("interlocking_table.header.destination_track"),
-                self._t("interlocking_table.header.flank_point"),
-                self._t("interlocking_table.header.overlap"),
-                self._t("interlocking_table.header.overlap_release"),
-            ]
-        )
+        labels = [
+            self._t("interlocking_table.header.no"),
+            self._t("interlocking_table.header.route"),
+            self._t("interlocking_table.header.signal"),
+            self._t("interlocking_table.header.signal_aspect"),
+            self._t("interlocking_table.header.normal").upper(),
+            self._t("interlocking_table.header.reverse").upper(),
+            self._t("interlocking_table.header.reverse_route"),
+            self._t("interlocking_table.header.calling_on_route"),
+            self._t("interlocking_table.header.opposing_signal"),
+            self._t("interlocking_table.header.track"),
+            self._t("interlocking_table.header.approach_lock_track"),
+            self._t("interlocking_table.header.approach_lock_release"),
+            self._t("interlocking_table.header.destination_track"),
+            self._t("interlocking_table.header.normal").upper(),
+            self._t("interlocking_table.header.reverse").upper(),
+            self._t("interlocking_table.header.overlap"),
+            self._t("interlocking_table.header.overlap_release"),
+        ]
+        self.table_widget.setHorizontalHeaderLabels(labels)
+        header = self.table_widget.horizontalHeader()
+        if isinstance(header, PointGroupedHeader):
+            point_label = (
+                "POINTS"
+                if self._translator.language == "en"
+                else self._t("interlocking_table.header.point").upper()
+            )
+            flank_label = self._t("interlocking_table.header.flank_point")
+            header.set_labels(
+                labels,
+                [
+                    (
+                        point_label,
+                        PointGroupedHeader.NORMAL_COLUMN,
+                        PointGroupedHeader.REVERSE_COLUMN,
+                    ),
+                    (
+                        flank_label,
+                        PointGroupedHeader.FLANK_NORMAL_COLUMN,
+                        PointGroupedHeader.FLANK_REVERSE_COLUMN,
+                    ),
+                ],
+            )
 
     def _retranslate_ui(self) -> None:
         self.setWindowTitle(self._t("app.window_title"))
@@ -263,6 +390,12 @@ class MainWindow(QMainWindow):
             self.palette.component_list.setToolTip(
                 self._t("main.tooltip.component_insertion_disabled")
             )
+        self.palette.add_label_button.setEnabled(
+            self.mode_policy.capabilities(self._operating_mode).can_edit_layout
+        )
+        self.palette.add_line_button.setEnabled(
+            self.mode_policy.capabilities(self._operating_mode).can_edit_layout
+        )
 
         self._sync_ui_state()
         if self.preview_route is not None:
@@ -463,13 +596,23 @@ class MainWindow(QMainWindow):
 
     def _insert_text_label(self) -> None:
         try:
-            center = self.canvas.mapToScene(self.canvas.viewport().rect().center())
-            self.canvas.add_text_label(center)
-            self.status.showMessage(self._t("status.label_added"))
+            self.canvas.begin_text_label_placement()
+            self.status.showMessage(self._t("status.label_tool_active"))
         except Exception as exc:
             QMessageBox.warning(
                 self,
                 self._t("dialog.cannot_add_label.title"),
+                str(exc),
+            )
+
+    def _insert_annotation_line(self) -> None:
+        try:
+            self.canvas.begin_annotation_line_drawing()
+            self.status.showMessage(self._t("status.line_tool_active"))
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                self._t("dialog.cannot_add_line.title"),
                 str(exc),
             )
 
@@ -601,7 +744,8 @@ class MainWindow(QMainWindow):
 
         self.table_group = QGroupBox(self._t("interlocking_table.group"))
         table_layout = QVBoxLayout(self.table_group)
-        self.table_widget = QTableWidget(0, 13, self.table_group)
+        self.table_widget = QTableWidget(0, 17, self.table_group)
+        self.table_widget.setHorizontalHeader(PointGroupedHeader(self.table_widget))
         self._set_table_headers()
         self.table_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table_widget.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -1209,6 +1353,8 @@ class MainWindow(QMainWindow):
         )
         self.canvas.set_edit_dialog_enabled(mode is not OperatingMode.RUNTIME)
         self.palette.component_list.setEnabled(design_mode)
+        self.palette.add_label_button.setEnabled(design_mode)
+        self.palette.add_line_button.setEnabled(design_mode)
         if design_mode:
             self.palette.component_list.setToolTip("")
         else:
@@ -1227,11 +1373,16 @@ class MainWindow(QMainWindow):
 
     def _on_properties_applied(self, element_id: str, updates: dict) -> None:
         try:
+            committed_label_id = self.canvas.commit_inline_label_edit()
             current_id = element_id
             new_id = str(updates.pop("id", "")).strip()
             if new_id and new_id != element_id:
                 self.canvas.rename_node(element_id, new_id)
                 current_id = new_id
+            if committed_label_id == element_id and "text" in updates:
+                label = self.canvas.topology.labels.get(current_id)
+                if label is not None:
+                    updates["text"] = label.text
 
             if updates:
                 self.canvas.update_node_properties(current_id, updates)
@@ -1459,24 +1610,35 @@ class MainWindow(QMainWindow):
                 if entry_signal is not None and entry_signal.approach_section.strip()
                 else "-"
             )
+            main_point_positions = self._main_route_point_positions(row)
             values = [
                 str(row_index + 1),
                 self._format_route_label(row),
                 row.entry_signal,
+                row.signal_aspect.value,
                 self._format_points_for_position(
-                    row.required_point_positions,
+                    main_point_positions,
                     PointPosition.NORMAL,
                 ),
                 self._format_points_for_position(
-                    row.required_point_positions,
+                    main_point_positions,
                     PointPosition.REVERSE,
                 ),
+                self._format_route_mark(row.is_reverse),
+                self._format_route_mark(row.is_calling_on),
                 self._format_opposing_signals(row),
                 " -> ".join(row.locked_sections) if row.locked_sections else "-",
                 approach_section,
                 self._format_seconds(float(self.approach_time_spin.value())),
                 self._format_destination_track(row),
-                self._format_flank_points(row),
+                self._format_points_for_position(
+                    row.flank_point_positions,
+                    PointPosition.NORMAL,
+                ),
+                self._format_points_for_position(
+                    row.flank_point_positions,
+                    PointPosition.REVERSE,
+                ),
                 " -> ".join(row.overlap) if row.overlap else "-",
                 self._format_seconds(float(self.overlap_release_spin.value())),
             ]
@@ -1658,10 +1820,47 @@ class MainWindow(QMainWindow):
                 )
             )
 
-    def _on_table_row_clicked(self, row_index: int, _column_index: int) -> None:
+    def _on_table_row_clicked(self, row_index: int, column_index: int) -> None:
         if row_index < 0 or row_index >= len(self.interlocking_rows):
             return
         row = self.interlocking_rows[row_index]
+        if column_index == self.SIGNAL_ASPECT_COLUMN:
+            if self._operating_mode is not OperatingMode.DESIGN_LAYOUT:
+                self._render_interlocking_row_log(row)
+                return
+            self._cycle_route_signal_aspect(row)
+            route_name = row.route_name
+            self.canvas.topology_changed.emit()
+            self._refresh_interlocking_table()
+            for next_row_index, next_row in enumerate(self.interlocking_rows):
+                if next_row.route_name == route_name:
+                    self.table_widget.setCurrentCell(next_row_index, column_index)
+                    self._render_interlocking_row_log(next_row)
+                    break
+            return
+        if column_index == self.CALLING_ON_ROUTE_COLUMN:
+            self._render_interlocking_row_log(row)
+            return
+        if column_index == self.REVERSE_ROUTE_COLUMN:
+            if self._operating_mode is not OperatingMode.DESIGN_LAYOUT:
+                self._render_interlocking_row_log(row)
+                return
+            route_type = ROUTE_TYPE_REVERSE
+            current_type = self.canvas.topology.route_type(row.entry_signal, row.exit_signal)
+            self.canvas.topology.set_route_type(
+                row.entry_signal,
+                row.exit_signal,
+                "" if current_type == route_type else route_type,
+            )
+            route_name = row.route_name
+            self.canvas.topology_changed.emit()
+            self._refresh_interlocking_table()
+            for next_row_index, next_row in enumerate(self.interlocking_rows):
+                if next_row.route_name == route_name:
+                    self.table_widget.setCurrentCell(next_row_index, column_index)
+                    self._render_interlocking_row_log(next_row)
+                    break
+            return
         self.entry_combo.setCurrentText(row.entry_signal)
         self.exit_combo.setCurrentText(row.exit_signal)
         search_order, _ = self._build_search_trace(row.path[0], row.path[-1])
@@ -1702,7 +1901,7 @@ class MainWindow(QMainWindow):
                 locked_path=row.path,
                 overlap_path=row.overlap,
                 destination_track=self._format_destination_track(row),
-                point_locks=row.required_point_positions,
+                point_locks=self._main_route_point_positions(row),
                 flank_point_locks=row.flank_point_positions,
                 monitored_flank_sections=[],
                 opposing_signals=self._opposing_signals_for_row(row),
@@ -1790,6 +1989,25 @@ class MainWindow(QMainWindow):
     def _format_route_label(row: InterlockingTableRow) -> str:
         return f"{row.entry_signal} -> {row.exit_signal}"
 
+    @staticmethod
+    def _format_route_mark(value: bool) -> str:
+        return "\u221a" if value else ""
+
+    def _cycle_route_signal_aspect(self, row: InterlockingTableRow) -> None:
+        route_type = self.canvas.topology.route_type(row.entry_signal, row.exit_signal)
+        allowed = self.canvas.topology.allowed_route_signal_aspects(route_type)
+        current = self.canvas.topology.route_signal_aspect(row.entry_signal, row.exit_signal)
+        try:
+            current_index = allowed.index(current)
+        except ValueError:
+            current_index = -1
+        next_aspect = allowed[(current_index + 1) % len(allowed)]
+        self.canvas.topology.set_route_signal_aspect(
+            row.entry_signal,
+            row.exit_signal,
+            next_aspect,
+        )
+
     def _destination_track_from_path(self, path: list[str], fallback: str = "-") -> str:
         for node_id in reversed(path):
             element = self.canvas.topology.get_element(node_id)
@@ -1805,6 +2023,17 @@ class MainWindow(QMainWindow):
 
     def _format_destination_track(self, row: InterlockingTableRow) -> str:
         return self._destination_track_from_path(row.path, fallback=row.exit_element or "-")
+
+    def _main_route_point_positions(self, row: InterlockingTableRow) -> dict[str, PointPosition]:
+        try:
+            return RouteEngine(self.canvas.topology).compute_required_point_positions(
+                [*row.path, *row.overlap]
+            )
+        except ValueError:
+            main_points = dict(row.required_point_positions)
+            for point_id in row.flank_point_positions:
+                main_points.pop(point_id, None)
+            return main_points
 
     def _opposing_signals_for_row(self, row: InterlockingTableRow) -> list[str]:
         entry_signal = self.canvas.topology.signals.get(row.entry_signal)
@@ -1841,6 +2070,9 @@ class MainWindow(QMainWindow):
             flank_point_positions=dict(route.flank_point_positions),
             locked_sections=[],
             conflicting_routes=[],
+            is_calling_on=route.is_calling_on,
+            is_reverse=route.is_reverse,
+            signal_aspect=route.signal_aspect,
         )
         return self._opposing_signals_for_row(row_like)
 
@@ -1852,9 +2084,6 @@ class MainWindow(QMainWindow):
 
     def _format_seconds(self, value_seconds: float) -> str:
         return f"{value_seconds:.1f}{self._t('unit.seconds_suffix')}"
-
-    def _format_flank_points(self, row: InterlockingTableRow) -> str:
-        return self.route_presenter.format_point_locks(row.flank_point_positions)
 
     def _validate_signal_pair_request(
         self,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.domain.lifecycle import RouteLifecycleState
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
 from kernel.product_kernel import GenericProductKernel
@@ -48,6 +49,18 @@ class SetOrReuseRouteUseCase:
             exit_signal_id=exit_signal_id,
         )
         if existing is not None:
+            simulation.locking_engine.update_time_locking()
+            existing = self._get_active_route_for_pair(
+                simulation,
+                entry_signal_id=entry_signal_id,
+                exit_signal_id=exit_signal_id,
+            )
+        if existing is not None:
+            if existing.lifecycle_state == RouteLifecycleState.RELEASING:
+                raise RuntimeError(
+                    f"Route {entry_signal_id}->{exit_signal_id} is releasing; "
+                    "wait for overlap release to finish before setting or simulating it again"
+                )
             return SetRouteResult(route=existing, created=False)
 
         route = self.kernel.set_route(

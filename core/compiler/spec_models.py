@@ -22,6 +22,9 @@ class InterlockingRouteSpec:
     required_point_positions: dict[str, str] = field(default_factory=dict)
     locked_sections: list[str] = field(default_factory=list)
     conflicting_routes: list[str] = field(default_factory=list)
+    calling_on_route: bool = False
+    reverse_route: bool = False
+    signal_aspect: str = "GREEN"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -37,6 +40,9 @@ class InterlockingRouteSpec:
             "required_point_positions": dict(self.required_point_positions),
             "locked_sections": list(self.locked_sections),
             "conflicting_routes": list(self.conflicting_routes),
+            "calling_on_route": bool(self.calling_on_route),
+            "reverse_route": bool(self.reverse_route),
+            "signal_aspect": self.signal_aspect,
         }
 
     @classmethod
@@ -58,6 +64,9 @@ class InterlockingRouteSpec:
             },
             locked_sections=[str(node_id) for node_id in data.get("locked_sections", [])],
             conflicting_routes=[str(name) for name in data.get("conflicting_routes", [])],
+            calling_on_route=bool(data.get("calling_on_route", False)),
+            reverse_route=bool(data.get("reverse_route", False)),
+            signal_aspect=str(data.get("signal_aspect", "GREEN")).strip() or "GREEN",
         )
 
 

@@ -157,7 +157,7 @@ def _normalize_geometry(kind: str, raw_geometry: Any) -> dict[str, Any]:
         return {
             "text": str(raw_geometry.get("text", "LABEL")),
             "font_size": _coerce_float(raw_geometry.get("font_size"), 28.0, minimum=8.0),
-            "align": str(raw_geometry.get("align", "middle")).strip().lower(),
+            "align": _align_token(raw_geometry.get("align")),
         }
     return {
         "width": _coerce_float(raw_geometry.get("width"), 42.0, minimum=8.0),

@@ -1,5 +1,7 @@
 import {
+  clientPointToSvgPoint,
   createEmptyDispatcherView,
+  createBoardCamera,
   createSvgElement,
   deepClone,
   getElementLocalBounds,
@@ -21,6 +23,9 @@ const gridSizeInput = document.getElementById("gridSizeInput");
 const canvasWidthInput = document.getElementById("canvasWidthInput");
 const canvasHeightInput = document.getElementById("canvasHeightInput");
 const inspector = document.getElementById("inspectorPanel");
+const fitBoardBtn = document.getElementById("fitBoardBtn");
+const zoomInBtn = document.getElementById("zoomInBtn");
+const zoomOutBtn = document.getElementById("zoomOutBtn");
 
 const TOOLBOX_SELECTOR = "[data-tool-kind]";
 
@@ -33,6 +38,8 @@ const state = {
   drag: null,
   dirty: false,
 };
+const boardCamera = createBoardCamera(board, boardViewport, { minScale: 0.45, maxScale: 4 });
+let lastCanvasSignature = "";
 
 function setStatus(message, kind = "info") {
   statusText.textContent = message;
@@ -91,7 +98,7 @@ function updateCanvasControls() {
   showDebugToggle.checked = state.showDebug;
 }
 
-function repaint() {
+function repaintBoard() {
   renderDispatcherBoard(board, state.view, { routes: [], trains: [], occupancyById: new Map(), signalStateById: new Map() }, {
     showGrid: true,
     showDebug: state.showDebug,
@@ -99,7 +106,18 @@ function repaint() {
     selectedIds: state.selectedIds,
     emptyStateText: "Drag elements here to author the dispatcher schematic.",
   });
+  boardCamera.setCanvas(state.view.canvas);
+  boardCamera.apply();
   decorateSelectionHandles();
+}
+
+function repaint({ fit = false } = {}) {
+  const canvasSignature = `${state.view.canvas.width}x${state.view.canvas.height}`;
+  repaintBoard();
+  if (fit || canvasSignature !== lastCanvasSignature) {
+    boardCamera.fit();
+  }
+  lastCanvasSignature = canvasSignature;
   updateInspector();
   updateCanvasControls();
 }
@@ -552,6 +570,12 @@ function updateElement(elementId, updater) {
   repaint();
 }
 
+function commitDragMutation() {
+  state.view = normalizeDispatcherView(state.view);
+  markDirty(true);
+  repaint();
+}
+
 function addElement(kind, position) {
   const element = createElementAt(kind, position);
   state.view.elements.push(element);
@@ -656,11 +680,7 @@ function decorateSelectionHandles() {
 }
 
 function clientToSvgPoint(clientX, clientY) {
-  const point = board.createSVGPoint();
-  point.x = clientX;
-  point.y = clientY;
-  const transformed = point.matrixTransform(board.getScreenCTM().inverse());
-  return { x: transformed.x, y: transformed.y };
+  return clientPointToSvgPoint(board, clientX, clientY);
 }
 
 function globalToLocal(element, globalPoint) {
@@ -699,6 +719,10 @@ function beginHandleDrag(pointerId, elementId, handle, startPoint) {
 }
 
 function handlePointerMove(event) {
+  if (!state.drag && boardCamera.pan(event)) {
+    event.preventDefault();
+    return;
+  }
   if (!state.drag || state.drag.pointerId !== event.pointerId) {
     return;
   }
@@ -707,11 +731,15 @@ function handlePointerMove(event) {
     const deltaX = currentPoint.x - state.drag.startPoint.x;
     const deltaY = currentPoint.y - state.drag.startPoint.y;
     state.drag.originals.forEach((original) => {
-      updateElement(original.id, (draft) => {
-        draft.position.x = snapCoordinate(original.x + deltaX);
-        draft.position.y = snapCoordinate(original.y + deltaY);
-      });
+      const element = findElement(original.id);
+      if (!element) {
+        return;
+      }
+      element.position.x = snapCoordinate(original.x + deltaX);
+      element.position.y = snapCoordinate(original.y + deltaY);
     });
+    markDirty(true);
+    repaintBoard();
     return;
   }
 
@@ -720,38 +748,43 @@ function handlePointerMove(event) {
     return;
   }
   if (state.drag.type === "rotate") {
-    updateElement(element.id, (draft) => {
-      const angle = Math.atan2(currentPoint.y - draft.position.y, currentPoint.x - draft.position.x) * (180 / Math.PI);
-      draft.rotation = state.view.canvas.snap_enabled ? Math.round(angle / 15) * 15 : angle;
-    });
+    const angle = Math.atan2(currentPoint.y - element.position.y, currentPoint.x - element.position.x) * (180 / Math.PI);
+    element.rotation = state.view.canvas.snap_enabled ? Math.round(angle / 15) * 15 : angle;
+    markDirty(true);
+    repaintBoard();
     return;
   }
   if (state.drag.type === "track-start" || state.drag.type === "track-end") {
     const local = globalToLocal(element, currentPoint);
-    updateElement(element.id, (draft) => {
-      const points = draft.geometry.points;
-      const index = state.drag.type === "track-start" ? 0 : points.length - 1;
-      points[index] = {
-        x: snapCoordinate(local.x),
-        y: snapCoordinate(local.y),
-      };
-    });
+    const points = element.geometry.points;
+    const index = state.drag.type === "track-start" ? 0 : points.length - 1;
+    points[index] = {
+      x: snapCoordinate(local.x),
+      y: snapCoordinate(local.y),
+    };
+    markDirty(true);
+    repaintBoard();
     return;
   }
   if (state.drag.type === "block-resize") {
     const local = globalToLocal(element, currentPoint);
-    updateElement(element.id, (draft) => {
-      draft.geometry.width = Math.max(8, snapCoordinate(local.x));
-      draft.geometry.height = Math.max(8, snapCoordinate(local.y));
-    });
+    element.geometry.width = Math.max(8, snapCoordinate(local.x));
+    element.geometry.height = Math.max(8, snapCoordinate(local.y));
+    markDirty(true);
+    repaintBoard();
   }
 }
 
 function handlePointerUp(event) {
+  if (!state.drag && boardCamera.endPan(event)) {
+    event.preventDefault();
+    return;
+  }
   if (!state.drag || state.drag.pointerId !== event.pointerId) {
     return;
   }
   state.drag = null;
+  commitDragMutation();
 }
 
 async function loadDispatcherLayout() {
@@ -769,7 +802,7 @@ async function loadDispatcherLayout() {
     layoutPathText.textContent = state.layoutPath || "-";
     markDirty(false);
     setStatus("Dispatcher schematic loaded.");
-    repaint();
+    repaint({ fit: true });
   } catch (error) {
     setStatus(`Load failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   }
@@ -852,6 +885,10 @@ board.addEventListener("pointerdown", (event) => {
   const group = event.target.closest?.("[data-element-id]");
   if (!group) {
     setSelection("", {});
+    if (boardCamera.beginPan(event)) {
+      board.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    }
     return;
   }
   const elementId = group.dataset.elementId;
@@ -870,6 +907,17 @@ board.addEventListener("pointerdown", (event) => {
 board.addEventListener("pointermove", handlePointerMove);
 board.addEventListener("pointerup", handlePointerUp);
 board.addEventListener("pointercancel", handlePointerUp);
+board.addEventListener("wheel", (event) => boardCamera.wheel(event), { passive: false });
+fitBoardBtn?.addEventListener("click", () => boardCamera.fit());
+zoomInBtn?.addEventListener("click", () => {
+  const rect = boardViewport.getBoundingClientRect();
+  boardCamera.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 1.2);
+});
+zoomOutBtn?.addEventListener("click", () => {
+  const rect = boardViewport.getBoundingClientRect();
+  boardCamera.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 1 / 1.2);
+});
+window.addEventListener("resize", () => boardCamera.apply());
 
 document.addEventListener("keydown", (event) => {
   if ((event.key === "Delete" || event.key === "Backspace") && state.selectedIds.size) {

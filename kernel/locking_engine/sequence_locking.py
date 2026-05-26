@@ -41,6 +41,10 @@ class SequenceLockingTracker:
             return
         self.seen_occupied_sections.setdefault(route_id, set()).add(node_id)
 
+    def has_seen_occupied(self, route_id: str, section_id: str) -> bool:
+        """Return whether a route has observed this section become occupied."""
+        return section_id in self.seen_occupied_sections.get(route_id, set())
+
     def try_section_release(self, route_id: str, section_id: str) -> bool:
         """Apply sequence rule only to route-body sections; overlap is out of scope."""
         section = self.topology.get_element(section_id)

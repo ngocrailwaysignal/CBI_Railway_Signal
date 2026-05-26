@@ -26,6 +26,7 @@ class Train:
     _movement_credit: float = field(default=0.0, init=False, repr=False)
     _active_path: list[str] = field(default_factory=list, init=False, repr=False)
     _occupied_track_section: str = field(default="", init=False, repr=False)
+    calling_on_shared_sections: set[str] = field(default_factory=set, init=False, repr=False)
 
     def _rebuild_active_path(self, route: Route) -> list[str]:
         approach_section = (
@@ -84,6 +85,8 @@ class Train:
     ) -> None:
         """Move train to another node on the same route with safe OCCUPIED-before-FREE ordering."""
         old_track = self._occupied_track_section.strip()
+        if new_section != self.current_section:
+            self.calling_on_shared_sections.discard(self.current_section)
         self.current_section = new_section
         active_path = self._rebuild_active_path(route)
         if self.current_section not in active_path:
@@ -114,7 +117,8 @@ class Train:
             # Route complete: keep destination occupancy, release route locking if eligible.
             completion_section = self._occupied_track_section or self.current_section
             locking_engine.sectional_release(route.id, completion_section)
-            self.route_id = None
+            if route.id not in locking_engine.active_routes:
+                self.route_id = None
             return False
 
         moved = False
@@ -130,6 +134,8 @@ class Train:
                     locking_engine.vacate_train_section(route.id, previous_track)
                 self._occupied_track_section = next_node
 
+            if next_node != self.current_section:
+                self.calling_on_shared_sections.discard(self.current_section)
             self.current_section = next_node
             self._cursor += 1
             self._movement_credit -= 1.0

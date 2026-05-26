@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.domain.lifecycle import RouteLifecycleState
 from core.domain.model.elements import TrackSection
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
@@ -69,6 +70,11 @@ class StartRouteSimulationUseCase:
         )
         active_simulation = simulation
         route = route_result.route
+        if route.lifecycle_state == RouteLifecycleState.RELEASING:
+            raise RuntimeError(
+                f"Route {entry_signal_id}->{exit_signal_id} is releasing; "
+                "wait for overlap release to finish before starting simulation again"
+            )
 
         train = find_train_for_route(active_simulation, route.id)
         simulation_start_section = self._resolve_simulation_start_section(topology, route)

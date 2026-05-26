@@ -9,7 +9,7 @@ from pathlib import Path
 
 import networkx as nx
 
-from core.domain.model.elements import PointPosition, TrackSection
+from core.domain.model.elements import PointPosition, SignalAspect, TrackSection
 from core.domain.model.route import Route
 from core.domain.model.topology import RailwayTopology
 from kernel.route_dispatcher.route_engine import RouteEngine
@@ -32,6 +32,9 @@ class InterlockingTableRow:
     flank_point_positions: dict[str, PointPosition]
     locked_sections: list[str]
     conflicting_routes: list[str]
+    is_calling_on: bool = False
+    is_reverse: bool = False
+    signal_aspect: SignalAspect = SignalAspect.GREEN
 
 
 class InterlockingTableGenerator:
@@ -50,18 +53,69 @@ class InterlockingTableGenerator:
     ) -> list[InterlockingTableRow]:
         """Generate one shortest valid interlocking row per entry/exit pair."""
         self.topology.sync_signal_virtual_routes()
-        routes: list[Route] = []
-        for entry_signal_id in entry_signal_ids:
-            for exit_signal_id in exit_signal_ids:
+        entry_set = {str(signal_id) for signal_id in entry_signal_ids}
+        exit_set = {str(signal_id) for signal_id in exit_signal_ids}
+        calling_on_pairs = self.topology.configured_calling_on_pairs()
+        reverse_pairs = self.topology.configured_reverse_route_pairs()
+        special_pairs = calling_on_pairs
+        pair_flags: dict[tuple[str, str], tuple[bool, bool]] = {}
+
+        def add_pair(entry_signal_id: str, exit_signal_id: str, *, calling_on: bool, reverse: bool) -> None:
+            if entry_signal_id == exit_signal_id:
+                return
+            if entry_signal_id not in entry_set or exit_signal_id not in exit_set:
+                return
+            existing_calling_on, existing_reverse = pair_flags.get(
+                (entry_signal_id, exit_signal_id),
+                (False, False),
+            )
+            pair_flags[(entry_signal_id, exit_signal_id)] = (
+                existing_calling_on or calling_on,
+                existing_reverse or reverse,
+            )
+
+        for entry_signal_id in sorted(entry_set):
+            entry_signal = self.topology.signals.get(entry_signal_id)
+            if entry_signal is None or entry_signal.is_blocking:
+                continue
+            for exit_signal_id in sorted(exit_set):
+                exit_signal = self.topology.signals.get(exit_signal_id)
+                if exit_signal is None or exit_signal.is_blocking:
+                    continue
                 if entry_signal_id == exit_signal_id:
                     continue
-                best_route = self._find_shortest_pair_route(
-                    entry_signal_id=entry_signal_id,
-                    exit_signal_id=exit_signal_id,
-                    max_depth=max_depth,
+                if (entry_signal_id, exit_signal_id) in special_pairs:
+                    continue
+                if entry_signal.direction != exit_signal.direction:
+                    continue
+                add_pair(
+                    entry_signal_id,
+                    exit_signal_id,
+                    calling_on=False,
+                    reverse=(entry_signal_id, exit_signal_id) in reverse_pairs,
                 )
-                if best_route is not None:
-                    routes.append(best_route)
+
+        for entry_signal_id, exit_signal_id in sorted(calling_on_pairs):
+            add_pair(
+                entry_signal_id,
+                exit_signal_id,
+                calling_on=True,
+                reverse=False,
+            )
+
+        routes: list[Route] = []
+        for (entry_signal_id, exit_signal_id), (is_calling_on, is_reverse) in sorted(
+            pair_flags.items()
+        ):
+            best_route = self._find_shortest_pair_route(
+                entry_signal_id=entry_signal_id,
+                exit_signal_id=exit_signal_id,
+                max_depth=max_depth,
+                is_calling_on=is_calling_on,
+                is_reverse=is_reverse,
+            )
+            if best_route is not None:
+                routes.append(best_route)
 
         rows: list[InterlockingTableRow] = []
         for route in routes:
@@ -104,6 +158,9 @@ class InterlockingTableGenerator:
                     flank_point_positions=dict(route.flank_point_positions),
                     locked_sections=locked_sections,
                     conflicting_routes=[],
+                    is_calling_on=route.is_calling_on,
+                    is_reverse=route.is_reverse,
+                    signal_aspect=route.signal_aspect,
                 )
             )
 
@@ -113,8 +170,8 @@ class InterlockingTableGenerator:
     def to_markdown(self, rows: list[InterlockingTableRow]) -> str:
         """Render rows as a markdown interlocking table."""
         lines = [
-            "| Route | Entry | Exit | Entry protected section | Exit protected section | Normal | Reverse | Track locks | Overlap | Conflicts |",
-            "|---|---|---|---|---|---|---|---|---|---|",
+            "| Route | Entry | Exit | Signal Aspect | Entry protected section | Exit protected section | Normal | Reverse | Reverse Route | Calling-on Route | Track locks | Overlap | Conflicts |",
+            "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
         ]
         for row in rows:
             normal_points = self._format_points_for_position(
@@ -134,8 +191,10 @@ class InterlockingTableGenerator:
             )
             lines.append(
                 f"| {row.route_name} | {row.entry_signal} ({row.entry_element}) | "
-                f"{row.exit_signal} ({row.exit_element}) | {entry_protected_section} | "
+                f"{row.exit_signal} ({row.exit_element}) | {row.signal_aspect.value} | "
+                f"{entry_protected_section} | "
                 f"{exit_protected_section} | {normal_points} | {reverse_points} | "
+                f"{self._format_mark(row.is_reverse)} | {self._format_mark(row.is_calling_on)} | "
                 f"{tracks} | {overlap} | {conflicts} |"
             )
         return "\n".join(lines)
@@ -159,10 +218,13 @@ class InterlockingTableGenerator:
                     "entry_element",
                     "exit_signal",
                     "exit_element",
+                    "signal_aspect",
                     "entry_protected_section",
                     "exit_protected_section",
                     "normal_points",
                     "reverse_points",
+                    "reverse_route",
+                    "calling_on_route",
                     "track_locks",
                     "overlap",
                     "conflicts",
@@ -176,6 +238,7 @@ class InterlockingTableGenerator:
                         row.entry_element,
                         row.exit_signal,
                         row.exit_element,
+                        row.signal_aspect.value,
                         row.entry_protected_section or "",
                         row.exit_protected_section or "",
                         self._format_points_for_position(
@@ -188,6 +251,8 @@ class InterlockingTableGenerator:
                             PointPosition.REVERSE,
                             empty="",
                         ),
+                        self._format_mark(row.is_reverse),
+                        self._format_mark(row.is_calling_on),
                         " -> ".join(row.locked_sections),
                         " -> ".join(row.overlap),
                         ", ".join(sorted(set(row.conflicting_routes))),
@@ -199,12 +264,16 @@ class InterlockingTableGenerator:
         entry_signal_id: str,
         exit_signal_id: str,
         max_depth: int,
+        is_calling_on: bool = False,
+        is_reverse: bool = False,
     ) -> list[Route]:
         """Compatibility wrapper that returns at most one shortest route."""
         best = self._find_shortest_pair_route(
             entry_signal_id=entry_signal_id,
             exit_signal_id=exit_signal_id,
             max_depth=max_depth,
+            is_calling_on=is_calling_on,
+            is_reverse=is_reverse,
         )
         return [best] if best is not None else []
 
@@ -213,11 +282,17 @@ class InterlockingTableGenerator:
         entry_signal_id: str,
         exit_signal_id: str,
         max_depth: int,
+        is_calling_on: bool = False,
+        is_reverse: bool = False,
     ) -> Route | None:
         """Return the shortest valid route for a signal pair, if any."""
         entry_signal = self.topology.signals.get(entry_signal_id)
         exit_signal = self.topology.signals.get(exit_signal_id)
         if entry_signal is None or exit_signal is None:
+            return None
+        if entry_signal.is_blocking:
+            return None
+        if exit_signal.is_blocking and not is_calling_on:
             return None
         if entry_signal.direction != exit_signal.direction:
             return None
@@ -229,14 +304,14 @@ class InterlockingTableGenerator:
             return None
         if entry_protected == exit_protected:
             return None
-        exit_approach_nodes = self.topology.signal_approach_nodes(exit_signal_id)
-        if not exit_approach_nodes:
+        exit_target_nodes = self.route_engine.route_exit_target_nodes(exit_signal_id)
+        if not exit_target_nodes:
             return None
 
         try:
             route_graph = self.route_engine.routing_graph_for_direction(entry_signal.direction)
             path_list: list[list[str]] = []
-            for target_node in exit_approach_nodes:
+            for target_node in exit_target_nodes:
                 try:
                     all_paths = nx.all_simple_paths(
                         route_graph,
@@ -284,6 +359,12 @@ class InterlockingTableGenerator:
                 monitored_flank_sections=flank_result.monitored_flank_sections,
                 approach_locking_section=self.route_engine.resolve_approach_locking_section(
                     entry_signal_id
+                ),
+                is_calling_on=is_calling_on,
+                is_reverse=is_reverse,
+                signal_aspect=self.topology.route_signal_aspect(
+                    entry_signal_id,
+                    exit_signal_id,
                 ),
             )
             return route
@@ -333,3 +414,7 @@ class InterlockingTableGenerator:
     ) -> str:
         points = cls.point_ids_for_position(required, position)
         return ", ".join(points) if points else empty
+
+    @staticmethod
+    def _format_mark(value: bool) -> str:
+        return "\u221a" if value else ""

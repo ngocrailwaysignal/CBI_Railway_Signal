@@ -43,6 +43,12 @@ def build_runtime_snapshot(simulation: RuntimeSessionPort | None) -> dict:
             "overlap_path": list(route.overlap_path),
             "full_path": list(route.full_path),
             "lifecycle_state": route.lifecycle_state.value,
+            "is_calling_on": bool(route.is_calling_on),
+            "is_reverse": bool(route.is_reverse),
+            "route_type": (
+                "CALLING_ON" if route.is_calling_on else "REVERSE" if route.is_reverse else ""
+            ),
+            "signal_aspect": route.signal_aspect.value,
             "status": "ACTIVE",
         }
         for route in simulation.locking_engine.active_routes.values()
@@ -59,7 +65,7 @@ def build_runtime_snapshot(simulation: RuntimeSessionPort | None) -> dict:
     signal_state = [
         {
             "id": signal.id,
-            "aspect": signal.aspect.value,
+            "aspect": "RED" if getattr(signal, "is_blocking", False) else signal.aspect.value,
             "route_id": signal.route_id,
         }
         for signal in topology.signals.values()

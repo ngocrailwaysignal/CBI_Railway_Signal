@@ -8,6 +8,7 @@ from PyQt6.QtCore import QMimeData, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QDrag, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
@@ -26,6 +27,7 @@ from core.domain.model.elements import (
     PointSymbolOrientation,
     SignalAspect,
     SignalDirection,
+    normalize_signal_aspect,
 )
 from ui.i18n import UITranslator
 
@@ -36,6 +38,38 @@ POINT_SYMBOL_CHOICES: tuple[tuple[str, PointSymbolOrientation], ...] = (
     ("4", PointSymbolOrientation.UP),
 )
 ANNOTATION_LABEL_TYPES = {"AnnotationLabel", "Label"}
+ANNOTATION_LINE_TYPES = {"AnnotationLine", "Line"}
+ANNOTATION_COLOR_PRESETS: tuple[tuple[str, str], ...] = (
+    ("Black", "#111111"),
+    ("Red", "#d71920"),
+    ("Blue", "#2563eb"),
+    ("Green", "#16a34a"),
+    ("Orange", "#f97316"),
+)
+
+
+def create_color_combo(current_color: str = "#111111") -> QComboBox:
+    combo = QComboBox()
+    combo.setEditable(True)
+    for label, color in ANNOTATION_COLOR_PRESETS:
+        combo.addItem(label, color)
+    normalized = str(current_color or "#111111").strip()
+    index = combo.findData(normalized)
+    if index >= 0:
+        combo.setCurrentIndex(index)
+    else:
+        combo.setEditText(normalized)
+    return combo
+
+
+def combo_color_value(combo: QComboBox) -> str:
+    text = str(combo.currentText()).strip()
+    if text.startswith("#"):
+        return text
+    data = combo.currentData()
+    if data:
+        return str(data).strip() or "#111111"
+    return text or "#111111"
 
 
 class PaletteListWidget(QListWidget):
@@ -274,9 +308,19 @@ class PropertiesPanel(QWidget):
             approach_section_input = QLineEdit(str(properties.get("approach_section", "")))
 
             aspect_input = QComboBox()
-            aspect_input.addItem(self._t("signal_aspect.stop"), SignalAspect.STOP.value)
-            aspect_input.addItem(self._t("signal_aspect.proceed"), SignalAspect.PROCEED.value)
-            current_aspect = str(properties.get("aspect", SignalAspect.STOP.value))
+            for signal_aspect in (
+                SignalAspect.RED,
+                SignalAspect.YELLOW,
+                SignalAspect.GREEN,
+                SignalAspect.BLUE,
+            ):
+                aspect_input.addItem(
+                    self._t(f"signal_aspect.{signal_aspect.value.lower()}"),
+                    signal_aspect.value,
+                )
+            current_aspect = normalize_signal_aspect(
+                properties.get("aspect", SignalAspect.RED.value)
+            ).value
             aspect_index = aspect_input.findData(current_aspect)
             aspect_input.setCurrentIndex(aspect_index if aspect_index >= 0 else 0)
 
@@ -292,26 +336,89 @@ class PropertiesPanel(QWidget):
             direction_index = direction_input.findData(current_direction)
             direction_input.setCurrentIndex(direction_index if direction_index >= 0 else 0)
 
+            blocking_input = QCheckBox()
+            blocking_input.setChecked(bool(properties.get("is_blocking", False)))
+
             self._inputs["protects"] = protects_input
             self._inputs["approach_section"] = approach_section_input
             self._inputs["aspect"] = aspect_input
             self._inputs["direction"] = direction_input
+            self._inputs["is_blocking"] = blocking_input
             self.form_layout.addRow(self._t("field.protects"), protects_input)
             self.form_layout.addRow(self._t("field.approach_section"), approach_section_input)
             self.form_layout.addRow(self._t("field.direction"), direction_input)
             self.form_layout.addRow(self._t("field.aspect"), aspect_input)
+            self.form_layout.addRow(self._t("field.blocking_signal"), blocking_input)
+            blocking_input.toggled.connect(self._sync_signal_route_controls)
+            self._sync_signal_route_controls()
 
         elif self._selected_type in ANNOTATION_LABEL_TYPES:
             text_input = QLineEdit(str(properties.get("text", "LABEL")))
             font_size_input = QDoubleSpinBox()
             font_size_input.setRange(6.0, 96.0)
             font_size_input.setValue(float(properties.get("font_size", 18.0)))
+            color_input = create_color_combo(str(properties.get("color", "#111111")))
+            width_input = QDoubleSpinBox()
+            height_input = QDoubleSpinBox()
+            for widget in (width_input, height_input):
+                widget.setRange(40.0, 2000.0)
+                widget.setDecimals(1)
+                widget.setSingleStep(10.0)
+            width_input.setValue(float(properties.get("width", 120.0)))
+            height_input.setValue(float(properties.get("height", 48.0)))
             self._inputs["text"] = text_input
             self._inputs["font_size"] = font_size_input
+            self._inputs["color"] = color_input
+            self._inputs["width"] = width_input
+            self._inputs["height"] = height_input
             self.form_layout.addRow(self._t("field.text"), text_input)
             self.form_layout.addRow(self._t("field.font_size"), font_size_input)
+            self.form_layout.addRow(self._t("field.color"), color_input)
+            self.form_layout.addRow(self._t("field.width"), width_input)
+            self.form_layout.addRow(self._t("field.height"), height_input)
+
+        elif self._selected_type in ANNOTATION_LINE_TYPES:
+            color_input = create_color_combo(str(properties.get("color", "#111111")))
+            width_input = QDoubleSpinBox()
+            width_input.setRange(1.0, 8.0)
+            width_input.setSingleStep(0.5)
+            width_input.setValue(float(properties.get("width", 2.0)))
+            start_x = QDoubleSpinBox()
+            start_y = QDoubleSpinBox()
+            end_x = QDoubleSpinBox()
+            end_y = QDoubleSpinBox()
+            for widget in (start_x, start_y, end_x, end_y):
+                widget.setRange(-100000.0, 100000.0)
+                widget.setDecimals(1)
+            start_x.setValue(float(properties.get("start_x", 0.0)))
+            start_y.setValue(float(properties.get("start_y", 0.0)))
+            end_x.setValue(float(properties.get("end_x", 120.0)))
+            end_y.setValue(float(properties.get("end_y", 0.0)))
+            self._inputs["color"] = color_input
+            self._inputs["width"] = width_input
+            self._inputs["start_x"] = start_x
+            self._inputs["start_y"] = start_y
+            self._inputs["end_x"] = end_x
+            self._inputs["end_y"] = end_y
+            self.form_layout.addRow(self._t("field.color"), color_input)
+            self.form_layout.addRow(self._t("field.width"), width_input)
+            self.form_layout.addRow(self._t("field.start_x"), start_x)
+            self.form_layout.addRow(self._t("field.start_y"), start_y)
+            self.form_layout.addRow(self._t("field.end_x"), end_x)
+            self.form_layout.addRow(self._t("field.end_y"), end_y)
 
         self.apply_button.setEnabled(True)
+
+    def _sync_signal_route_controls(self) -> None:
+        blocking_input = self._inputs.get("is_blocking")
+        aspect_input = self._inputs.get("aspect")
+
+        is_blocking = isinstance(blocking_input, QCheckBox) and blocking_input.isChecked()
+        if isinstance(aspect_input, QComboBox):
+            if is_blocking:
+                red_index = aspect_input.findData(SignalAspect.RED.value)
+                aspect_input.setCurrentIndex(red_index if red_index >= 0 else 0)
+            aspect_input.setEnabled(not is_blocking)
 
     def _clear_form(self) -> None:
         while self.form_layout.count():
@@ -344,10 +451,25 @@ class PropertiesPanel(QWidget):
             updated["direction"] = str(
                 self._inputs["direction"].currentData() or SignalDirection.RIGHT.value
             )
-            updated["aspect"] = str(self._inputs["aspect"].currentData() or SignalAspect.STOP.value)
+            updated["is_blocking"] = bool(self._inputs["is_blocking"].isChecked())
+            updated["aspect"] = (
+                SignalAspect.RED.value
+                if updated["is_blocking"]
+                else str(self._inputs["aspect"].currentData() or SignalAspect.RED.value)
+            )
         elif self._selected_type in ANNOTATION_LABEL_TYPES:
             updated["text"] = str(self._inputs["text"].text()).strip() or "LABEL"
             updated["font_size"] = float(self._inputs["font_size"].value())
+            updated["color"] = combo_color_value(self._inputs["color"])
+            updated["width"] = float(self._inputs["width"].value())
+            updated["height"] = float(self._inputs["height"].value())
+        elif self._selected_type in ANNOTATION_LINE_TYPES:
+            updated["color"] = combo_color_value(self._inputs["color"])
+            updated["width"] = float(self._inputs["width"].value())
+            updated["start_x"] = float(self._inputs["start_x"].value())
+            updated["start_y"] = float(self._inputs["start_y"].value())
+            updated["end_x"] = float(self._inputs["end_x"].value())
+            updated["end_y"] = float(self._inputs["end_y"].value())
         updated["id"] = str(self._inputs["id"].text()).strip()
         self.properties_applied.emit(self._selected_id, updated)
 
@@ -357,6 +479,7 @@ class ComponentsPalette(QWidget):
 
     component_insert_requested = pyqtSignal(str)
     label_insert_requested = pyqtSignal()
+    line_insert_requested = pyqtSignal()
     properties_applied = pyqtSignal(str, dict)
 
     def __init__(self, translator: UITranslator, parent: QWidget | None = None) -> None:
@@ -370,6 +493,8 @@ class ComponentsPalette(QWidget):
 
         self.add_label_button = QPushButton()
         self.add_label_button.clicked.connect(self.label_insert_requested.emit)
+        self.add_line_button = QPushButton()
+        self.add_line_button.clicked.connect(self.line_insert_requested.emit)
 
         self.hint_label = QLabel()
         self.hint_label.setWordWrap(True)
@@ -382,6 +507,7 @@ class ComponentsPalette(QWidget):
         layout.addWidget(self.title_label)
         layout.addWidget(self.component_list)
         layout.addWidget(self.add_label_button)
+        layout.addWidget(self.add_line_button)
         layout.addWidget(self.hint_label)
         layout.addWidget(self.properties_panel)
 
@@ -399,6 +525,7 @@ class ComponentsPalette(QWidget):
     def retranslate_ui(self) -> None:
         self.title_label.setText(self._t("palette.components"))
         self.add_label_button.setText(self._t("palette.add_label"))
+        self.add_line_button.setText(self._t("palette.add_line"))
         self.hint_label.setText(self._t("palette.hint"))
 
     def set_selected_element(self, payload: dict[str, Any] | None) -> None:

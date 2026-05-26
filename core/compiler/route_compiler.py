@@ -45,6 +45,9 @@ class RouteCompiler:
                 },
                 locked_sections=list(row.locked_sections),
                 conflicting_routes=sorted(set(row.conflicting_routes)),
+                calling_on_route=row.is_calling_on,
+                reverse_route=row.is_reverse,
+                signal_aspect=row.signal_aspect.value,
             )
             for row in rows
         ]

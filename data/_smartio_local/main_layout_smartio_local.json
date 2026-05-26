@@ -1,28 +1,42 @@
 {
   "sections": [
     {
-      "id": "S1",
+      "id": "T0102",
       "kind": "track",
       "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
     {
-      "id": "S2",
+      "id": "T0101",
       "kind": "track",
       "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
     {
-      "id": "S4",
+      "id": "T0104",
       "kind": "track",
       "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
     {
-      "id": "2",
+      "id": "T0103",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T014-8DG",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T012-6DG",
       "kind": "track",
       "occupied": false,
       "locked_by": null,
@@ -43,50 +57,57 @@
       "length": 100.0
     },
     {
-      "id": "S9",
+      "id": "T0106",
       "kind": "track",
       "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
     {
-      "id": "1",
+      "id": "T0201",
       "kind": "track",
       "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
     {
-      "id": "S10",
+      "id": "T0108",
       "kind": "track",
       "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
     {
-      "id": "S12",
+      "id": "T0204",
       "kind": "track",
       "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
     {
-      "id": "S14",
+      "id": "T0205",
       "kind": "track",
       "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
     {
-      "id": "AS1",
-      "kind": "approach",
+      "id": "T0207",
+      "kind": "track",
       "occupied": false,
       "locked_by": null,
       "length": 100.0
     },
     {
-      "id": "AS2",
-      "kind": "approach",
+      "id": "T0206",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0208",
+      "kind": "track",
       "occupied": false,
       "locked_by": null,
       "length": 100.0
@@ -94,259 +115,380 @@
   ],
   "points": [
     {
-      "id": "P2",
+      "id": "P0108",
       "position": "NORMAL",
-      "symbol_orientation": "LEFT",
+      "symbol_orientation": "DOWN",
       "locked_by": null,
       "facing_connections": {
-        "NORMAL": "S14",
-        "REVERSE": "S2"
+        "NORMAL": "T014-8DG",
+        "REVERSE": "S7"
       }
     },
     {
-      "id": "P1",
-      "position": "NORMAL",
-      "symbol_orientation": "RIGHT",
-      "locked_by": null,
-      "facing_connections": {
-        "NORMAL": "S10",
-        "REVERSE": "S2"
-      }
-    },
-    {
-      "id": "P3",
+      "id": "P0102",
       "position": "NORMAL",
       "symbol_orientation": "UP",
       "locked_by": null,
       "facing_connections": {
-        "NORMAL": "S8",
+        "NORMAL": "T012-6DG",
         "REVERSE": "S7"
+      }
+    },
+    {
+      "id": "P0106",
+      "position": "REVERSE",
+      "symbol_orientation": "RIGHT",
+      "locked_by": null,
+      "facing_connections": {
+        "NORMAL": "T012-6DG",
+        "REVERSE": "S8"
+      }
+    },
+    {
+      "id": "P0104",
+      "position": "REVERSE",
+      "symbol_orientation": "LEFT",
+      "locked_by": null,
+      "facing_connections": {
+        "NORMAL": "T014-8DG",
+        "REVERSE": "S8"
       }
     }
   ],
   "signals": [
     {
-      "id": "A",
-      "aspect": "STOP",
+      "id": "Z0103",
+      "aspect": "RED",
+      "direction": "LEFT",
+      "protects": "T0102",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": true
+    },
+    {
+      "id": "Z0101",
+      "aspect": "RED",
+      "direction": "LEFT",
+      "protects": "T0101",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": true
+    },
+    {
+      "id": "X0106",
+      "aspect": "RED",
       "direction": "RIGHT",
-      "protects": "S1",
-      "approach_section": "AS1",
-      "route_id": null
-    },
-    {
-      "id": "F",
-      "aspect": "STOP",
-      "direction": "LEFT",
-      "protects": "S9",
-      "approach_section": "AS2",
-      "route_id": null
-    },
-    {
-      "id": "N2",
-      "aspect": "STOP",
-      "direction": "LEFT",
-      "protects": "S4",
+      "protects": "P0108",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     },
     {
-      "id": "G2",
-      "aspect": "STOP",
+      "id": "X0104",
+      "aspect": "RED",
       "direction": "RIGHT",
-      "protects": "S7",
+      "protects": "P0106",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     },
     {
-      "id": "G1",
-      "aspect": "STOP",
+      "id": "XQD201",
+      "aspect": "RED",
       "direction": "RIGHT",
-      "protects": "S8",
+      "protects": "T0205",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     },
     {
-      "id": "N1",
-      "aspect": "STOP",
+      "id": "SC0203",
+      "aspect": "RED",
       "direction": "LEFT",
-      "protects": "S10",
+      "protects": "T0108",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     },
     {
-      "id": "Y",
-      "aspect": "STOP",
+      "id": "S0102",
+      "aspect": "RED",
       "direction": "LEFT",
-      "protects": "S12",
+      "protects": "T0106",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "XC0204",
+      "aspect": "RED",
+      "direction": "RIGHT",
+      "protects": "T0207",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "SQ0202",
+      "aspect": "RED",
+      "direction": "LEFT",
+      "protects": "T0206",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "ZF0503",
+      "aspect": "RED",
+      "direction": "RIGHT",
+      "protects": "T0208",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
     }
   ],
+  "labels": [],
+  "annotation_lines": [],
   "edges": [
     [
-      "S1",
-      "P1"
+      "T014-8DG",
+      "P0104"
     ],
     [
-      "S2",
-      "P2"
+      "T012-6DG",
+      "P0102"
     ],
     [
       "S7",
-      "P3"
+      "P0102"
     ],
     [
       "S8",
-      "P3"
+      "P0106"
     ],
     [
-      "P2",
-      "S4"
+      "T0206",
+      "T0204"
     ],
     [
-      "P2",
-      "S14"
+      "P0108",
+      "S7"
     ],
     [
-      "P1",
-      "S2"
+      "P0108",
+      "T014-8DG"
     ],
     [
-      "P1",
-      "S10"
+      "P0102",
+      "T0201"
     ],
     [
-      "P3",
-      "S9"
+      "P0106",
+      "T012-6DG"
+    ],
+    [
+      "P0104",
+      "S8"
+    ],
+    [
+      "P0104",
+      "T0106"
     ]
   ],
   "signal_links": [
     [
-      "1",
-      "G1"
+      "T0101",
+      "Z0101"
     ],
     [
-      "1",
-      "N1"
+      "T0102",
+      "Z0103"
     ],
     [
-      "2",
-      "G2"
+      "T0103",
+      "X0104"
     ],
     [
-      "2",
-      "N2"
+      "T0103",
+      "Z0101"
     ],
     [
-      "AS1",
-      "A"
+      "T0104",
+      "X0106"
     ],
     [
-      "AS2",
-      "F"
+      "T0104",
+      "Z0103"
     ],
     [
-      "S10",
-      "N1"
+      "T0106",
+      "S0102"
     ],
     [
-      "S14",
-      "Y"
+      "T0108",
+      "S0102"
+    ],
+    [
+      "T0108",
+      "SC0203"
+    ],
+    [
+      "T0201",
+      "XQD201"
+    ],
+    [
+      "T0204",
+      "SC0203"
+    ],
+    [
+      "T0205",
+      "XC0204"
+    ],
+    [
+      "T0205",
+      "XQD201"
+    ],
+    [
+      "T0206",
+      "ZF0503"
+    ],
+    [
+      "T0208",
+      "SQ0202"
     ]
   ],
   "clearance_conflict_groups": [],
+  "route_types": {
+    "S0102->Z0101": "CALLING_ON",
+    "S0102->Z0103": "CALLING_ON",
+    "X0106->ZF0503": "REVERSE"
+  },
+  "route_signal_aspects": {
+    "S0102->Z0101": "YELLOW",
+    "S0102->Z0103": "YELLOW",
+    "X0106->ZF0503": "YELLOW_BLUE"
+  },
   "ui_positions": {
-    "S1": [
+    "T0102": [
+      -775.0,
+      -450.0
+    ],
+    "T0101": [
+      -775.0,
+      -125.0
+    ],
+    "T0104": [
+      -575.0,
+      -450.0
+    ],
+    "T0103": [
+      -575.0,
+      -125.0
+    ],
+    "T014-8DG": [
       -250.0,
-      -175.0
+      -450.0
     ],
-    "S2": [
-      -125.0,
-      -300.0
-    ],
-    "S4": [
-      50.0,
-      -400.0
-    ],
-    "2": [
-      300.0,
-      -400.0
+    "T012-6DG": [
+      -250.0,
+      -125.0
     ],
     "S7": [
-      575.0,
-      -400.0
+      -300.0,
+      -300.0
     ],
     "S8": [
-      600.0,
-      -175.0
+      -175.0,
+      -300.0
     ],
-    "S9": [
-      875.0,
-      -175.0
+    "T0106": [
+      0.0,
+      -450.0
     ],
-    "1": [
-      300.0,
-      -175.0
-    ],
-    "S10": [
-      25.0,
-      -175.0
-    ],
-    "S12": [
-      -575.0,
-      -400.0
-    ],
-    "S14": [
-      -250.0,
-      -400.0
-    ],
-    "AS1": [
-      -475.0,
-      -175.0
-    ],
-    "AS2": [
-      1025.0,
-      -175.0
-    ],
-    "P2": [
-      -125.0,
-      -400.0
-    ],
-    "P1": [
-      -125.0,
-      -175.0
-    ],
-    "P3": [
-      725.0,
-      -175.0
-    ],
-    "A": [
-      -375.0,
+    "T0201": [
+      225.0,
       -125.0
     ],
-    "F": [
-      975.0,
-      -275.0
+    "T0108": [
+      200.0,
+      -450.0
     ],
-    "N2": [
-      175.0,
+    "T0204": [
+      400.0,
+      -450.0
+    ],
+    "T0205": [
+      475.0,
+      -125.0
+    ],
+    "T0207": [
+      725.0,
+      -125.0
+    ],
+    "T0206": [
+      575.0,
+      -450.0
+    ],
+    "T0208": [
+      800.0,
+      -450.0
+    ],
+    "P0108": [
+      -375.0,
+      -450.0
+    ],
+    "P0102": [
+      -125.0,
+      -125.0
+    ],
+    "P0106": [
+      -350.0,
+      -125.0
+    ],
+    "P0104": [
+      -100.0,
+      -450.0
+    ],
+    "Z0103": [
+      -675.0,
       -525.0
     ],
-    "G2": [
-      450.0,
-      -275.0
+    "Z0101": [
+      -675.0,
+      -50.0
     ],
-    "G1": [
-      450.0,
-      -125.0
+    "X0106": [
+      -475.0,
+      -350.0
     ],
-    "N1": [
-      150.0,
-      -250.0
+    "X0104": [
+      -475.0,
+      -50.0
     ],
-    "Y": [
-      -400.0,
-      -400.0
+    "XQD201": [
+      350.0,
+      -50.0
+    ],
+    "SC0203": [
+      300.0,
+      -525.0
+    ],
+    "S0102": [
+      100.0,
+      -525.0
+    ],
+    "XC0204": [
+      600.0,
+      -50.0
+    ],
+    "SQ0202": [
+      700.0,
+      -525.0
+    ],
+    "ZF0503": [
+      675.0,
+      -375.0
     ]
-  }
+  },
+  "dispatcher_view": {}
 }

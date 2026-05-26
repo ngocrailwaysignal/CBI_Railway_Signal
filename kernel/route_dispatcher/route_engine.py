@@ -43,6 +43,8 @@ class RouteEngine:
         exit_signal_id: str,
         active_routes: dict[str, Route] | None = None,
         overlap_length: int = 0,
+        is_calling_on: bool = False,
+        is_reverse: bool = False,
     ) -> Route:
         """Find and validate a route between two signals."""
         entry_signal = self.topology.signals.get(entry_signal_id)
@@ -57,9 +59,23 @@ class RouteEngine:
             raise ValueError(
                 f"Unknown signal id for {', '.join(missing)}. Available signals: {available}"
             )
+        route_is_calling_on = bool(is_calling_on) or self.topology.is_calling_on_pair(
+            entry_signal_id,
+            exit_signal_id,
+        )
+        route_is_reverse = bool(is_reverse) or self.topology.is_reverse_route_pair(
+            entry_signal_id,
+            exit_signal_id,
+        )
+        if entry_signal.is_blocking:
+            raise ValueError(f"Blocking signal {entry_signal_id} cannot be used as route entry")
+        if exit_signal.is_blocking and not route_is_calling_on:
+            raise ValueError(
+                f"Blocking signal {exit_signal_id} requires a manually marked calling-on route"
+            )
         if entry_signal.direction != exit_signal.direction:
             raise ValueError(
-                f"Entry {entry_signal_id} and exit {exit_signal_id} must have the same direction "
+                f"Entry {entry_signal_id} and exit {exit_signal_id} have opposite directions "
                 f"({entry_signal.direction.value} != {exit_signal.direction.value})"
             )
         if entry_signal_id == exit_signal_id:
@@ -87,12 +103,12 @@ class RouteEngine:
 
         route_graph = self.routing_graph_for_direction(entry_signal.direction)
         source_node = entry_protected
-        exit_approach_nodes = self.topology.signal_approach_nodes(exit_signal_id)
-        if not exit_approach_nodes:
+        exit_target_nodes = self.route_exit_target_nodes(exit_signal_id)
+        if not exit_target_nodes:
             raise ValueError(f"Exit signal {exit_signal.id} has no incoming track/point link")
 
         reachable_targets: list[tuple[int, str]] = []
-        for target_node in exit_approach_nodes:
+        for target_node in exit_target_nodes:
             try:
                 distance = nx.shortest_path_length(
                     route_graph, source=source_node, target=target_node
@@ -160,6 +176,12 @@ class RouteEngine:
                             approach_locking_section=self._resolve_approach_locking_section(
                                 entry_signal_id
                             ),
+                            is_calling_on=route_is_calling_on,
+                            is_reverse=route_is_reverse,
+                            signal_aspect=self.topology.route_signal_aspect(
+                                entry_signal_id,
+                                exit_signal_id,
+                            ),
                         )
                     except ValueError as exc:
                         last_reason = str(exc)
@@ -176,7 +198,7 @@ class RouteEngine:
                         route.full_path,
                         all_points,
                         monitored_flank_sections=route.monitored_flank_sections,
-                        allow_occupied_sections=[path[0]] if path else None,
+                        allow_occupied_sections=self._allow_occupied_sections(route),
                     )
                     if not route_ok:
                         last_reason = f"Route unavailable: {reason}"
@@ -273,6 +295,13 @@ class RouteEngine:
         """Public helper to resolve approach section for one entry signal."""
         return self._resolve_approach_locking_section(entry_signal_id)
 
+    def route_exit_target_nodes(
+        self,
+        exit_signal_id: str,
+    ) -> list[str]:
+        """Return graph nodes that can terminate a route at the exit signal."""
+        return self.topology.signal_approach_nodes(exit_signal_id)
+
     def resolve_effective_protected_section(
         self,
         signal_id: str,
@@ -299,6 +328,15 @@ class RouteEngine:
             if isinstance(self.topology.get_element(node_id), TrackSection):
                 return node_id
         return None
+
+    def _allow_occupied_sections(self, route: Route) -> list[str]:
+        if route.is_calling_on:
+            return [
+                node_id
+                for node_id in route.full_path
+                if isinstance(self.topology.get_element(node_id), TrackSection)
+            ]
+        return [route.path[0]] if route.path else []
 
     def _compute_required_point_positions(self, path: list[str]) -> dict[str, PointPosition]:
         """Compute all point positions needed to traverse the path."""

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from core.domain.lifecycle import RouteLifecycleState
-from core.domain.model.elements import PointPosition
+from core.domain.model.elements import PointPosition, SignalAspect
 
 
 @dataclass(slots=True)
@@ -21,6 +21,9 @@ class Route:
     flank_point_positions: dict[str, PointPosition] = field(default_factory=dict)
     monitored_flank_sections: list[str] = field(default_factory=list)
     approach_locking_section: str | None = None
+    is_calling_on: bool = False
+    is_reverse: bool = False
+    signal_aspect: SignalAspect = SignalAspect.GREEN
     lifecycle_state: RouteLifecycleState = RouteLifecycleState.RESERVED
 
     @property

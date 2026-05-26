@@ -28,10 +28,13 @@ class SimulationEngine:
                 continue
             train.step(route, self.runtime_session.topology, self.runtime_session.locking_engine)
         self.runtime_session.route_dispatcher.update_time_locking()
+        self._reconcile_train_occupancy()
+        self._mark_calling_on_shared_sections()
 
         issues = self.runtime_session.safety_monitor.detect_unsafe_conditions(
             self.runtime_session.topology,
             self.runtime_session.trains.values(),
+            active_routes=self.runtime_session.locking_engine.active_routes,
         )
         if issues:
             self.runtime_session.locking_engine.force_all_signals_stop()
@@ -65,3 +68,30 @@ class SimulationEngine:
             f"[tick={self.runtime_session.tick}] signals[{signal_state}] "
             f"tracks[{'; '.join(section_state)}] trains[{train_state}]"
         )
+
+    def _reconcile_train_occupancy(self) -> None:
+        for train in self.runtime_session.trains.values():
+            element = self.runtime_session.topology.get_element(train.current_section)
+            if hasattr(element, "occupied"):
+                element.occupied = True
+
+    def _mark_calling_on_shared_sections(self) -> None:
+        active_routes = self.runtime_session.locking_engine.active_routes
+        trains_by_section: dict[str, list[object]] = {}
+        for train in self.runtime_session.trains.values():
+            trains_by_section.setdefault(train.current_section, []).append(train)
+
+        for section_id, trains in trains_by_section.items():
+            if len(trains) < 2:
+                continue
+            has_calling_on_authority = any(
+                (route := active_routes.get(str(train.route_id or "").strip()))
+                is not None
+                and route.is_calling_on
+                and section_id in route.full_path
+                for train in trains
+            )
+            if not has_calling_on_authority:
+                continue
+            for train in trains:
+                train.calling_on_shared_sections.add(section_id)

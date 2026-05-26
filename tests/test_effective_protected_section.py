@@ -109,8 +109,8 @@ def test_interlocking_export_splits_normal_and_reverse_point_columns(tmp_path) -
 
     markdown = generator.to_markdown([row])
 
-    assert "| Route | Entry | Exit | Entry protected section | Exit protected section | Normal | Reverse |" in markdown
-    assert "| ENTRY->EXIT | ENTRY (P1) | EXIT (S2) | N1 | S2 | P1 | P2 |" in markdown
+    assert "| Route | Entry | Exit | Signal Aspect | Entry protected section | Exit protected section | Normal | Reverse |" in markdown
+    assert "| ENTRY->EXIT | ENTRY (P1) | EXIT (S2) | GREEN | N1 | S2 | P1 | P2 |" in markdown
 
     csv_path = tmp_path / "interlocking.csv"
     generator.export_csv([row], csv_path)
@@ -118,8 +118,10 @@ def test_interlocking_export_splits_normal_and_reverse_point_columns(tmp_path) -
 
     assert "normal_points" in csv_rows[0]
     assert "reverse_points" in csv_rows[0]
+    assert "signal_aspect" in csv_rows[0]
     assert csv_rows[1][csv_rows[0].index("normal_points")] == "P1"
     assert csv_rows[1][csv_rows[0].index("reverse_points")] == "P2"
+    assert csv_rows[1][csv_rows[0].index("signal_aspect")] == "GREEN"
 
 
 def test_webclient_interlocking_payload_includes_split_point_columns() -> None:

@@ -15,6 +15,15 @@ const DEFAULT_TRACK_STYLE = {
   approach: { stroke: "#54f27b" },
 };
 
+const SIGNAL_ASPECTS = new Set(["RED", "YELLOW", "GREEN", "BLUE", "YELLOW_BLUE", "GREEN_BLUE"]);
+
+const SIGNAL_ASPECT_COLORS = {
+  RED: "#ff655b",
+  YELLOW: "#f4bb5a",
+  GREEN: "#54f27b",
+  BLUE: "#4aa3ff",
+};
+
 export function createSvgElement(tagName, attrs = {}) {
   const node = document.createElementNS(SVG_NS, tagName);
   Object.entries(attrs).forEach(([key, value]) => {
@@ -184,6 +193,159 @@ export function renderDispatcherBoard(svg, dispatcherView, runtimeState, options
   }
 }
 
+export function createBoardCamera(svg, viewport, options = {}) {
+  const state = {
+    svg,
+    viewport,
+    minScale: Number(options.minScale || 0.35),
+    maxScale: Number(options.maxScale || 3),
+    scale: 1,
+    x: 0,
+    y: 0,
+    canvas: { ...DEFAULT_CANVAS },
+    dragging: null,
+  };
+
+  function viewportSize() {
+    const rect = viewport?.getBoundingClientRect?.() || { width: 0, height: 0 };
+    return {
+      width: Math.max(1, rect.width),
+      height: Math.max(1, rect.height),
+      left: Number(rect.left || 0),
+      top: Number(rect.top || 0),
+    };
+  }
+
+  function viewBoxSize() {
+    const size = viewportSize();
+    const canvasRatio = state.canvas.width / state.canvas.height;
+    const viewportRatio = size.width / size.height;
+    let width = state.canvas.width / state.scale;
+    let height = state.canvas.height / state.scale;
+    if (viewportRatio > canvasRatio) {
+      width = height * viewportRatio;
+    } else {
+      height = width / viewportRatio;
+    }
+    return { width, height };
+  }
+
+  function clamp() {
+    const box = viewBoxSize();
+    if (box.width >= state.canvas.width) {
+      state.x = (state.canvas.width - box.width) / 2;
+    } else {
+      state.x = Math.min(Math.max(0, state.x), state.canvas.width - box.width);
+    }
+    if (box.height >= state.canvas.height) {
+      state.y = (state.canvas.height - box.height) / 2;
+    } else {
+      state.y = Math.min(Math.max(0, state.y), state.canvas.height - box.height);
+    }
+    return box;
+  }
+
+  function apply() {
+    if (!svg) {
+      return;
+    }
+    const box = clamp();
+    svg.setAttribute("viewBox", `${state.x} ${state.y} ${box.width} ${box.height}`);
+    svg.dataset.zoom = state.scale.toFixed(2);
+  }
+
+  function setCanvas(canvas) {
+    const source = isRecord(canvas) ? canvas : DEFAULT_CANVAS;
+    state.canvas = {
+      width: coerceNumber(source.width, DEFAULT_CANVAS.width, 640),
+      height: coerceNumber(source.height, DEFAULT_CANVAS.height, 480),
+    };
+    apply();
+  }
+
+  function fit() {
+    state.scale = 1;
+    const box = viewBoxSize();
+    state.x = (state.canvas.width - box.width) / 2;
+    state.y = (state.canvas.height - box.height) / 2;
+    apply();
+  }
+
+  function zoomAt(clientX, clientY, factor) {
+    if (!svg) {
+      return;
+    }
+    const before = clientPointToSvgPoint(svg, clientX, clientY);
+    const nextScale = Math.min(state.maxScale, Math.max(state.minScale, state.scale * factor));
+    if (nextScale === state.scale) {
+      return;
+    }
+    state.scale = nextScale;
+    const box = viewBoxSize();
+    const size = viewportSize();
+    state.x = before.x - (clientX - size.left) / size.width * box.width;
+    state.y = before.y - (clientY - size.top) / size.height * box.height;
+    apply();
+  }
+
+  function wheel(event) {
+    event.preventDefault();
+    zoomAt(event.clientX, event.clientY, event.deltaY < 0 ? 1.12 : 1 / 1.12);
+  }
+
+  function beginPan(event) {
+    if (event.button !== 0) {
+      return false;
+    }
+    const box = viewBoxSize();
+    const size = viewportSize();
+    state.dragging = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      x: state.x,
+      y: state.y,
+      unitsPerPixelX: box.width / size.width,
+      unitsPerPixelY: box.height / size.height,
+    };
+    viewport?.classList?.add("is-dragging");
+    return true;
+  }
+
+  function pan(event) {
+    if (!state.dragging || state.dragging.pointerId !== event.pointerId) {
+      return false;
+    }
+    state.x = state.dragging.x - (event.clientX - state.dragging.clientX) * state.dragging.unitsPerPixelX;
+    state.y = state.dragging.y - (event.clientY - state.dragging.clientY) * state.dragging.unitsPerPixelY;
+    apply();
+    return true;
+  }
+
+  function endPan(event) {
+    if (!state.dragging || state.dragging.pointerId !== event.pointerId) {
+      return false;
+    }
+    state.dragging = null;
+    viewport?.classList?.remove("is-dragging");
+    return true;
+  }
+
+  return { state, setCanvas, fit, apply, zoomAt, wheel, beginPan, pan, endPan };
+}
+
+export function clientPointToSvgPoint(svg, clientX, clientY) {
+  const point = svg.createSVGPoint();
+  point.x = clientX;
+  point.y = clientY;
+  const matrix = svg.getScreenCTM();
+  if (!matrix) {
+    return { x: 0, y: 0 };
+  }
+  const transformed = point.matrixTransform(matrix.inverse());
+  return { x: transformed.x, y: transformed.y };
+}
+
 export function getElementLocalBounds(element) {
   if (!element || !element.kind) {
     return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
@@ -200,15 +362,15 @@ export function getElementLocalBounds(element) {
     };
   }
   if (element.kind === "signal") {
-    const mast = Number(element.geometry?.mast || 18);
+    const mast = Math.max(Number(element.geometry?.mast || 18), Number(element.geometry?.head_radius || 5.5) * 7);
     const arm = Number(element.geometry?.arm || 14);
     const headRadius = Number(element.geometry?.head_radius || 5.5);
     const labelOffset = Number(element.geometry?.label_offset || 20);
     return {
-      minX: -8,
-      minY: -mast / 2 - 8,
+      minX: -headRadius - 8,
+      minY: -mast / 2 - headRadius - 8,
       maxX: arm + labelOffset + headRadius + 36,
-      maxY: mast / 2 + 8,
+      maxY: mast / 2 + headRadius + 8,
     };
   }
   if (element.kind === "point") {
@@ -264,14 +426,7 @@ function normalizeElement(rawElement, index) {
   const rotation = coerceNumber(rawElement.rotation, 0);
   const geometry = normalizeGeometry(kind, rawElement.geometry);
   const style = isRecord(rawElement.style) ? deepClone(rawElement.style) : {};
-  const binding = isRecord(rawElement.binding) &&
-    String(rawElement.binding.cbi_type || "").trim() &&
-    String(rawElement.binding.cbi_id || "").trim()
-      ? {
-          cbi_type: String(rawElement.binding.cbi_type).trim().toLowerCase(),
-          cbi_id: String(rawElement.binding.cbi_id).trim(),
-        }
-      : null;
+  const binding = normalizeBinding(kind, rawElement.binding);
   return {
     id,
     kind,
@@ -282,6 +437,28 @@ function normalizeElement(rawElement, index) {
     z_index: Math.round(coerceNumber(rawElement.z_index, index)),
     binding,
   };
+}
+
+function normalizeBinding(kind, rawBinding) {
+  if (!isRecord(rawBinding)) {
+    return null;
+  }
+  const cbiType = String(rawBinding.cbi_type || "").trim().toLowerCase();
+  const cbiId = String(rawBinding.cbi_id || "").trim();
+  if (!cbiType || !cbiId) {
+    return null;
+  }
+  const allowedTypes = {
+    track_section: new Set(["section"]),
+    signal: new Set(["signal"]),
+    point: new Set(["point"]),
+    block_marker: new Set(["section"]),
+    label: new Set(),
+  };
+  if (!allowedTypes[kind]?.has(cbiType)) {
+    return null;
+  }
+  return { cbi_type: cbiType, cbi_id: cbiId };
 }
 
 function normalizeGeometry(kind, geometry) {
@@ -513,14 +690,13 @@ function renderTrackSection(group, element, runtime, options) {
 
 function renderSignal(group, element, runtime) {
   const geometry = element.geometry;
-  const mast = Number(geometry.mast || 18);
-  const arm = Number(geometry.arm || 14);
   const headRadius = Number(geometry.head_radius || 5.5);
+  const mast = Math.max(Number(geometry.mast || 18), headRadius * 7);
+  const arm = Number(geometry.arm || 14);
   const labelOffset = Number(geometry.label_offset || 20);
   const bindingId = element.binding?.cbi_id || "";
   const runtimeSignal = bindingId ? runtime.signalStateById.get(bindingId) : null;
-  const aspect = String(runtimeSignal?.aspect || "STOP").toUpperCase();
-  const color = aspect === "PROCEED" ? "#54f27b" : "#ff655b";
+  const aspect = normalizeSignalAspect(runtimeSignal?.aspect);
 
   group.appendChild(
     createSvgElement("line", {
@@ -540,16 +716,7 @@ function renderSignal(group, element, runtime) {
       class: "dispatcher-signal-arm",
     }),
   );
-  group.appendChild(
-    createSvgElement("circle", {
-      cx: arm,
-      cy: 0,
-      r: headRadius,
-      fill: color,
-      stroke: color,
-      filter: "url(#dispatcherGlow)",
-    }),
-  );
+  group.appendChild(buildSignalHead(arm, 0, headRadius, aspect));
   if (bindingId) {
     const label = createSvgElement("text", {
       x: arm + labelOffset,
@@ -560,6 +727,69 @@ function renderSignal(group, element, runtime) {
     label.textContent = bindingId;
     group.appendChild(label);
   }
+}
+
+function normalizeSignalAspect(value) {
+  const token = String(value || "").trim().toUpperCase();
+  return SIGNAL_ASPECTS.has(token) ? token : "RED";
+}
+
+function buildSignalHead(cx, cy, radius, aspect) {
+  const activeLamps = new Set(signalAspectLamps(aspect));
+  const lampRadius = Math.max(3.2, radius * 0.62);
+  const spacing = Math.max(7.5, radius * 1.75);
+  const housingPadding = 3.2;
+  const housingWidth = lampRadius * 2 + housingPadding * 2;
+  const housingHeight = spacing * 2 + lampRadius * 2 + housingPadding * 2;
+  const head = createSvgElement("g", {
+    class: `dispatcher-signal-head aspect-${aspect.toLowerCase().replace(/_/g, "-")}`,
+    "data-aspect": aspect,
+    filter: "url(#dispatcherGlow)",
+  });
+  head.appendChild(
+    createSvgElement("rect", {
+      x: cx - housingWidth / 2,
+      y: cy - housingHeight / 2,
+      width: housingWidth,
+      height: housingHeight,
+      rx: housingWidth / 2,
+      ry: housingWidth / 2,
+      class: "dispatcher-signal-housing",
+    }),
+  );
+  [
+    { lamp: "RED", y: cy - spacing },
+    { lamp: activeLamps.has("GREEN") ? "GREEN" : "YELLOW", y: cy },
+    { lamp: "BLUE", y: cy + spacing },
+  ].forEach((slot) => {
+    head.appendChild(buildSignalLamp(cx, slot.y, lampRadius, slot.lamp, activeLamps.has(slot.lamp)));
+  });
+  const title = createSvgElement("title");
+  title.textContent = aspect;
+  head.appendChild(title);
+  return head;
+}
+
+function buildSignalLamp(cx, cy, radius, lamp, active) {
+  const color = SIGNAL_ASPECT_COLORS[lamp] || SIGNAL_ASPECT_COLORS.RED;
+  return createSvgElement("circle", {
+    cx,
+    cy,
+    r: radius,
+    fill: active ? color : undefined,
+    stroke: active ? color : undefined,
+    class: `dispatcher-signal-lamp lamp-${lamp.toLowerCase()}${active ? " active" : " inactive"}`,
+  });
+}
+
+function signalAspectLamps(aspect) {
+  if (aspect === "YELLOW_BLUE") {
+    return ["YELLOW", "BLUE"];
+  }
+  if (aspect === "GREEN_BLUE") {
+    return ["GREEN", "BLUE"];
+  }
+  return [aspect];
 }
 
 function renderPoint(group, element, runtime, options) {
@@ -797,16 +1027,16 @@ function createTickMarks(points, width, color = "rgba(245, 247, 251, 0.9)") {
     if (!marker) {
       return;
     }
-      group.appendChild(
-        createSvgElement("line", {
-          x1: marker.point.x - marker.normal.x * (width * 1.6),
-          y1: marker.point.y - marker.normal.y * (width * 1.6),
-          x2: marker.point.x + marker.normal.x * (width * 1.6),
-          y2: marker.point.y + marker.normal.y * (width * 1.6),
-          stroke: color,
-        }),
-      );
-    });
+    group.appendChild(
+      createSvgElement("line", {
+        x1: marker.point.x - marker.normal.x * (width * 1.6),
+        y1: marker.point.y - marker.normal.y * (width * 1.6),
+        x2: marker.point.x + marker.normal.x * (width * 1.6),
+        y2: marker.point.y + marker.normal.y * (width * 1.6),
+        stroke: color,
+      }),
+    );
+  });
   return group.childNodes.length ? group : null;
 }
 

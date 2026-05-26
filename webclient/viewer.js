@@ -1,4 +1,4 @@
-import { normalizeRuntimeState, renderDispatcherBoard } from "/dispatcher-core.js";
+import { createBoardCamera, normalizeRuntimeState, renderDispatcherBoard } from "/dispatcher-core.js";
 
 const board = document.getElementById("dispatcherBoard");
 const boardFrame = document.querySelector(".board-frame");
@@ -21,16 +21,17 @@ const routePointsText = document.getElementById("routePointsText");
 const setRouteBtn = document.getElementById("setRouteBtn");
 const cancelRoutesBtn = document.getElementById("cancelRoutesBtn");
 const commandStatusText = document.getElementById("commandStatusText");
+const fitBoardBtn = document.getElementById("fitBoardBtn");
+const zoomInBtn = document.getElementById("zoomInBtn");
+const zoomOutBtn = document.getElementById("zoomOutBtn");
 
 let latestRuntime = normalizeRuntimeState({});
 let latestDispatcherView = latestRuntime.dispatcherView;
 let showDebug = false;
 let showRoutes = true;
 let runtimeLive = false;
-let boardZoom = 1;
-let isBoardDragging = false;
-let dragStartX = 0;
-let dragStartScrollLeft = 0;
+const boardCamera = createBoardCamera(board, boardFrame, { minScale: 0.45, maxScale: 4 });
+let lastLayoutSignature = "";
 
 function setCommandStatus(text, kind = "") {
   if (!commandStatusText) {
@@ -169,66 +170,48 @@ function updateCommandControls(runtime) {
   }
 }
 
-function applyBoardZoom() {
-  if (!board) {
-    return;
-  }
-  board.style.transform = `scale(${boardZoom})`;
-}
-
-function zoomBoardFromWheel(event) {
-  if (!boardFrame) {
-    return;
-  }
-  event.preventDefault();
-  const previousZoom = boardZoom;
-  const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
-  boardZoom = Math.min(3, Math.max(0.35, boardZoom * factor));
-  if (boardZoom === previousZoom) {
-    return;
-  }
-  applyBoardZoom();
-}
-
 function isInteractiveBoardTarget(target) {
   return Boolean(target?.closest?.("button, input, select, textarea, a, label"));
 }
 
-function beginBoardDrag(event) {
-  if (!boardFrame || event.button !== 0 || isInteractiveBoardTarget(event.target)) {
+function beginBoardPan(event) {
+  if (!boardFrame || isInteractiveBoardTarget(event.target)) {
     return;
   }
-  isBoardDragging = true;
-  dragStartX = event.clientX;
-  dragStartScrollLeft = boardFrame.scrollLeft;
-  boardFrame.classList.add("is-dragging");
-  event.preventDefault();
+  if (boardCamera.beginPan(event)) {
+    boardFrame.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  }
 }
 
-function dragBoard(event) {
-  if (!boardFrame || !isBoardDragging) {
-    return;
+function panBoard(event) {
+  if (boardCamera.pan(event)) {
+    event.preventDefault();
   }
-  const deltaX = event.clientX - dragStartX;
-  boardFrame.scrollLeft = dragStartScrollLeft - deltaX;
-  event.preventDefault();
 }
 
-function endBoardDrag() {
-  if (!boardFrame || !isBoardDragging) {
-    return;
+function endBoardPan(event) {
+  if (boardCamera.endPan(event)) {
+    event.preventDefault();
   }
-  isBoardDragging = false;
-  boardFrame.classList.remove("is-dragging");
 }
 
 function repaint() {
+  const previousSignature = lastLayoutSignature;
   renderDispatcherBoard(board, latestDispatcherView, latestRuntime, {
     showDebug,
     showRoutes,
     showTrains: false,
     emptyStateText: "No dispatcher schematic. Open /dispatcher/editor to create one.",
   });
+  const canvas = latestDispatcherView.canvas;
+  lastLayoutSignature = `${canvas.width}x${canvas.height}:${latestDispatcherView.elements.length}`;
+  boardCamera.setCanvas(canvas);
+  if (lastLayoutSignature !== previousSignature) {
+    boardCamera.fit();
+  } else {
+    boardCamera.apply();
+  }
   updateMeta({
     ...latestRuntime,
     dispatcherView: latestDispatcherView,
@@ -375,14 +358,23 @@ toggleRoutesBtn?.addEventListener("click", () => {
 routeSelect?.addEventListener("change", () => updateCommandControls(latestRuntime));
 setRouteBtn?.addEventListener("click", submitSetRoute);
 cancelRoutesBtn?.addEventListener("click", submitCancelRoutes);
-boardFrame?.addEventListener("wheel", zoomBoardFromWheel, { passive: false });
-boardFrame?.addEventListener("mousedown", beginBoardDrag);
-boardFrame?.addEventListener("mousemove", dragBoard);
-boardFrame?.addEventListener("mouseup", endBoardDrag);
-boardFrame?.addEventListener("mouseleave", endBoardDrag);
+boardFrame?.addEventListener("wheel", (event) => boardCamera.wheel(event), { passive: false });
+boardFrame?.addEventListener("pointerdown", beginBoardPan);
+boardFrame?.addEventListener("pointermove", panBoard);
+boardFrame?.addEventListener("pointerup", endBoardPan);
+boardFrame?.addEventListener("pointercancel", endBoardPan);
+fitBoardBtn?.addEventListener("click", () => boardCamera.fit());
+zoomInBtn?.addEventListener("click", () => {
+  const rect = boardFrame.getBoundingClientRect();
+  boardCamera.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 1.2);
+});
+zoomOutBtn?.addEventListener("click", () => {
+  const rect = boardFrame.getBoundingClientRect();
+  boardCamera.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 1 / 1.2);
+});
+window.addEventListener("resize", () => boardCamera.apply());
 
 tickClock();
-applyBoardZoom();
 setInterval(tickClock, 1000);
 loadRuntimeState();
 setInterval(loadRuntimeState, 1000);

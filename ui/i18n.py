@@ -160,6 +160,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Signal",
         "vi": "Tín hiệu",
     },
+    "interlocking_table.header.signal_aspect": {
+        "en": "Signal Aspect",
+        "vi": "Signal Aspect",
+    },
     "interlocking_table.header.point": {
         "en": "Point",
         "vi": "Ghi",
@@ -171,6 +175,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "interlocking_table.header.reverse": {
         "en": "Reverse",
         "vi": "Reverse",
+    },
+    "interlocking_table.header.reverse_route": {
+        "en": "Reverse Route",
+        "vi": "Reverse Route",
+    },
+    "interlocking_table.header.calling_on_route": {
+        "en": "Calling-on Route",
+        "vi": "Calling-on Route",
     },
     "interlocking_table.header.opposing_signal": {
         "en": "Opposing Signal",
@@ -272,6 +284,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Aspect",
         "vi": "Chỉ thị",
     },
+    "field.blocking_signal": {
+        "en": "Blocking Signal",
+        "vi": "Blocking Signal",
+    },
     "field.text": {
         "en": "Text",
         "vi": "Nội dung",
@@ -279,6 +295,34 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "field.font_size": {
         "en": "Font size",
         "vi": "Cỡ chữ",
+    },
+    "field.color": {
+        "en": "Color",
+        "vi": "Color",
+    },
+    "field.width": {
+        "en": "Width",
+        "vi": "Width",
+    },
+    "field.height": {
+        "en": "Height",
+        "vi": "Height",
+    },
+    "field.start_x": {
+        "en": "Start X",
+        "vi": "Start X",
+    },
+    "field.start_y": {
+        "en": "Start Y",
+        "vi": "Start Y",
+    },
+    "field.end_x": {
+        "en": "End X",
+        "vi": "End X",
+    },
+    "field.end_y": {
+        "en": "End Y",
+        "vi": "End Y",
     },
     "field.element_id_placeholder": {
         "en": "Element ID",
@@ -356,6 +400,22 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "PROCEED",
         "vi": "ĐI",
     },
+    "signal_aspect.red": {
+        "en": "RED",
+        "vi": "RED",
+    },
+    "signal_aspect.yellow": {
+        "en": "YELLOW",
+        "vi": "YELLOW",
+    },
+    "signal_aspect.green": {
+        "en": "GREEN",
+        "vi": "GREEN",
+    },
+    "signal_aspect.blue": {
+        "en": "BLUE",
+        "vi": "BLUE",
+    },
     "palette.components": {
         "en": "Components",
         "vi": "Thành phần",
@@ -383,6 +443,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "palette.add_label": {
         "en": "Add text label",
         "vi": "Thêm nhãn chữ",
+    },
+    "palette.add_line": {
+        "en": "Add line",
+        "vi": "Add line",
     },
     "properties.title": {
         "en": "Properties",
@@ -415,6 +479,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "dialog.cannot_add_label.title": {
         "en": "Cannot add text label",
         "vi": "Không thể thêm nhãn chữ",
+    },
+    "dialog.cannot_add_line.title": {
+        "en": "Cannot add line",
+        "vi": "Cannot add line",
     },
     "dialog.property_update_failed.title": {
         "en": "Property update failed",
@@ -567,6 +635,18 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "status.label_added": {
         "en": "Added text label",
         "vi": "Đã thêm nhãn chữ",
+    },
+    "status.line_added": {
+        "en": "Added line",
+        "vi": "Added line",
+    },
+    "status.label_tool_active": {
+        "en": "Text label tool active",
+        "vi": "Text label tool active",
+    },
+    "status.line_tool_active": {
+        "en": "Line tool active",
+        "vi": "Line tool active",
     },
     "status.simulation_stopped_workspace": {
         "en": "Simulation stopped after leaving Simulation workspace.",
@@ -787,6 +867,18 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "canvas.message.connect_mode_off": {
         "en": "Connect mode OFF",
         "vi": "Tắt chế độ nối",
+    },
+    "canvas.message.annotation_text_mode": {
+        "en": "Text label mode: click the canvas to place a label. Press Esc to cancel.",
+        "vi": "Text label mode: click the canvas to place a label. Press Esc to cancel.",
+    },
+    "canvas.message.annotation_line_mode_start": {
+        "en": "Line mode: click the start point. Press Esc to cancel.",
+        "vi": "Line mode: click the start point. Press Esc to cancel.",
+    },
+    "canvas.message.annotation_line_mode_end": {
+        "en": "Line mode: click the end point.",
+        "vi": "Line mode: click the end point.",
     },
     "canvas.message.manual_free_removed_trains": {
         "en": "Manual FREE on {section_id}: removed train(s) {train_ids} from simulation state.",

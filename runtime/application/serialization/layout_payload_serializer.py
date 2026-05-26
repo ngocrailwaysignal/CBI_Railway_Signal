@@ -6,6 +6,7 @@ import hashlib
 import json
 from copy import deepcopy
 
+from core.domain.model.elements import SignalAspect
 from core.domain.model.topology import RailwayTopology
 
 
@@ -16,9 +17,12 @@ def build_layout_payload(topology: RailwayTopology) -> dict:
         "points": [],
         "signals": [],
         "labels": [],
+        "annotation_lines": [],
         "edges": [],
         "signal_links": [],
         "clearance_conflict_groups": [],
+        "route_types": {},
+        "route_signal_aspects": {},
         "ui_positions": {},
         "dispatcher_view": deepcopy(getattr(topology, "dispatcher_view", {})),
     }
@@ -61,14 +65,18 @@ def build_layout_payload(topology: RailwayTopology) -> dict:
             )
 
     for signal in topology.signals.values():
+        signal_aspect = signal.aspect
+        if getattr(signal, "is_blocking", False):
+            signal_aspect = SignalAspect.RED
         payload["signals"].append(
             {
                 "id": signal.id,
-                "aspect": signal.aspect.value,
+                "aspect": signal_aspect.value,
                 "direction": signal.direction.value,
                 "protects": signal.protects,
                 "approach_section": signal.approach_section,
                 "route_id": signal.route_id,
+                "is_blocking": bool(getattr(signal, "is_blocking", False)),
             }
         )
 
@@ -78,6 +86,20 @@ def build_layout_payload(topology: RailwayTopology) -> dict:
                 "id": label.id,
                 "text": label.text,
                 "font_size": float(label.font_size),
+                "color": getattr(label, "color", "#111111"),
+                "width": float(getattr(label, "width", 120.0)),
+                "height": float(getattr(label, "height", 48.0)),
+            }
+        )
+
+    for line in getattr(topology, "annotation_lines", {}).values():
+        payload["annotation_lines"].append(
+            {
+                "id": line.id,
+                "start": [float(line.start[0]), float(line.start[1])],
+                "end": [float(line.end[0]), float(line.end[1])],
+                "color": line.color,
+                "width": float(line.width),
             }
         )
 
@@ -99,6 +121,11 @@ def build_layout_payload(topology: RailwayTopology) -> dict:
     ]
     payload["ui_positions"] = {
         key: [float(value[0]), float(value[1])] for key, value in topology.ui_positions.items()
+    }
+    payload["route_types"] = dict(sorted(getattr(topology, "route_types", {}).items()))
+    payload["route_signal_aspects"] = {
+        route_key: aspect.value
+        for route_key, aspect in sorted(getattr(topology, "route_signal_aspects", {}).items())
     }
     return payload
 

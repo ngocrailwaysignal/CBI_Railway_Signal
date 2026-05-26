@@ -111,13 +111,6 @@
       "occupied": false,
       "locked_by": null,
       "length": 100.0
-    },
-    {
-      "id": "T0503",
-      "kind": "track",
-      "occupied": false,
-      "locked_by": null,
-      "length": 100.0
     }
   ],
   "points": [
@@ -143,7 +136,7 @@
     },
     {
       "id": "P0106",
-      "position": "NORMAL",
+      "position": "REVERSE",
       "symbol_orientation": "RIGHT",
       "locked_by": null,
       "facing_connections": {
@@ -153,7 +146,7 @@
     },
     {
       "id": "P0104",
-      "position": "NORMAL",
+      "position": "REVERSE",
       "symbol_orientation": "LEFT",
       "locked_by": null,
       "facing_connections": {
@@ -166,18 +159,20 @@
     {
       "id": "Z0103",
       "aspect": "STOP",
-      "direction": "RIGHT",
+      "direction": "LEFT",
       "protects": "T0102",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": true
     },
     {
       "id": "Z0101",
       "aspect": "STOP",
-      "direction": "RIGHT",
+      "direction": "LEFT",
       "protects": "T0101",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": true
     },
     {
       "id": "X0106",
@@ -185,7 +180,8 @@
       "direction": "RIGHT",
       "protects": "P0108",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     },
     {
       "id": "X0104",
@@ -193,7 +189,8 @@
       "direction": "RIGHT",
       "protects": "P0106",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     },
     {
       "id": "XQD201",
@@ -201,7 +198,8 @@
       "direction": "RIGHT",
       "protects": "T0205",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     },
     {
       "id": "SC0203",
@@ -209,7 +207,8 @@
       "direction": "LEFT",
       "protects": "T0108",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     },
     {
       "id": "S0102",
@@ -217,7 +216,8 @@
       "direction": "LEFT",
       "protects": "T0106",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     },
     {
       "id": "XC0204",
@@ -225,7 +225,8 @@
       "direction": "RIGHT",
       "protects": "T0207",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     },
     {
       "id": "SQ0202",
@@ -233,15 +234,17 @@
       "direction": "LEFT",
       "protects": "T0206",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     },
     {
       "id": "ZF0503",
       "aspect": "STOP",
-      "direction": "LEFT",
-      "protects": "T0503",
+      "direction": "RIGHT",
+      "protects": "T0208",
       "approach_section": "",
-      "route_id": null
+      "route_id": null,
+      "is_blocking": false
     }
   ],
   "labels": [],
@@ -261,6 +264,10 @@
     [
       "S8",
       "P0106"
+    ],
+    [
+      "T0206",
+      "T0204"
     ],
     [
       "P0108",
@@ -285,14 +292,6 @@
     [
       "P0104",
       "T0106"
-    ],
-    [
-      "T0206",
-      "T0204"
-    ],
-    [
-      "T0503",
-      "T0207"
     ]
   ],
   "signal_links": [
@@ -349,11 +348,20 @@
       "XQD201"
     ],
     [
+      "T0206",
+      "ZF0503"
+    ],
+    [
       "T0208",
       "SQ0202"
     ]
   ],
   "clearance_conflict_groups": [],
+  "route_types": {
+    "S0102->Z0101": "CALLING_ON",
+    "S0102->Z0103": "CALLING_ON",
+    "X0106->ZF0503": "REVERSE"
+  },
   "ui_positions": {
     "T0102": [
       -775.0,
@@ -407,6 +415,18 @@
       475.0,
       -125.0
     ],
+    "T0207": [
+      725.0,
+      -125.0
+    ],
+    "T0206": [
+      575.0,
+      -450.0
+    ],
+    "T0208": [
+      800.0,
+      -450.0
+    ],
     "P0108": [
       -375.0,
       -450.0
@@ -433,7 +453,7 @@
     ],
     "X0106": [
       -475.0,
-      -525.0
+      -350.0
     ],
     "X0104": [
       -475.0,
@@ -455,29 +475,13 @@
       600.0,
       -50.0
     ],
-    "T0207": [
-      725.0,
-      -125.0
-    ],
-    "T0206": [
-      575.0,
-      -450.0
-    ],
     "SQ0202": [
       700.0,
       -525.0
     ],
-    "T0208": [
-      800.0,
-      -450.0
-    ],
-    "T0503": [
-      900.0,
-      -125.0
-    ],
     "ZF0503": [
-      1000.0,
-      -50.0
+      675.0,
+      -375.0
     ]
   },
   "dispatcher_view": {}

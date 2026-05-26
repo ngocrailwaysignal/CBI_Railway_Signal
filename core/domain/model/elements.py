@@ -25,8 +25,33 @@ class PointSymbolOrientation(StrEnum):
 class SignalAspect(StrEnum):
     """Signal aspect state."""
 
-    STOP = "STOP"
-    PROCEED = "PROCEED"
+    RED = "RED"
+    YELLOW = "YELLOW"
+    GREEN = "GREEN"
+    BLUE = "BLUE"
+    YELLOW_BLUE = "YELLOW_BLUE"
+    GREEN_BLUE = "GREEN_BLUE"
+    STOP = "RED"
+    PROCEED = "GREEN"
+
+    @classmethod
+    def _missing_(cls, value: object) -> SignalAspect | None:
+        token = str(value or "").strip().upper().replace("-", "_").replace(" ", "_")
+        legacy = {
+            "STOP": cls.RED,
+            "PROCEED": cls.GREEN,
+            "BLUE_YELLOW": cls.YELLOW_BLUE,
+            "BLUE_GREEN": cls.GREEN_BLUE,
+        }
+        return legacy.get(token)
+
+
+def normalize_signal_aspect(value: object, default: SignalAspect = SignalAspect.RED) -> SignalAspect:
+    """Normalize persisted/user aspect values, including legacy STOP/PROCEED tokens."""
+    try:
+        return SignalAspect(value)
+    except ValueError:
+        return default
 
 
 class SignalDirection(StrEnum):
@@ -64,14 +89,15 @@ class Point:
 
 @dataclass(slots=True)
 class Signal:
-    """A lineside signal that protects a section."""
+    """A lineside signal that protects a section or configured route."""
 
     id: str
-    aspect: SignalAspect = SignalAspect.STOP
+    aspect: SignalAspect = SignalAspect.RED
     direction: SignalDirection = SignalDirection.RIGHT
     protects: str = ""
     approach_section: str = ""
     route_id: str | None = None
+    is_blocking: bool = False
 
 
 @dataclass(slots=True)
@@ -81,7 +107,21 @@ class DisplayLabel:
     id: str
     text: str = "LABEL"
     font_size: float = 18.0
+    color: str = "#111111"
+    width: float = 120.0
+    height: float = 48.0
+
+
+@dataclass(slots=True)
+class DisplayLine:
+    """A visual one-way arrow line placed on the design layout."""
+
+    id: str
+    start: tuple[float, float] = (0.0, 0.0)
+    end: tuple[float, float] = (120.0, 0.0)
+    color: str = "#111111"
+    width: float = 2.0
 
 
 RailElement = TrackSection | ApproachSection | Point | Signal
-LayoutElement = RailElement | DisplayLabel
+LayoutElement = RailElement | DisplayLabel | DisplayLine

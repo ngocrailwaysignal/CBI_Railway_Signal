@@ -84,7 +84,7 @@ class LockingEngine:
                 route.full_path,
                 all_points,
                 monitored_flank_sections=route.monitored_flank_sections,
-                allow_occupied_sections=[route.path[0]] if route.path else None,
+                allow_occupied_sections=self._allow_occupied_sections(route),
             )
             if not ok:
                 raise ValueError(f"Cannot lock route: {reason}")
@@ -111,7 +111,11 @@ class LockingEngine:
 
             entry_signal = self.topology.signals[route.entry_signal_id]
             entry_signal.route_id = route.id
-            entry_signal.aspect = SignalAspect.PROCEED
+            entry_signal.aspect = (
+                SignalAspect.RED
+                if entry_signal.is_blocking
+                else route.signal_aspect
+            )
             self._transition_route_state(route, RouteLifecycleState.CLEARED_REVERSIBLE)
             self.active_routes[route.id] = route
             route.approach_locking_section = self._resolve_route_approach_section(route)
@@ -122,6 +126,15 @@ class LockingEngine:
             )
             self._initialize_sequence_locking_state(route)
             self._clear_pending_timed_release(route.id)
+
+    def _allow_occupied_sections(self, route: Route) -> list[str]:
+        if route.is_calling_on:
+            return [
+                node_id
+                for node_id in route.full_path
+                if isinstance(self.topology.get_element(node_id), TrackSection)
+            ]
+        return [route.path[0]] if route.path else []
 
     def set_point_position(self, point_id: str, new_position: PointPosition) -> None:
         """Move a point only if not locked."""
@@ -180,12 +193,24 @@ class LockingEngine:
         with self._lock:
             section = self.topology.get_element(section_id)
             if isinstance(section, TrackSection):
-                if section.occupied and not allow_preoccupied:
+                if section.locked_by and section.locked_by != route_id:
+                    raise RuntimeError(
+                        f"Unsafe move: section {section.id} locked by {section.locked_by}"
+                    )
+                if (
+                    section.occupied
+                    and not allow_preoccupied
+                    and not self._can_calling_on_enter_preoccupied(route_id, section_id)
+                ):
                     raise RuntimeError(f"Unsafe move: section {section.id} already occupied")
                 if not section.occupied:
                     section.occupied = True
             self.notify_train_entered(route_id, section_id)
             self._cleanup_route_if_complete(route_id)
+
+    def _can_calling_on_enter_preoccupied(self, route_id: str, section_id: str) -> bool:
+        route = self.active_routes.get(route_id)
+        return bool(route is not None and route.is_calling_on and section_id in route.full_path)
 
     def vacate_train_section(self, route_id: str, section_id: str) -> None:
         """Mark one train section vacate via runtime mutator."""
@@ -254,6 +279,8 @@ class LockingEngine:
             route = self.active_routes.get(route_id)
             if route is None:
                 return
+            if route.lifecycle_state == RouteLifecycleState.RELEASING:
+                return
             self._mark_sequence_section_occupied(route_id, node_id)
             if route.approach_locking_section and node_id == route.approach_locking_section:
                 self.approach_locking.mark_approach_locked(route_id)
@@ -261,7 +288,7 @@ class LockingEngine:
                     self._transition_route_state(route, RouteLifecycleState.APPROACH_LOCKED)
             if node_id == route.path[0]:
                 entry_signal = self.topology.signals[route.entry_signal_id]
-                entry_signal.aspect = SignalAspect.STOP
+                entry_signal.aspect = SignalAspect.RED
                 self.approach_locking.mark_approach_locked(route_id)
                 self._transition_route_state(route, RouteLifecycleState.TRAIN_IN_ROUTE)
 
@@ -277,7 +304,7 @@ class LockingEngine:
     def force_all_signals_stop(self) -> None:
         """Force fail-safe STOP on every signal."""
         for signal in self.topology.signals.values():
-            signal.aspect = SignalAspect.STOP
+            signal.aspect = SignalAspect.RED
             signal.route_id = None
 
     def update_time_locking(self) -> None:
@@ -350,6 +377,16 @@ class LockingEngine:
         destination_section = body_track_sections[-1]
         destination = self.topology.get_element(destination_section)
         destination_occupied = isinstance(destination, TrackSection) and bool(destination.occupied)
+        destination_seen_by_route = self._sequence_locking.has_seen_occupied(
+            route_id,
+            destination_section,
+        )
+        if destination_occupied and not destination_seen_by_route:
+            # Calling-on routes may be locked into an already occupied destination
+            # section. That pre-existing occupancy is not proof that this route's
+            # train has arrived, so do not begin release until route movement
+            # records destination occupancy.
+            return
         if (
             isinstance(destination, TrackSection)
             and destination.locked_by == route_id
@@ -412,7 +449,7 @@ class LockingEngine:
 
         for signal in self.topology.signals.values():
             if signal.route_id == route_id:
-                signal.aspect = SignalAspect.STOP
+                signal.aspect = SignalAspect.RED
                 signal.route_id = None
 
         if (

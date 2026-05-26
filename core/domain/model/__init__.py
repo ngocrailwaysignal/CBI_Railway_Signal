@@ -3,6 +3,7 @@
 from .elements import (
     ApproachSection,
     DisplayLabel,
+    DisplayLine,
     LayoutElement,
     Point,
     PointPosition,
@@ -12,6 +13,7 @@ from .elements import (
     SignalAspect,
     SignalDirection,
     TrackSection,
+    normalize_signal_aspect,
 )
 from .route import Route
 from .topology import RailwayTopology
@@ -20,6 +22,7 @@ from .train import Train
 __all__ = [
     "ApproachSection",
     "DisplayLabel",
+    "DisplayLine",
     "LayoutElement",
     "Point",
     "PointPosition",
@@ -30,6 +33,7 @@ __all__ = [
     "SignalAspect",
     "SignalDirection",
     "TrackSection",
+    "normalize_signal_aspect",
     "RailwayTopology",
     "Train",
 ]
