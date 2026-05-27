@@ -53,9 +53,7 @@ class SafetyMonitor:
             if signal.is_blocking and signal.aspect != SignalAspect.RED:
                 issues.append(f"Blocking signal {signal.id} must remain RED")
             if signal.aspect != SignalAspect.RED and not signal.route_id:
-                issues.append(
-                    f"Signal {signal.id} is {signal.aspect.value} without a locked route"
-                )
+                issues.append(f"Signal {signal.id} is {signal.aspect.value} without a locked route")
 
         for node_id in topology.graph.nodes:
             element = topology.graph.nodes[node_id]["element"]

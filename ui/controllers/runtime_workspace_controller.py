@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
+from config import DEFAULT_APP_CONFIG
 from core.domain.model.topology import RailwayTopology
 from integration.smartio_adapter import (
     SmartIOProtocolError,
@@ -51,11 +52,14 @@ class SmartIORuntimeCoordinator(QObject):
         self._last_command_result_at: float | None = None
         self._last_runtime_event_seq: int = 0
         self._health_timer = QTimer(self)
-        self._health_timer.setInterval(1000)
+        self._health_timer.setInterval(DEFAULT_APP_CONFIG.webclient.runtime_publish_interval_ms)
         self._health_timer.timeout.connect(self._emit_runtime_health)
         self._heartbeat_timer = QTimer(self)
         self._heartbeat_timer.setInterval(
-            max(1000, int(float(self._profile.smart_io_snapshot_heartbeat_seconds) * 1000.0))
+            max(
+                DEFAULT_APP_CONFIG.webclient.runtime_publish_interval_ms,
+                int(float(self._profile.smart_io_snapshot_heartbeat_seconds) * 1000.0),
+            )
         )
         self._heartbeat_timer.timeout.connect(self.publish_runtime_snapshot)
         self._initialize_client(parent)
@@ -78,7 +82,14 @@ class SmartIORuntimeCoordinator(QObject):
         health = self._runtime_workspace_service.runtime_health()
         now = time.time()
         stale_after = max(
-            1.0, float(getattr(self._profile, "smart_io_runtime_stale_seconds", 15.0))
+            1.0,
+            float(
+                getattr(
+                    self._profile,
+                    "smart_io_runtime_stale_seconds",
+                    DEFAULT_APP_CONFIG.smartio.runtime_stale_seconds,
+                )
+            ),
         )
         snapshot_age = (
             max(0.0, now - self._last_snapshot_published_at)
@@ -125,7 +136,11 @@ class SmartIORuntimeCoordinator(QObject):
         return host in {"127.0.0.1", "localhost"}
 
     def _should_keep_connection_for_mode(self, mode: AppMode) -> bool:
-        return bool(str(self._ws_url or "").strip())
+        if not str(self._ws_url or "").strip():
+            return False
+        if mode is AppMode.RUNTIME:
+            return True
+        return mode is AppMode.SIMULATION and self._is_local_endpoint()
 
     def _can_publish_snapshot_for_mode(self, mode: AppMode) -> bool:
         return self._should_keep_connection_for_mode(mode)
@@ -142,9 +157,19 @@ class SmartIORuntimeCoordinator(QObject):
             return
         self._smartio_client = SmartIOWebSocketClient(
             ws_url=ws_url,
-            reconnect_enabled=bool(getattr(self._profile, "smart_io_reconnect_enabled", True)),
+            reconnect_enabled=bool(
+                getattr(
+                    self._profile,
+                    "smart_io_reconnect_enabled",
+                    DEFAULT_APP_CONFIG.smartio.reconnect_enabled,
+                )
+            ),
             reconnect_max_seconds=float(
-                getattr(self._profile, "smart_io_reconnect_max_seconds", 30.0)
+                getattr(
+                    self._profile,
+                    "smart_io_reconnect_max_seconds",
+                    DEFAULT_APP_CONFIG.smartio.reconnect_max_seconds,
+                )
             ),
             parent=parent,
         )
@@ -157,12 +182,12 @@ class SmartIORuntimeCoordinator(QObject):
         normalized_url = str(ws_url).strip()
         if normalized_url == self._ws_url:
             return
-        should_reconnect = bool(normalized_url)
         self.disconnect()
         if self._smartio_client is not None:
             self._smartio_client.deleteLater()
         self._smartio_client = None
         self._ws_url = normalized_url
+        should_reconnect = self._should_keep_connection_for_mode(self._operating_mode_provider())
         self._last_transport_message_at = None
         self._last_command_result_at = None
         self._last_snapshot_published_at = None

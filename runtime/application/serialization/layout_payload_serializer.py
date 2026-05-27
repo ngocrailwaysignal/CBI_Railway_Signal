@@ -77,6 +77,7 @@ def build_layout_payload(topology: RailwayTopology) -> dict:
                 "approach_section": signal.approach_section,
                 "route_id": signal.route_id,
                 "is_blocking": bool(getattr(signal, "is_blocking", False)),
+                "is_reverse_signal": bool(getattr(signal, "is_reverse_signal", False)),
             }
         )
 

@@ -111,6 +111,139 @@
       "occupied": false,
       "locked_by": null,
       "length": 100.0
+    },
+    {
+      "id": "T0301",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0302",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0304",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0306",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0308",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0303",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0305",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0307",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0401",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0403",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0402",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0404",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0405",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0406",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0407",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0408",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0501",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0502",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0503",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
     }
   ],
   "points": [
@@ -193,15 +326,6 @@
       "is_blocking": false
     },
     {
-      "id": "XQD201",
-      "aspect": "RED",
-      "direction": "RIGHT",
-      "protects": "T0205",
-      "approach_section": "",
-      "route_id": null,
-      "is_blocking": false
-    },
-    {
       "id": "SC0203",
       "aspect": "RED",
       "direction": "LEFT",
@@ -238,17 +362,245 @@
       "is_blocking": false
     },
     {
-      "id": "ZF0503",
+      "id": "XQ0301",
       "aspect": "RED",
       "direction": "RIGHT",
-      "protects": "T0208",
+      "protects": "T0303",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "XQ0201",
+      "aspect": "RED",
+      "direction": "RIGHT",
+      "protects": "T0205",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "SC0303",
+      "aspect": "RED",
+      "direction": "LEFT",
+      "protects": "T0302",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "SQ0302",
+      "aspect": "RED",
+      "direction": "LEFT",
+      "protects": "T0306",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "XC0304",
+      "aspect": "RED",
+      "direction": "RIGHT",
+      "protects": "T0307",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "SC0403",
+      "aspect": "RED",
+      "direction": "LEFT",
+      "protects": "T0402",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "XQ0401",
+      "aspect": "RED",
+      "direction": "RIGHT",
+      "protects": "T0405",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "SQ0402",
+      "aspect": "RED",
+      "direction": "LEFT",
+      "protects": "T0406",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "XC0404",
+      "aspect": "RED",
+      "direction": "RIGHT",
+      "protects": "T0407",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "XQ0501",
+      "aspect": "RED",
+      "direction": "RIGHT",
+      "protects": "",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "SC0505",
+      "aspect": "RED",
+      "direction": "RIGHT",
+      "protects": "",
       "approach_section": "",
       "route_id": null,
       "is_blocking": false
     }
   ],
-  "labels": [],
-  "annotation_lines": [],
+  "labels": [
+    {
+      "id": "LBL1",
+      "text": "Ga C\u00e1t Linh 01",
+      "font_size": 36.0,
+      "color": "#111111",
+      "width": 425.0,
+      "height": 150.0
+    },
+    {
+      "id": "LBL2",
+      "text": "Ga La Thanh 02",
+      "font_size": 36.0,
+      "color": "#111111",
+      "width": 550.0,
+      "height": 200.0
+    },
+    {
+      "id": "LBL3",
+      "text": "GA Th\u00e1i H\u00e0 03",
+      "font_size": 36.0,
+      "color": "#111111",
+      "width": 500.0,
+      "height": 150.0
+    },
+    {
+      "id": "LBL4",
+      "text": "Ga L\u00e1ng 04",
+      "font_size": 36.0,
+      "color": "#111111",
+      "width": 650.0,
+      "height": 150.0
+    }
+  ],
+  "annotation_lines": [
+    {
+      "id": "LINE1",
+      "start": [
+        -2550.0,
+        -375.0
+      ],
+      "end": [
+        -2825.0,
+        -375.0
+      ],
+      "color": "#111111",
+      "width": 2.0
+    },
+    {
+      "id": "LINE2",
+      "start": [
+        -2825.0,
+        175.0
+      ],
+      "end": [
+        -2575.0,
+        175.0
+      ],
+      "color": "#111111",
+      "width": 2.0
+    },
+    {
+      "id": "LINE3",
+      "start": [
+        -1450.0,
+        -375.0
+      ],
+      "end": [
+        -1850.0,
+        -375.0
+      ],
+      "color": "#111111",
+      "width": 2.0
+    },
+    {
+      "id": "LINE4",
+      "start": [
+        -1900.0,
+        175.0
+      ],
+      "end": [
+        -1500.0,
+        175.0
+      ],
+      "color": "#111111",
+      "width": 2.0
+    },
+    {
+      "id": "LINE5",
+      "start": [
+        -700.0,
+        -375.0
+      ],
+      "end": [
+        -1025.0,
+        -375.0
+      ],
+      "color": "#111111",
+      "width": 2.0
+    },
+    {
+      "id": "LINE6",
+      "start": [
+        -1075.0,
+        175.0
+      ],
+      "end": [
+        -725.0,
+        175.0
+      ],
+      "color": "#111111",
+      "width": 2.0
+    },
+    {
+      "id": "LINE7",
+      "start": [
+        225.0,
+        -400.0
+      ],
+      "end": [
+        -150.0,
+        -400.0
+      ],
+      "color": "#111111",
+      "width": 2.0
+    },
+    {
+      "id": "LINE8",
+      "start": [
+        -175.0,
+        200.0
+      ],
+      "end": [
+        225.0,
+        200.0
+      ],
+      "color": "#111111",
+      "width": 2.0
+    }
+  ],
   "edges": [
     [
       "T014-8DG",
@@ -267,8 +619,44 @@
       "P0106"
     ],
     [
+      "T0207",
+      "T0301"
+    ],
+    [
       "T0206",
       "T0204"
+    ],
+    [
+      "T0208",
+      "T0302"
+    ],
+    [
+      "T0304",
+      "T0306"
+    ],
+    [
+      "T0308",
+      "T0402"
+    ],
+    [
+      "T0303",
+      "T0305"
+    ],
+    [
+      "T0307",
+      "T0401"
+    ],
+    [
+      "T0401",
+      "T0403"
+    ],
+    [
+      "T0404",
+      "T0406"
+    ],
+    [
+      "T0407",
+      "T0501"
     ],
     [
       "P0108",
@@ -334,7 +722,7 @@
     ],
     [
       "T0201",
-      "XQD201"
+      "XQ0201"
     ],
     [
       "T0204",
@@ -346,148 +734,318 @@
     ],
     [
       "T0205",
-      "XQD201"
-    ],
-    [
-      "T0206",
-      "ZF0503"
+      "XQ0201"
     ],
     [
       "T0208",
       "SQ0202"
+    ],
+    [
+      "T0301",
+      "XQ0301"
+    ],
+    [
+      "T0302",
+      "SC0303"
+    ],
+    [
+      "T0304",
+      "SC0303"
+    ],
+    [
+      "T0305",
+      "XC0304"
+    ],
+    [
+      "T0306",
+      "SQ0302"
+    ],
+    [
+      "T0308",
+      "SQ0302"
+    ],
+    [
+      "T0402",
+      "SC0403"
+    ],
+    [
+      "T0403",
+      "XQ0401"
+    ],
+    [
+      "T0404",
+      "SC0403"
+    ],
+    [
+      "T0405",
+      "XC0404"
+    ],
+    [
+      "T0406",
+      "SQ0402"
+    ],
+    [
+      "T0408",
+      "SQ0402"
     ]
   ],
   "clearance_conflict_groups": [],
   "route_types": {
     "S0102->Z0101": "CALLING_ON",
-    "S0102->Z0103": "CALLING_ON",
-    "X0106->ZF0503": "REVERSE"
+    "S0102->Z0103": "CALLING_ON"
   },
   "route_signal_aspects": {
     "S0102->Z0101": "YELLOW",
-    "S0102->Z0103": "YELLOW",
-    "X0106->ZF0503": "YELLOW_BLUE"
+    "S0102->Z0103": "YELLOW"
   },
   "ui_positions": {
     "T0102": [
-      -775.0,
-      -450.0
-    ],
-    "T0101": [
-      -775.0,
-      -125.0
-    ],
-    "T0104": [
-      -575.0,
-      -450.0
-    ],
-    "T0103": [
-      -575.0,
-      -125.0
-    ],
-    "T014-8DG": [
-      -250.0,
-      -450.0
-    ],
-    "T012-6DG": [
-      -250.0,
-      -125.0
-    ],
-    "S7": [
-      -300.0,
+      -2925.0,
       -300.0
     ],
+    "T0101": [
+      -2925.0,
+      25.0
+    ],
+    "T0104": [
+      -2725.0,
+      -300.0
+    ],
+    "T0103": [
+      -2725.0,
+      25.0
+    ],
+    "T014-8DG": [
+      -2350.0,
+      -300.0
+    ],
+    "T012-6DG": [
+      -2350.0,
+      25.0
+    ],
+    "S7": [
+      -2275.0,
+      -125.0
+    ],
     "S8": [
+      -2400.0,
+      -125.0
+    ],
+    "T0106": [
+      -2125.0,
+      -300.0
+    ],
+    "T0201": [
+      -2050.0,
+      25.0
+    ],
+    "T0108": [
+      -1925.0,
+      -300.0
+    ],
+    "T0204": [
+      -1725.0,
+      -300.0
+    ],
+    "T0205": [
+      -1850.0,
+      25.0
+    ],
+    "T0207": [
+      -1650.0,
+      25.0
+    ],
+    "T0206": [
+      -1625.0,
+      -300.0
+    ],
+    "T0208": [
+      -1375.0,
+      -300.0
+    ],
+    "T0301": [
+      -1450.0,
+      25.0
+    ],
+    "T0302": [
+      -1250.0,
+      -300.0
+    ],
+    "T0304": [
+      -1025.0,
+      -300.0
+    ],
+    "T0306": [
+      -900.0,
+      -300.0
+    ],
+    "T0308": [
+      -625.0,
+      -300.0
+    ],
+    "T0303": [
+      -1225.0,
+      25.0
+    ],
+    "T0305": [
+      -1100.0,
+      25.0
+    ],
+    "T0307": [
+      -850.0,
+      25.0
+    ],
+    "T0401": [
+      -625.0,
+      25.0
+    ],
+    "T0403": [
+      -450.0,
+      25.0
+    ],
+    "T0402": [
+      -425.0,
+      -300.0
+    ],
+    "T0404": [
       -175.0,
       -300.0
     ],
-    "T0106": [
-      0.0,
-      -450.0
+    "T0405": [
+      -175.0,
+      25.0
     ],
-    "T0201": [
-      225.0,
-      -125.0
+    "T0406": [
+      -50.0,
+      -300.0
     ],
-    "T0108": [
-      200.0,
-      -450.0
+    "T0407": [
+      50.0,
+      25.0
     ],
-    "T0204": [
-      400.0,
-      -450.0
+    "T0408": [
+      275.0,
+      -300.0
     ],
-    "T0205": [
-      475.0,
-      -125.0
+    "T0501": [
+      250.0,
+      75.0
     ],
-    "T0207": [
-      725.0,
-      -125.0
+    "T0502": [
+      425.0,
+      -300.0
     ],
-    "T0206": [
-      575.0,
-      -450.0
-    ],
-    "T0208": [
-      800.0,
-      -450.0
+    "T0503": [
+      500.0,
+      75.0
     ],
     "P0108": [
-      -375.0,
-      -450.0
+      -2475.0,
+      -300.0
     ],
     "P0102": [
-      -125.0,
-      -125.0
+      -2225.0,
+      25.0
     ],
     "P0106": [
-      -350.0,
-      -125.0
+      -2475.0,
+      25.0
     ],
     "P0104": [
-      -100.0,
-      -450.0
+      -2225.0,
+      -300.0
     ],
     "Z0103": [
-      -675.0,
-      -525.0
+      -2825.0,
+      -350.0
     ],
     "Z0101": [
-      -675.0,
+      -2825.0,
       -50.0
     ],
     "X0106": [
-      -475.0,
-      -350.0
+      -2550.0,
+      -250.0
     ],
     "X0104": [
-      -475.0,
-      -50.0
-    ],
-    "XQD201": [
-      350.0,
-      -50.0
+      -2550.0,
+      75.0
     ],
     "SC0203": [
-      300.0,
-      -525.0
+      -1825.0,
+      -350.0
     ],
     "S0102": [
-      100.0,
-      -525.0
+      -2025.0,
+      -350.0
     ],
     "XC0204": [
-      600.0,
-      -50.0
+      -1750.0,
+      75.0
     ],
     "SQ0202": [
-      700.0,
-      -525.0
+      -1525.0,
+      -350.0
     ],
-    "ZF0503": [
-      675.0,
-      -375.0
+    "XQ0301": [
+      -1350.0,
+      75.0
+    ],
+    "XQ0201": [
+      -1950.0,
+      75.0
+    ],
+    "SC0303": [
+      -1125.0,
+      -350.0
+    ],
+    "SQ0302": [
+      -800.0,
+      -350.0
+    ],
+    "XC0304": [
+      -975.0,
+      75.0
+    ],
+    "SC0403": [
+      -300.0,
+      -350.0
+    ],
+    "XQ0401": [
+      -300.0,
+      75.0
+    ],
+    "SQ0402": [
+      100.0,
+      -350.0
+    ],
+    "XC0404": [
+      -50.0,
+      75.0
+    ],
+    "XQ0501": [
+      375.0,
+      25.0
+    ],
+    "SC0505": [
+      550.0,
+      -350.0
+    ],
+    "LBL1": [
+      -2850.0,
+      -575.0
+    ],
+    "LBL2": [
+      -1900.0,
+      -600.0
+    ],
+    "LBL3": [
+      -1125.0,
+      -575.0
+    ],
+    "LBL4": [
+      -275.0,
+      -525.0
     ]
   },
   "dispatcher_view": {}

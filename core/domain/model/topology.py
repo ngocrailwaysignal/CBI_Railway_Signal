@@ -636,6 +636,7 @@ class RailwayTopology:
                     "approach_section": signal.approach_section,
                     "route_id": signal.route_id if include_runtime_state else None,
                     "is_blocking": bool(signal.is_blocking),
+                    "is_reverse_signal": bool(signal.is_reverse_signal),
                 }
             )
 
@@ -779,6 +780,7 @@ class RailwayTopology:
                 approach_section=str(signal_data.get("approach_section", "")).strip(),
                 route_id=signal_data.get("route_id") if load_runtime_state else None,
                 is_blocking=bool(signal_data.get("is_blocking", False)),
+                is_reverse_signal=bool(signal_data.get("is_reverse_signal", False)),
             )
             if signal.is_blocking:
                 signal.aspect = SignalAspect.RED
@@ -788,9 +790,7 @@ class RailwayTopology:
                 position=(float(signal_pos[0]), float(signal_pos[1])) if signal_pos else None,
             )
 
-            legacy_calling_on_entry = str(
-                signal_data.get("calling_on_entry_signal", "")
-            ).strip()
+            legacy_calling_on_entry = str(signal_data.get("calling_on_entry_signal", "")).strip()
             if signal.is_blocking and legacy_calling_on_entry:
                 topology.set_route_type(
                     legacy_calling_on_entry,

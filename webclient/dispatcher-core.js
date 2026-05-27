@@ -1,8 +1,8 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 export const DEFAULT_CANVAS = {
-  width: 1920,
-  height: 900,
+  width: 3840,
+  height: 1800,
   grid_size: 20,
   snap_enabled: true,
   background: "#050607",

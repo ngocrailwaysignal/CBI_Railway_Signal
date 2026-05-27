@@ -90,6 +90,27 @@
       "occupied": false,
       "locked_by": null,
       "length": 100.0
+    },
+    {
+      "id": "T0207",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0206",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
+    },
+    {
+      "id": "T0208",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
     }
   ],
   "points": [
@@ -115,7 +136,7 @@
     },
     {
       "id": "P0106",
-      "position": "NORMAL",
+      "position": "REVERSE",
       "symbol_orientation": "RIGHT",
       "locked_by": null,
       "facing_connections": {
@@ -125,7 +146,7 @@
     },
     {
       "id": "P0104",
-      "position": "NORMAL",
+      "position": "REVERSE",
       "symbol_orientation": "LEFT",
       "locked_by": null,
       "facing_connections": {
@@ -142,10 +163,7 @@
       "protects": "T0102",
       "approach_section": "",
       "route_id": null,
-      "reverse_route_enabled": false,
-      "calling_on_route_enabled": true,
-      "reverse_signal_aspect": "BLUE_YELLOW",
-      "calling_on_signal_aspect": "YELLOW"
+      "is_blocking": true
     },
     {
       "id": "Z0101",
@@ -154,10 +172,7 @@
       "protects": "T0101",
       "approach_section": "",
       "route_id": null,
-      "reverse_route_enabled": false,
-      "calling_on_route_enabled": true,
-      "reverse_signal_aspect": "BLUE_YELLOW",
-      "calling_on_signal_aspect": "YELLOW"
+      "is_blocking": true
     },
     {
       "id": "X0106",
@@ -166,10 +181,7 @@
       "protects": "P0108",
       "approach_section": "",
       "route_id": null,
-      "reverse_route_enabled": true,
-      "calling_on_route_enabled": false,
-      "reverse_signal_aspect": "BLUE_YELLOW",
-      "calling_on_signal_aspect": "YELLOW"
+      "is_blocking": false
     },
     {
       "id": "X0104",
@@ -178,10 +190,7 @@
       "protects": "P0106",
       "approach_section": "",
       "route_id": null,
-      "reverse_route_enabled": true,
-      "calling_on_route_enabled": false,
-      "reverse_signal_aspect": "BLUE_YELLOW",
-      "calling_on_signal_aspect": "YELLOW"
+      "is_blocking": false
     },
     {
       "id": "XQD201",
@@ -190,10 +199,7 @@
       "protects": "T0205",
       "approach_section": "",
       "route_id": null,
-      "reverse_route_enabled": false,
-      "calling_on_route_enabled": false,
-      "reverse_signal_aspect": "BLUE_YELLOW",
-      "calling_on_signal_aspect": "YELLOW"
+      "is_blocking": false
     },
     {
       "id": "SC0203",
@@ -202,25 +208,47 @@
       "protects": "T0108",
       "approach_section": "",
       "route_id": null,
-      "reverse_route_enabled": false,
-      "calling_on_route_enabled": false,
-      "reverse_signal_aspect": "BLUE_YELLOW",
-      "calling_on_signal_aspect": "YELLOW"
+      "is_blocking": false
     },
     {
       "id": "S0102",
       "aspect": "RED",
       "direction": "LEFT",
-      "protects": "T0108",
+      "protects": "T0106",
       "approach_section": "",
       "route_id": null,
-      "reverse_route_enabled": false,
-      "calling_on_route_enabled": true,
-      "reverse_signal_aspect": "BLUE_YELLOW",
-      "calling_on_signal_aspect": "YELLOW"
+      "is_blocking": false
+    },
+    {
+      "id": "XC0204",
+      "aspect": "RED",
+      "direction": "RIGHT",
+      "protects": "T0207",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "SQ0202",
+      "aspect": "RED",
+      "direction": "LEFT",
+      "protects": "T0206",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
+    },
+    {
+      "id": "ZF0503",
+      "aspect": "RED",
+      "direction": "RIGHT",
+      "protects": "T0208",
+      "approach_section": "",
+      "route_id": null,
+      "is_blocking": false
     }
   ],
   "labels": [],
+  "annotation_lines": [],
   "edges": [
     [
       "T014-8DG",
@@ -237,6 +265,10 @@
     [
       "S8",
       "P0106"
+    ],
+    [
+      "T0206",
+      "T0204"
     ],
     [
       "P0108",
@@ -285,7 +317,15 @@
       "X0106"
     ],
     [
+      "T0104",
+      "Z0103"
+    ],
+    [
       "T0106",
+      "S0102"
+    ],
+    [
+      "T0108",
       "S0102"
     ],
     [
@@ -302,12 +342,32 @@
     ],
     [
       "T0205",
+      "XC0204"
+    ],
+    [
+      "T0205",
       "XQD201"
+    ],
+    [
+      "T0206",
+      "ZF0503"
+    ],
+    [
+      "T0208",
+      "SQ0202"
     ]
   ],
   "clearance_conflict_groups": [],
-  "route_types": [],
-  "route_signal_aspects": [],
+  "route_types": {
+    "S0102->Z0101": "CALLING_ON",
+    "S0102->Z0103": "CALLING_ON",
+    "X0106->ZF0503": "REVERSE"
+  },
+  "route_signal_aspects": {
+    "S0102->Z0101": "YELLOW",
+    "S0102->Z0103": "YELLOW",
+    "X0106->ZF0503": "YELLOW_BLUE"
+  },
   "ui_positions": {
     "T0102": [
       -775.0,
@@ -342,7 +402,7 @@
       -300.0
     ],
     "T0106": [
-      25.0,
+      0.0,
       -450.0
     ],
     "T0201": [
@@ -350,16 +410,28 @@
       -125.0
     ],
     "T0108": [
-      300.0,
+      200.0,
       -450.0
     ],
     "T0204": [
-      525.0,
+      400.0,
       -450.0
     ],
     "T0205": [
       475.0,
       -125.0
+    ],
+    "T0207": [
+      725.0,
+      -125.0
+    ],
+    "T0206": [
+      575.0,
+      -450.0
+    ],
+    "T0208": [
+      800.0,
+      -450.0
     ],
     "P0108": [
       -375.0,
@@ -387,7 +459,7 @@
     ],
     "X0106": [
       -475.0,
-      -525.0
+      -350.0
     ],
     "X0104": [
       -475.0,
@@ -398,12 +470,24 @@
       -50.0
     ],
     "SC0203": [
-      400.0,
+      300.0,
       -525.0
     ],
     "S0102": [
-      150.0,
+      100.0,
       -525.0
+    ],
+    "XC0204": [
+      600.0,
+      -50.0
+    ],
+    "SQ0202": [
+      700.0,
+      -525.0
+    ],
+    "ZF0503": [
+      675.0,
+      -375.0
     ]
   },
   "dispatcher_view": {}

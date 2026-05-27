@@ -1,4 +1,5 @@
 import { createBoardCamera, normalizeRuntimeState, renderDispatcherBoard } from "/dispatcher-core.js";
+import { applyStaticTranslations, initLanguageSelector, t } from "/i18n.js";
 
 const board = document.getElementById("dispatcherBoard");
 const boardFrame = document.querySelector(".board-frame");
@@ -74,11 +75,11 @@ function updateMeta(runtime) {
     updatedAtText.textContent = "--";
   }
   scenarioTitle.textContent = runtime.dispatcherView.elements.length
-    ? "Dispatcher Board"
-    : "No Dispatcher Diagram Authored";
+    ? t("viewer.dispatcher_board")
+    : t("viewer.no_diagram");
   transportHint.textContent = runtime.dispatcherView.elements.length
-    ? "Clean track is green, occupied track is red, and active routes extend across the full path."
-    : "No dispatcher schematic exists yet. Open /dispatcher/editor to draw and bind the board.";
+    ? t("viewer.clean_track_hint")
+    : t("viewer.no_schematic_hint");
   updateCommandControls(runtime);
 }
 
@@ -113,7 +114,7 @@ function repopulateRouteSelect(routes, previousValue) {
   routeSelect.replaceChildren();
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = "Select route";
+  placeholder.textContent = t("viewer.select_route");
   routeSelect.appendChild(placeholder);
   routes.forEach((route) => {
     const option = document.createElement("option");
@@ -164,9 +165,9 @@ function updateCommandControls(runtime) {
   if (cancelRoutesBtn) cancelRoutesBtn.disabled = !canControlRuntime || runtime.routes.length === 0;
   updateRouteReadout(route);
   if (!canControlRuntime) {
-    setCommandStatus(runtimeLive ? "Route controls disabled for this workspace mode." : "Runtime controls waiting...");
+    translatedCommandStatus(runtimeLive ? "viewer.controls_disabled" : "viewer.controls_waiting");
   } else if (!routes.length) {
-    setCommandStatus("No interlocking routes available.");
+    translatedCommandStatus("viewer.no_routes");
   }
 }
 
@@ -182,6 +183,10 @@ function beginBoardPan(event) {
     boardFrame.setPointerCapture?.(event.pointerId);
     event.preventDefault();
   }
+}
+
+function translatedCommandStatus(key, params = {}, kind = "") {
+  setCommandStatus(t(key, params), kind);
 }
 
 function panBoard(event) {
@@ -202,7 +207,7 @@ function repaint() {
     showDebug,
     showRoutes,
     showTrains: false,
-    emptyStateText: "No dispatcher schematic. Open /dispatcher/editor to create one.",
+    emptyStateText: t("viewer.empty_board"),
   });
   const canvas = latestDispatcherView.canvas;
   lastLayoutSignature = `${canvas.width}x${canvas.height}:${latestDispatcherView.elements.length}`;
@@ -238,7 +243,7 @@ async function loadRuntimeState() {
     if (runtimeResponse.status === 204) {
       latestRuntime = normalizeRuntimeState({});
       runtimeLive = false;
-      setConnectionState("waiting", "WAITING RUNTIME");
+      setConnectionState("waiting", t("viewer.waiting_runtime"));
       repaint();
       return;
     }
@@ -248,14 +253,16 @@ async function loadRuntimeState() {
     const payload = await runtimeResponse.json();
     latestRuntime = normalizeRuntimeState(payload);
     runtimeLive = true;
-    setConnectionState("live", "LIVE RUNTIME");
+    setConnectionState("live", t("viewer.live_runtime"));
     repaint();
   } catch (error) {
     runtimeLive = false;
-    setConnectionState("error", "RUNTIME ERROR");
-    transportHint.textContent = `Runtime feed error: ${error instanceof Error ? error.message : String(error)}`;
+    setConnectionState("error", t("viewer.runtime_error"));
+    transportHint.textContent = t("viewer.feed_error", {
+      message: error instanceof Error ? error.message : String(error),
+    });
     updateCommandControls(latestRuntime);
-    setCommandStatus("Runtime feed error.", "error");
+    translatedCommandStatus("viewer.command_error", {}, "error");
   }
 }
 
@@ -295,27 +302,31 @@ async function submitSetRoute() {
   const entrySignalId = route?.entrySignal || "";
   const exitSignalId = route?.exitSignal || "";
   if (!entrySignalId || !exitSignalId) {
-    setCommandStatus("Select an interlocking route.", "error");
+    translatedCommandStatus("viewer.select_interlocking_route", {}, "error");
     return;
   }
   if (entrySignalId === exitSignalId) {
-    setCommandStatus("Entry and exit signals must be different.", "error");
+    translatedCommandStatus("viewer.entry_exit_different", {}, "error");
     return;
   }
   try {
-    setCommandStatus("Queueing set route command...");
+    translatedCommandStatus("viewer.queue_set_route");
     const queued = await sendRuntimeCommand("set_route", {
       entry_signal_id: entrySignalId,
       exit_signal_id: exitSignalId,
     });
-    setCommandStatus("Command queued. Waiting for runtime...");
+    translatedCommandStatus("viewer.command_queued");
     const commandResult = await waitForCommandResult(String(queued.command_id || ""));
     if (commandResult?.status === "rejected") {
-      setCommandStatus(commandResult.message || "Set route rejected.", "error");
+      setCommandStatus(commandResult.message || t("viewer.set_route_rejected"), "error");
     } else if (commandResult?.status === "applied") {
-      setCommandStatus(`Route command applied: ${entrySignalId} -> ${exitSignalId}`, "ok");
+      translatedCommandStatus(
+        "viewer.route_applied",
+        { entry: entrySignalId, exit: exitSignalId },
+        "ok",
+      );
     } else {
-      setCommandStatus("Command queued; runtime result pending.");
+      translatedCommandStatus("viewer.result_pending");
     }
     await loadRuntimeState();
   } catch (error) {
@@ -325,17 +336,17 @@ async function submitSetRoute() {
 
 async function submitCancelRoutes() {
   try {
-    setCommandStatus("Queueing cancel routes command...");
+    translatedCommandStatus("viewer.queue_cancel_routes");
     const queued = await sendRuntimeCommand("cancel_active_routes", {});
-    setCommandStatus("Command queued. Waiting for runtime...");
+    translatedCommandStatus("viewer.command_queued");
     const commandResult = await waitForCommandResult(String(queued.command_id || ""));
     if (commandResult?.status === "rejected") {
-      setCommandStatus(commandResult.message || "Cancel routes rejected.", "error");
+      setCommandStatus(commandResult.message || t("viewer.cancel_rejected"), "error");
     } else if (commandResult?.status === "applied") {
       const cancelled = commandResult.payload?.cancelled_routes ?? 0;
-      setCommandStatus(`Cancel routes applied. Cancelled: ${cancelled}`, "ok");
+      translatedCommandStatus("viewer.cancel_applied", { count: cancelled }, "ok");
     } else {
-      setCommandStatus("Command queued; runtime result pending.");
+      translatedCommandStatus("viewer.result_pending");
     }
     await loadRuntimeState();
   } catch (error) {
@@ -345,13 +356,13 @@ async function submitCancelRoutes() {
 
 debugLabelsBtn?.addEventListener("click", () => {
   showDebug = !showDebug;
-  debugLabelsBtn.textContent = showDebug ? "Hide Debug" : "Show Debug";
+  debugLabelsBtn.textContent = showDebug ? t("viewer.hide_debug") : t("viewer.show_debug");
   repaint();
 });
 
 toggleRoutesBtn?.addEventListener("click", () => {
   showRoutes = !showRoutes;
-  toggleRoutesBtn.textContent = showRoutes ? "Hide Routes" : "Show Routes";
+  toggleRoutesBtn.textContent = showRoutes ? t("viewer.hide_routes") : t("viewer.show_routes");
   repaint();
 });
 
@@ -373,6 +384,13 @@ zoomOutBtn?.addEventListener("click", () => {
   boardCamera.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 1 / 1.2);
 });
 window.addEventListener("resize", () => boardCamera.apply());
+
+applyStaticTranslations();
+initLanguageSelector(() => {
+  debugLabelsBtn.textContent = showDebug ? t("viewer.hide_debug") : t("viewer.show_debug");
+  toggleRoutesBtn.textContent = showRoutes ? t("viewer.hide_routes") : t("viewer.show_routes");
+  repaint();
+});
 
 tickClock();
 setInterval(tickClock, 1000);

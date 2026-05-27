@@ -9,6 +9,7 @@ import {
   renderDispatcherBoard,
   snapValue,
 } from "/dispatcher-core.js";
+import { applyStaticTranslations, initLanguageSelector, t } from "/i18n.js";
 
 const board = document.getElementById("editorBoard");
 const boardViewport = document.getElementById("boardViewport");
@@ -40,10 +41,16 @@ const state = {
 };
 const boardCamera = createBoardCamera(board, boardViewport, { minScale: 0.45, maxScale: 4 });
 let lastCanvasSignature = "";
+let lastStatus = { key: "editor.loading", params: {}, kind: "info" };
 
 function setStatus(message, kind = "info") {
   statusText.textContent = message;
   statusText.dataset.kind = kind;
+}
+
+function setTranslatedStatus(key, params = {}, kind = "info") {
+  lastStatus = { key, params, kind };
+  setStatus(t(key, params), kind);
 }
 
 function markDirty(isDirty = true) {
@@ -104,7 +111,7 @@ function repaintBoard() {
     showDebug: state.showDebug,
     showRoutes: false,
     selectedIds: state.selectedIds,
-    emptyStateText: "Drag elements here to author the dispatcher schematic.",
+    emptyStateText: t("editor.empty_board"),
   });
   boardCamera.setCanvas(state.view.canvas);
   boardCamera.apply();
@@ -126,11 +133,11 @@ function updateInspector() {
   const selected = selectedElements();
   inspector.replaceChildren();
   if (!selected.length) {
-    inspector.appendChild(buildInspectorEmpty("Select one or more elements to edit geometry and CBI bindings."));
+    inspector.appendChild(buildInspectorEmpty(t("editor.select_to_edit")));
     return;
   }
   if (selected.length > 1) {
-    inspector.appendChild(buildInspectorEmpty(`${selected.length} elements selected. Drag to move as a group.`));
+    inspector.appendChild(buildInspectorEmpty(t("editor.elements_selected", { count: selected.length })));
     return;
   }
 
@@ -138,7 +145,7 @@ function updateInspector() {
   const panel = document.createElement("div");
   panel.className = "inspector-stack";
   panel.appendChild(buildInspectorSummary(element));
-  panel.appendChild(buildField("Element ID", buildReadonlyValue(element.id)));
+  panel.appendChild(buildField(t("editor.element_id"), buildReadonlyValue(element.id)));
   panel.appendChild(buildPositionEditor(element));
 
   const bindingField = buildBindingEditor(element);
@@ -161,7 +168,7 @@ function buildInspectorSummary(element) {
   summary.appendChild(kind);
 
   const meta = document.createElement("span");
-  meta.textContent = `Rotate ${Math.round(Number(element.rotation || 0))} deg`;
+  meta.textContent = t("editor.rotate", { degrees: Math.round(Number(element.rotation || 0)) });
   summary.appendChild(meta);
 
   return summary;
@@ -173,7 +180,7 @@ function buildPositionEditor(element) {
 
   const title = document.createElement("span");
   title.className = "inspector-label";
-  title.textContent = "Position";
+  title.textContent = t("editor.position");
   wrapper.appendChild(title);
 
   const row = document.createElement("div");
@@ -195,14 +202,14 @@ function appendGeometryFields(panel, element) {
   if (element.kind === "track_section") {
     panel.appendChild(
       buildField(
-        "Track Style",
+        t("editor.track_style"),
         buildSelect(["main", "siding", "yard", "approach"], element.style.variant || "main", (value) => updateElement(element.id, (draft) => {
           draft.style.variant = value;
         })),
       ),
     );
     panel.appendChild(
-      buildField("Stroke Width", buildNumberInput(element.geometry.stroke_width, (value) => updateElement(element.id, (draft) => {
+      buildField(t("editor.stroke_width"), buildNumberInput(element.geometry.stroke_width, (value) => updateElement(element.id, (draft) => {
         draft.geometry.stroke_width = Math.max(1, value);
       }))),
     );
@@ -210,12 +217,12 @@ function appendGeometryFields(panel, element) {
   }
   if (element.kind === "signal") {
     panel.appendChild(
-      buildField("Mast", buildNumberInput(element.geometry.mast, (value) => updateElement(element.id, (draft) => {
+      buildField(t("editor.mast"), buildNumberInput(element.geometry.mast, (value) => updateElement(element.id, (draft) => {
         draft.geometry.mast = Math.max(8, value);
       }))),
     );
     panel.appendChild(
-      buildField("Arm", buildNumberInput(element.geometry.arm, (value) => updateElement(element.id, (draft) => {
+      buildField(t("editor.arm"), buildNumberInput(element.geometry.arm, (value) => updateElement(element.id, (draft) => {
         draft.geometry.arm = Math.max(6, value);
       }))),
     );
@@ -224,19 +231,19 @@ function appendGeometryFields(panel, element) {
   if (element.kind === "point") {
     panel.appendChild(
       buildField(
-        "Branch Side",
+        t("editor.branch_side"),
         buildSelect(["up", "down"], element.geometry.branch_side || "up", (value) => updateElement(element.id, (draft) => {
           draft.geometry.branch_side = value;
         })),
       ),
     );
     panel.appendChild(
-      buildField("Straight", buildNumberInput(element.geometry.straight, (value) => updateElement(element.id, (draft) => {
+      buildField(t("editor.straight"), buildNumberInput(element.geometry.straight, (value) => updateElement(element.id, (draft) => {
         draft.geometry.straight = Math.max(12, value);
       }))),
     );
     panel.appendChild(
-      buildField("Branch", buildNumberInput(element.geometry.branch, (value) => updateElement(element.id, (draft) => {
+      buildField(t("editor.branch"), buildNumberInput(element.geometry.branch, (value) => updateElement(element.id, (draft) => {
         draft.geometry.branch = Math.max(12, value);
       }))),
     );
@@ -245,20 +252,20 @@ function appendGeometryFields(panel, element) {
   if (element.kind === "label") {
     panel.appendChild(
       buildField(
-        "Text",
+        t("editor.text"),
         buildTextarea(String(element.geometry.text || ""), (value) => updateElement(element.id, (draft) => {
           draft.geometry.text = value;
         })),
       ),
     );
     panel.appendChild(
-      buildField("Font Size", buildNumberInput(element.geometry.font_size, (value) => updateElement(element.id, (draft) => {
+      buildField(t("editor.font_size"), buildNumberInput(element.geometry.font_size, (value) => updateElement(element.id, (draft) => {
         draft.geometry.font_size = Math.max(8, value);
       }))),
     );
     panel.appendChild(
       buildField(
-        "Align",
+        t("editor.align"),
         buildSelect(["start", "middle", "end"], element.geometry.align || "middle", (value) => updateElement(element.id, (draft) => {
           draft.geometry.align = value;
         })),
@@ -266,7 +273,7 @@ function appendGeometryFields(panel, element) {
     );
     panel.appendChild(
       buildField(
-        "Tone",
+        t("editor.tone"),
         buildSelect(["bright", "muted", "amber", "steel"], element.style.tone || "bright", (value) => updateElement(element.id, (draft) => {
           draft.style.tone = value;
         })),
@@ -275,18 +282,18 @@ function appendGeometryFields(panel, element) {
     return;
   }
   panel.appendChild(
-    buildField("Width", buildNumberInput(element.geometry.width, (value) => updateElement(element.id, (draft) => {
+    buildField(t("editor.width"), buildNumberInput(element.geometry.width, (value) => updateElement(element.id, (draft) => {
       draft.geometry.width = Math.max(8, value);
     }))),
   );
   panel.appendChild(
-    buildField("Height", buildNumberInput(element.geometry.height, (value) => updateElement(element.id, (draft) => {
+    buildField(t("editor.height"), buildNumberInput(element.geometry.height, (value) => updateElement(element.id, (draft) => {
       draft.geometry.height = Math.max(8, value);
     }))),
   );
   panel.appendChild(
     buildField(
-      "Tone",
+      t("editor.tone"),
       buildSelect(["steel", "bright", "muted"], element.style.tone || "steel", (value) => updateElement(element.id, (draft) => {
         draft.style.tone = value;
       })),
@@ -312,20 +319,20 @@ function buildBindingEditor(element) {
 
   const title = document.createElement("span");
   title.className = "inspector-label";
-  title.textContent = `CBI Binding (${cbiType})`;
+  title.textContent = t("editor.cbi_binding", { type: cbiType });
   field.appendChild(title);
 
   if (!options.length) {
-    field.appendChild(buildReadonlyValue(`No ${cbiType} IDs available from the current CBI layout.`));
+    field.appendChild(buildReadonlyValue(t("editor.no_ids", { type: cbiType })));
     return field;
   }
 
   const hint = document.createElement("p");
   hint.className = "hint";
-  hint.textContent = `Click one ${cbiType} ID below to bind it to the selected element.`;
+  hint.textContent = t("editor.binding_hint", { type: cbiType });
   field.appendChild(hint);
 
-  field.appendChild(buildReadonlyValue(element.binding?.cbi_id || `Unbound (${cbiType})`));
+  field.appendChild(buildReadonlyValue(element.binding?.cbi_id || t("editor.unbound", { type: cbiType })));
   field.appendChild(buildBindingSearch(options, element.binding?.cbi_id || "", cbiType, element.id, usage));
   field.appendChild(buildBindingSuggestions(options, element.binding?.cbi_id || "", cbiType, element.id, usage));
   return field;
@@ -389,7 +396,7 @@ function buildSelect(options, value, onChange, config = {}) {
   options.forEach((optionValue) => {
     const option = document.createElement("option");
     option.value = optionValue;
-    option.textContent = config.labels?.[optionValue] || optionValue || "Unbound";
+    option.textContent = config.labels?.[optionValue] || optionValue || t("editor.unbind");
     select.appendChild(option);
   });
   select.value = value;
@@ -400,7 +407,7 @@ function buildSelect(options, value, onChange, config = {}) {
 function buildBindingSearch(options, selectedValue, cbiType, elementId, usage) {
   const input = document.createElement("input");
   input.type = "search";
-  input.placeholder = `Filter ${cbiType} IDs`;
+  input.placeholder = t("editor.filter_ids", { type: cbiType });
   input.value = selectedValue || "";
   input.addEventListener("input", () => {
     const chips = input.parentElement?.querySelector?.(".binding-chip-list");
@@ -432,13 +439,13 @@ function buildBindingSuggestions(options, selectedValue, cbiType, elementId, usa
 
   const title = document.createElement("span");
   title.className = "inspector-label";
-  title.textContent = "Available IDs";
+  title.textContent = t("editor.available_ids");
   actions.appendChild(title);
 
   const clearButton = document.createElement("button");
   clearButton.type = "button";
   clearButton.className = "ghost binding-clear-button";
-  clearButton.textContent = "Unbind";
+  clearButton.textContent = t("editor.unbind");
   clearButton.disabled = !selectedValue;
   clearButton.addEventListener("click", () => assignBinding(elementId, cbiType, ""));
   actions.appendChild(clearButton);
@@ -453,7 +460,7 @@ function buildBindingSuggestions(options, selectedValue, cbiType, elementId, usa
     chip.type = "button";
     chip.className = `binding-chip${optionValue === selectedValue ? " active" : ""}${owners.length ? " used" : ""}`;
     chip.dataset.bindingId = optionValue;
-    chip.title = owners.length ? `Currently used by ${owners.join(", ")}` : "";
+    chip.title = owners.length ? t("editor.used_by", { owners: owners.join(", ") }) : "";
 
     const idText = document.createElement("span");
     idText.className = "binding-chip-id";
@@ -464,8 +471,8 @@ function buildBindingSuggestions(options, selectedValue, cbiType, elementId, usa
       const meta = document.createElement("span");
       meta.className = "binding-chip-meta";
       meta.textContent = owners.includes(elementId) && owners.length === 1
-        ? "used by this element"
-        : `used by ${owners.join(", ")}`;
+        ? t("editor.used_by_this")
+        : t("editor.used_by", { owners: owners.join(", ") });
       chip.appendChild(meta);
     }
 
@@ -493,7 +500,7 @@ function buildElementActions() {
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
   deleteButton.className = "danger-button";
-  deleteButton.textContent = "Delete This Element";
+  deleteButton.textContent = t("editor.delete_this");
   deleteButton.addEventListener("click", () => deleteSelectedElements());
   row.appendChild(deleteButton);
 
@@ -501,6 +508,16 @@ function buildElementActions() {
 }
 
 function formatKindLabel(kind) {
+  const labels = {
+    block_marker: t("editor.block_marker"),
+    label: t("editor.label"),
+    point: t("editor.point"),
+    signal: t("editor.signal"),
+    track_section: t("editor.track_section"),
+  };
+  if (labels[kind]) {
+    return labels[kind];
+  }
   return String(kind || "")
     .split("_")
     .filter(Boolean)
@@ -548,7 +565,7 @@ function createElementAt(kind, position) {
   if (kind === "label") {
     return {
       ...base,
-      geometry: { text: "LABEL", font_size: 28, align: "middle" },
+      geometry: { text: t("editor.label").toUpperCase(), font_size: 28, align: "middle" },
       style: { tone: "bright" },
     };
   }
@@ -594,7 +611,7 @@ function clearCanvas() {
   state.view = normalizeDispatcherView(nextView);
   state.selectedIds.clear();
   markDirty(true);
-  setStatus("Canvas cleared. Save to persist the empty schematic.");
+  setTranslatedStatus("editor.canvas_cleared");
   repaint();
 }
 
@@ -788,7 +805,7 @@ function handlePointerUp(event) {
 }
 
 async function loadDispatcherLayout() {
-  setStatus("Loading dispatcher schematic...");
+  setTranslatedStatus("editor.loading");
   try {
     const response = await fetch("/api/dispatcher-layout", { cache: "no-store" });
     if (!response.ok) {
@@ -801,15 +818,19 @@ async function loadDispatcherLayout() {
     state.selectedIds.clear();
     layoutPathText.textContent = state.layoutPath || "-";
     markDirty(false);
-    setStatus("Dispatcher schematic loaded.");
+    setTranslatedStatus("editor.loaded");
     repaint({ fit: true });
   } catch (error) {
-    setStatus(`Load failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+    setTranslatedStatus(
+      "editor.load_failed",
+      { message: error instanceof Error ? error.message : String(error) },
+      "error",
+    );
   }
 }
 
 async function saveDispatcherLayout() {
-  setStatus("Saving dispatcher schematic...");
+  setTranslatedStatus("editor.saving");
   saveButton.disabled = true;
   try {
     const response = await fetch("/api/dispatcher-layout", {
@@ -823,21 +844,25 @@ async function saveDispatcherLayout() {
     }
     state.view = normalizeDispatcherView(payload.dispatcher_view || {});
     markDirty(false);
-    setStatus("Dispatcher schematic saved.");
+    setTranslatedStatus("editor.saved");
     repaint();
     window.location.href = "/dispatcher?saved=1";
   } catch (error) {
     markDirty(true);
-    setStatus(`Save failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+    setTranslatedStatus(
+      "editor.save_failed",
+      { message: error instanceof Error ? error.message : String(error) },
+      "error",
+    );
   }
 }
 
 function confirmAndClearCanvas() {
   if (!state.view.elements.length) {
-    setStatus("Canvas is already empty.");
+    setTranslatedStatus("editor.already_empty");
     return;
   }
-  const confirmed = window.confirm("Clear the entire dispatcher canvas? This removes all elements until you reload or save.");
+  const confirmed = window.confirm(t("editor.confirm_clear"));
   if (!confirmed) {
     return;
   }
@@ -944,14 +969,20 @@ gridSizeInput.addEventListener("change", () => {
   repaint();
 });
 canvasWidthInput.addEventListener("change", () => {
-  state.view.canvas.width = Math.max(640, Number(canvasWidthInput.value || 1920));
+  state.view.canvas.width = Math.max(640, Number(canvasWidthInput.value || 3840));
   markDirty(true);
   repaint();
 });
 canvasHeightInput.addEventListener("change", () => {
-  state.view.canvas.height = Math.max(480, Number(canvasHeightInput.value || 900));
+  state.view.canvas.height = Math.max(480, Number(canvasHeightInput.value || 1800));
   markDirty(true);
   repaint();
+});
+
+applyStaticTranslations();
+initLanguageSelector(() => {
+  repaint();
+  setTranslatedStatus(lastStatus.key, lastStatus.params, lastStatus.kind);
 });
 
 loadDispatcherLayout();

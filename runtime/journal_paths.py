@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from config import DEFAULT_APP_CONFIG
 from infrastructure.snapshot_store import (
     WEBCLIENT_RUNTIME_COMMAND_RESULTS_FILENAME,
     WEBCLIENT_RUNTIME_COMMANDS_FILENAME,
     WEBCLIENT_RUNTIME_STATE_FILENAME,
 )
 
-DEFAULT_RUNTIME_JOURNAL_DIR = "data/runtime_journal"
+DEFAULT_RUNTIME_JOURNAL_DIR = DEFAULT_APP_CONFIG.paths.runtime_journal_dir
 
 
 def runtime_journal_dir(

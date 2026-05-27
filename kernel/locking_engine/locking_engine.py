@@ -112,9 +112,7 @@ class LockingEngine:
             entry_signal = self.topology.signals[route.entry_signal_id]
             entry_signal.route_id = route.id
             entry_signal.aspect = (
-                SignalAspect.RED
-                if entry_signal.is_blocking
-                else route.signal_aspect
+                SignalAspect.RED if entry_signal.is_blocking else route.signal_aspect
             )
             self._transition_route_state(route, RouteLifecycleState.CLEARED_REVERSIBLE)
             self.active_routes[route.id] = route

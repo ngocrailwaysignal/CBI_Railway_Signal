@@ -17,6 +17,7 @@ repo_root_text = str(REPO_ROOT)
 if repo_root_text not in sys.path:
     sys.path.insert(0, repo_root_text)
 
+from config import DEFAULT_APP_CONFIG
 from runtime.journal_paths import (
     webclient_runtime_command_path,
     webclient_runtime_command_result_path,
@@ -42,7 +43,7 @@ def _default_runtime_command_result_path(root: Path) -> Path:
 
 
 def _default_layout_path(root: Path) -> Path:
-    return root.parent / "data" / "station_layout" / "main_layout.json"
+    return root.parent / DEFAULT_APP_CONFIG.paths.default_layout_path
 
 
 def _load_json_object(path: Path, *, object_name: str) -> dict:
@@ -333,8 +334,8 @@ def create_handler(
 
 def create_server(
     *,
-    host: str = "127.0.0.1",
-    port: int = 8091,
+    host: str = DEFAULT_APP_CONFIG.webclient.host,
+    port: int = DEFAULT_APP_CONFIG.webclient.port,
     root: Path | None = None,
     runtime_state_path: Path | None = None,
     runtime_command_path: Path | None = None,
@@ -360,8 +361,8 @@ def create_server(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Serve the dispatcher webclient.")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8091)
+    parser.add_argument("--host", default=DEFAULT_APP_CONFIG.webclient.host)
+    parser.add_argument("--port", type=int, default=DEFAULT_APP_CONFIG.webclient.port)
     parser.add_argument("--runtime-state-file", default="")
     parser.add_argument("--runtime-command-file", default="")
     parser.add_argument("--runtime-command-result-file", default="")

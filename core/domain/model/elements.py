@@ -46,7 +46,9 @@ class SignalAspect(StrEnum):
         return legacy.get(token)
 
 
-def normalize_signal_aspect(value: object, default: SignalAspect = SignalAspect.RED) -> SignalAspect:
+def normalize_signal_aspect(
+    value: object, default: SignalAspect = SignalAspect.RED
+) -> SignalAspect:
     """Normalize persisted/user aspect values, including legacy STOP/PROCEED tokens."""
     try:
         return SignalAspect(value)
@@ -98,6 +100,7 @@ class Signal:
     approach_section: str = ""
     route_id: str | None = None
     is_blocking: bool = False
+    is_reverse_signal: bool = False
 
 
 @dataclass(slots=True)

@@ -54,6 +54,7 @@ def test_blocking_signal_and_manual_route_type_round_trip(tmp_path) -> None:
     signal = topology.signals["EXIT"]
     signal.aspect = SignalAspect.GREEN
     signal.is_blocking = True
+    signal.is_reverse_signal = True
     topology.set_route_type("ENTRY", "EXIT", ROUTE_TYPE_CALLING_ON)
 
     path = tmp_path / "layout.json"
@@ -63,8 +64,8 @@ def test_blocking_signal_and_manual_route_type_round_trip(tmp_path) -> None:
 
     assert raw_signal["aspect"] == SignalAspect.RED.value
     assert raw_signal["is_blocking"] is True
+    assert raw_signal["is_reverse_signal"] is True
     assert "calling_on_entry_signal" not in raw_signal
-    assert "is_reverse_signal" not in raw_signal
     assert raw["route_types"] == {"ENTRY->EXIT": ROUTE_TYPE_CALLING_ON}
     assert raw["route_signal_aspects"] == {"ENTRY->EXIT": SignalAspect.YELLOW.value}
 
@@ -72,11 +73,27 @@ def test_blocking_signal_and_manual_route_type_round_trip(tmp_path) -> None:
     loaded_signal = loaded.signals["EXIT"]
     assert loaded_signal.aspect == SignalAspect.RED
     assert loaded_signal.is_blocking is True
+    assert loaded_signal.is_reverse_signal is True
     assert loaded.route_type("ENTRY", "EXIT") == ROUTE_TYPE_CALLING_ON
     loaded_signal.aspect = SignalAspect.GREEN
     view_state = build_runtime_view_state(RuntimeSession(loaded))
     exit_state = next(item for item in view_state.signal_state if item.id == "EXIT")
     assert exit_state.aspect == SignalAspect.RED.value
+
+
+def test_missing_reverse_signal_field_loads_as_false(tmp_path) -> None:
+    topology = build_two_signal_topology()
+    path = tmp_path / "layout.json"
+    topology.export_to_json(path, include_runtime_state=True)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    for signal in raw["signals"]:
+        signal.pop("is_reverse_signal", None)
+    path.write_text(json.dumps(raw), encoding="utf-8")
+
+    loaded = RailwayTopology.load_from_json(path, load_runtime_state=True)
+
+    assert loaded.signals["ENTRY"].is_reverse_signal is False
+    assert loaded.signals["EXIT"].is_reverse_signal is False
 
 
 def test_route_type_is_mutually_exclusive_and_can_reset_to_normal() -> None:

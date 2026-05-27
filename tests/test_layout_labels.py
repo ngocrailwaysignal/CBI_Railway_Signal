@@ -7,15 +7,19 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtWidgets import QApplication, QGraphicsView
 
 from core.domain.model import DisplayLabel, DisplayLine, TrackSection
 from core.domain.model.elements import SignalAspect
 from core.domain.model.topology import RailwayTopology
 from runtime.application.serialization.layout_payload_serializer import build_layout_payload
 from ui.i18n import UITranslator
-from ui.views.canvas_editor_view import ANNOTATION_LABEL_NODE_TYPE, ANNOTATION_LINE_TYPE, CanvasEditor
+from ui.views.canvas_editor_view import (
+    ANNOTATION_LABEL_NODE_TYPE,
+    ANNOTATION_LINE_TYPE,
+    CanvasEditor,
+)
 from ui.views.components_palette_view import PaletteListWidget, PropertiesPanel
 
 
@@ -58,6 +62,29 @@ def test_display_label_round_trips_with_layout_json(tmp_path: Path) -> None:
     assert loaded.labels["LBL1"].height == 48.0
     assert loaded.ui_positions["LBL1"] == (30.0, 40.0)
     assert "LBL1" not in loaded.graph.nodes
+
+
+def test_canvas_left_drag_is_reserved_for_box_selection(qapp: QApplication) -> None:
+    editor = CanvasEditor()
+
+    assert qapp is not None
+    assert editor.dragMode() == QGraphicsView.DragMode.RubberBandDrag
+    assert not editor._is_canvas_pan_request(
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    assert editor._is_canvas_pan_request(
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.AltModifier,
+    )
+    assert editor._is_canvas_pan_request(
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    assert editor._is_canvas_pan_request(
+        Qt.MouseButton.MiddleButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
 
 
 def test_display_label_missing_color_loads_with_default(tmp_path: Path) -> None:
@@ -345,11 +372,108 @@ def test_canvas_line_creation_and_properties_use_annotation_api(qapp: QApplicati
         editor.deleteLater()
 
 
+def test_canvas_node_drag_updates_only_connected_edges_and_records_one_undo(
+    qapp: QApplication,
+) -> None:
+    _ = qapp
+    editor = CanvasEditor()
+    try:
+        first = editor.add_component("TrackSection", QPointF(0.0, 0.0))
+        second = editor.add_component("TrackSection", QPointF(100.0, 0.0))
+        third = editor.add_component("TrackSection", QPointF(200.0, 0.0))
+        editor.create_connection(first.element_id, second.element_id)
+        editor.create_connection(second.element_id, third.element_id)
+
+        first_edge = next(
+            edge
+            for edge in editor.edges
+            if {edge.source.element_id, edge.target.element_id}
+            == {first.element_id, second.element_id}
+        )
+        second_edge = next(
+            edge
+            for edge in editor.edges
+            if {edge.source.element_id, edge.target.element_id}
+            == {second.element_id, third.element_id}
+        )
+
+        update_counts = {first_edge: 0, second_edge: 0}
+        for edge in (first_edge, second_edge):
+            original_update = edge.update_geometry
+
+            def counted_update(edge=edge, original_update=original_update) -> None:
+                update_counts[edge] += 1
+                original_update()
+
+            edge.update_geometry = counted_update
+
+        editor._undo_stack.clear()
+        editor.begin_node_drag(first)
+        first.setPos(QPointF(75.0, 0.0))
+        editor.finish_node_drag()
+
+        assert editor.topology.ui_positions[first.element_id] == (75.0, 0.0)
+        assert update_counts[first_edge] == 1
+        assert update_counts[second_edge] == 0
+        assert len(editor._undo_stack) == 1
+
+        assert editor.undo()
+        assert editor.topology.ui_positions[first.element_id] == (0.0, 0.0)
+    finally:
+        editor.deleteLater()
+
+
+def test_canvas_topology_edits_still_emit_topology_changed(qapp: QApplication) -> None:
+    _ = qapp
+    editor = CanvasEditor()
+    emitted: list[None] = []
+    editor.topology_changed.connect(lambda: emitted.append(None))
+    try:
+        first = editor.add_component("TrackSection", QPointF(0.0, 0.0))
+        second = editor.add_component("TrackSection", QPointF(100.0, 0.0))
+        editor.create_connection(first.element_id, second.element_id)
+        editor.delete_node(second)
+
+        assert len(emitted) == 4
+    finally:
+        editor.deleteLater()
+
+
+def test_canvas_annotation_line_drag_records_one_undo_and_one_topology_change(
+    qapp: QApplication,
+) -> None:
+    _ = qapp
+    editor = CanvasEditor()
+    emitted: list[None] = []
+    editor.topology_changed.connect(lambda: emitted.append(None))
+    try:
+        line_item = editor.add_annotation_line(QPointF(30.0, 40.0))
+        line_id = line_item.line.id
+        editor._undo_stack.clear()
+        emitted.clear()
+
+        editor.begin_annotation_line_drag(line_id)
+        editor.move_annotation_line(line_id, QPointF(25.0, 0.0), emit_change=False)
+        editor.move_annotation_line(line_id, QPointF(25.0, 0.0), emit_change=False)
+        editor.finish_annotation_line_drag(line_id)
+
+        assert editor.topology.annotation_lines[line_id].start == (75.0, 50.0)
+        assert len(editor._undo_stack) == 1
+        assert len(emitted) == 1
+
+        assert editor.undo()
+        assert editor.topology.annotation_lines[line_id].start == (25.0, 50.0)
+    finally:
+        editor.deleteLater()
+
+
 def test_properties_panel_emits_annotation_line_updates(qapp: QApplication) -> None:
     _ = qapp
     panel = PropertiesPanel(UITranslator())
     captured: list[tuple[str, dict]] = []
-    panel.properties_applied.connect(lambda element_id, updates: captured.append((element_id, updates)))
+    panel.properties_applied.connect(
+        lambda element_id, updates: captured.append((element_id, updates))
+    )
     try:
         panel.set_element(
             {
@@ -383,7 +507,9 @@ def test_properties_panel_emits_label_color_updates(qapp: QApplication) -> None:
     _ = qapp
     panel = PropertiesPanel(UITranslator())
     captured: list[tuple[str, dict]] = []
-    panel.properties_applied.connect(lambda element_id, updates: captured.append((element_id, updates)))
+    panel.properties_applied.connect(
+        lambda element_id, updates: captured.append((element_id, updates))
+    )
     try:
         panel.set_element(
             {
@@ -414,11 +540,15 @@ def test_properties_panel_emits_label_color_updates(qapp: QApplication) -> None:
         panel.deleteLater()
 
 
-def test_signal_blocking_property_forces_stop_and_hides_route_type_controls(qapp: QApplication) -> None:
+def test_signal_blocking_property_forces_stop_and_hides_route_type_controls(
+    qapp: QApplication,
+) -> None:
     _ = qapp
     panel = PropertiesPanel(UITranslator())
     captured: list[tuple[str, dict]] = []
-    panel.properties_applied.connect(lambda element_id, updates: captured.append((element_id, updates)))
+    panel.properties_applied.connect(
+        lambda element_id, updates: captured.append((element_id, updates))
+    )
     try:
         panel.set_element(
             {
@@ -428,15 +558,17 @@ def test_signal_blocking_property_forces_stop_and_hides_route_type_controls(qapp
                     "aspect": SignalAspect.PROCEED.value,
                     "direction": "RIGHT",
                     "is_blocking": False,
+                    "is_reverse_signal": False,
                 },
             }
         )
 
         assert "calling_on_entry_signal" not in panel._inputs
-        assert "is_reverse_signal" not in panel._inputs
+        assert "is_reverse_signal" in panel._inputs
         assert "reverse_role" not in panel._inputs
         assert "reverse_pair_signal" not in panel._inputs
 
+        panel._inputs["is_reverse_signal"].setChecked(True)
         panel._inputs["is_blocking"].setChecked(True)
         assert panel._inputs["aspect"].currentData() == SignalAspect.RED.value
         assert not panel._inputs["aspect"].isEnabled()
@@ -444,9 +576,12 @@ def test_signal_blocking_property_forces_stop_and_hides_route_type_controls(qapp
         panel._apply()
         assert captured[-1][0] == "S1"
         assert captured[-1][1]["aspect"] == SignalAspect.RED.value
+        assert captured[-1][1]["is_reverse_signal"] is True
 
         panel._inputs["is_blocking"].setChecked(False)
+        panel._inputs["is_reverse_signal"].setChecked(False)
         panel._apply()
         assert captured[-1][1]["is_blocking"] is False
+        assert captured[-1][1]["is_reverse_signal"] is False
     finally:
         panel.deleteLater()

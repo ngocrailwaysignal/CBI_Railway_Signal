@@ -11,7 +11,7 @@ import networkx as nx
 
 from core.domain.model.elements import PointPosition, SignalAspect, TrackSection
 from core.domain.model.route import Route
-from core.domain.model.topology import RailwayTopology
+from core.domain.model.topology import ROUTE_TYPE_REVERSE, RailwayTopology
 from kernel.route_dispatcher.route_engine import RouteEngine
 
 
@@ -51,7 +51,7 @@ class InterlockingTableGenerator:
         exit_signal_ids: Iterable[str],
         max_depth: int = 24,
     ) -> list[InterlockingTableRow]:
-        """Generate one shortest valid interlocking row per entry/exit pair."""
+        """Generate nearest automatic route per entry plus manually marked routes."""
         self.topology.sync_signal_virtual_routes()
         entry_set = {str(signal_id) for signal_id in entry_signal_ids}
         exit_set = {str(signal_id) for signal_id in exit_signal_ids}
@@ -60,7 +60,9 @@ class InterlockingTableGenerator:
         special_pairs = calling_on_pairs
         pair_flags: dict[tuple[str, str], tuple[bool, bool]] = {}
 
-        def add_pair(entry_signal_id: str, exit_signal_id: str, *, calling_on: bool, reverse: bool) -> None:
+        def add_pair(
+            entry_signal_id: str, exit_signal_id: str, *, calling_on: bool, reverse: bool
+        ) -> None:
             if entry_signal_id == exit_signal_id:
                 return
             if entry_signal_id not in entry_set or exit_signal_id not in exit_set:
@@ -78,6 +80,8 @@ class InterlockingTableGenerator:
             entry_signal = self.topology.signals.get(entry_signal_id)
             if entry_signal is None or entry_signal.is_blocking:
                 continue
+            nearest_exit_signal_id: str | None = None
+            nearest_path_length: int | None = None
             for exit_signal_id in sorted(exit_set):
                 exit_signal = self.topology.signals.get(exit_signal_id)
                 if exit_signal is None or exit_signal.is_blocking:
@@ -88,11 +92,71 @@ class InterlockingTableGenerator:
                     continue
                 if entry_signal.direction != exit_signal.direction:
                     continue
+                route = self._find_shortest_pair_route(
+                    entry_signal_id,
+                    exit_signal_id,
+                    max_depth=max_depth,
+                    is_calling_on=False,
+                    is_reverse=(entry_signal_id, exit_signal_id) in reverse_pairs,
+                )
+                if route is None:
+                    continue
+                path_length = len(route.path)
+                if (
+                    nearest_path_length is None
+                    or path_length < nearest_path_length
+                    or (
+                        path_length == nearest_path_length
+                        and exit_signal_id < (nearest_exit_signal_id or "")
+                    )
+                ):
+                    nearest_exit_signal_id = exit_signal_id
+                    nearest_path_length = path_length
+            if nearest_exit_signal_id is not None:
+                add_pair(
+                    entry_signal_id,
+                    nearest_exit_signal_id,
+                    calling_on=False,
+                    reverse=(entry_signal_id, nearest_exit_signal_id) in reverse_pairs,
+                )
+
+        configured_pairs = calling_on_pairs | reverse_pairs
+        for entry_signal_id in sorted(entry_set):
+            entry_signal = self.topology.signals.get(entry_signal_id)
+            if entry_signal is None or entry_signal.is_blocking:
+                continue
+            for exit_signal_id in sorted(exit_set):
+                exit_signal = self.topology.signals.get(exit_signal_id)
+                if exit_signal is None or exit_signal.is_blocking:
+                    continue
+                if entry_signal_id == exit_signal_id:
+                    continue
+                if (entry_signal_id, exit_signal_id) in configured_pairs:
+                    continue
+                if (entry_signal_id, exit_signal_id) in pair_flags:
+                    continue
+                if entry_signal.direction != exit_signal.direction:
+                    continue
+                if not (
+                    bool(getattr(entry_signal, "is_reverse_signal", False))
+                    and bool(getattr(exit_signal, "is_reverse_signal", False))
+                ):
+                    continue
+                if (
+                    self._find_shortest_pair_route(
+                        entry_signal_id=entry_signal_id,
+                        exit_signal_id=exit_signal_id,
+                        max_depth=max_depth,
+                        is_reverse=True,
+                    )
+                    is None
+                ):
+                    continue
                 add_pair(
                     entry_signal_id,
                     exit_signal_id,
                     calling_on=False,
-                    reverse=(entry_signal_id, exit_signal_id) in reverse_pairs,
+                    reverse=True,
                 )
 
         for entry_signal_id, exit_signal_id in sorted(calling_on_pairs):
@@ -101,6 +165,13 @@ class InterlockingTableGenerator:
                 exit_signal_id,
                 calling_on=True,
                 reverse=False,
+            )
+        for entry_signal_id, exit_signal_id in sorted(reverse_pairs):
+            add_pair(
+                entry_signal_id,
+                exit_signal_id,
+                calling_on=False,
+                reverse=True,
             )
 
         routes: list[Route] = []
@@ -170,7 +241,11 @@ class InterlockingTableGenerator:
     def to_markdown(self, rows: list[InterlockingTableRow]) -> str:
         """Render rows as a markdown interlocking table."""
         lines = [
-            "| Route | Entry | Exit | Signal Aspect | Entry protected section | Exit protected section | Normal | Reverse | Reverse Route | Calling-on Route | Track locks | Overlap | Conflicts |",
+            (
+                "| Route | Entry | Exit | Signal Aspect | Entry protected section | "
+                "Exit protected section | Normal | Reverse | Reverse Route | "
+                "Calling-on Route | Track locks | Overlap | Conflicts |"
+            ),
             "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
         ]
         for row in rows:
@@ -337,6 +412,17 @@ class InterlockingTableGenerator:
                 preferred_first_node=exit_protected,
             )
             try:
+                signal_aspect = self.topology.route_signal_aspect(
+                    entry_signal_id,
+                    exit_signal_id,
+                )
+                if is_reverse and not self.topology.is_reverse_route_pair(
+                    entry_signal_id,
+                    exit_signal_id,
+                ):
+                    signal_aspect = RailwayTopology.default_route_signal_aspect(
+                        ROUTE_TYPE_REVERSE
+                    )
                 required_points = self.route_engine.compute_required_point_positions(
                     [*path, *overlap_path]
                 )
@@ -362,10 +448,7 @@ class InterlockingTableGenerator:
                 ),
                 is_calling_on=is_calling_on,
                 is_reverse=is_reverse,
-                signal_aspect=self.topology.route_signal_aspect(
-                    entry_signal_id,
-                    exit_signal_id,
-                ),
+                signal_aspect=signal_aspect,
             )
             return route
         return None

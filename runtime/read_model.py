@@ -95,7 +95,11 @@ def build_runtime_view_state(runtime_session: RuntimeSession | None) -> RuntimeV
             lifecycle_state=route.lifecycle_state.value,
             is_calling_on=bool(route.is_calling_on),
             is_reverse=bool(route.is_reverse),
-            route_type="CALLING_ON" if route.is_calling_on else "REVERSE" if route.is_reverse else "",
+            route_type="CALLING_ON"
+            if route.is_calling_on
+            else "REVERSE"
+            if route.is_reverse
+            else "",
             signal_aspect=route.signal_aspect.value,
         )
         for route in runtime_session.locking_engine.active_routes.values()

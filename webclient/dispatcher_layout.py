@@ -7,8 +7,8 @@ from typing import Any
 
 ELEMENT_KINDS = {"track_section", "signal", "point", "label", "block_marker"}
 DEFAULT_CANVAS = {
-    "width": 1920.0,
-    "height": 900.0,
+    "width": 3840.0,
+    "height": 1800.0,
     "grid_size": 20.0,
     "snap_enabled": True,
     "background": "#050607",

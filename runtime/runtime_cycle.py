@@ -85,8 +85,7 @@ class SimulationEngine:
             if len(trains) < 2:
                 continue
             has_calling_on_authority = any(
-                (route := active_routes.get(str(train.route_id or "").strip()))
-                is not None
+                (route := active_routes.get(str(train.route_id or "").strip())) is not None
                 and route.is_calling_on
                 and section_id in route.full_path
                 for train in trains

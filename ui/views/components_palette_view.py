@@ -338,17 +338,21 @@ class PropertiesPanel(QWidget):
 
             blocking_input = QCheckBox()
             blocking_input.setChecked(bool(properties.get("is_blocking", False)))
+            reverse_signal_input = QCheckBox()
+            reverse_signal_input.setChecked(bool(properties.get("is_reverse_signal", False)))
 
             self._inputs["protects"] = protects_input
             self._inputs["approach_section"] = approach_section_input
             self._inputs["aspect"] = aspect_input
             self._inputs["direction"] = direction_input
             self._inputs["is_blocking"] = blocking_input
+            self._inputs["is_reverse_signal"] = reverse_signal_input
             self.form_layout.addRow(self._t("field.protects"), protects_input)
             self.form_layout.addRow(self._t("field.approach_section"), approach_section_input)
             self.form_layout.addRow(self._t("field.direction"), direction_input)
             self.form_layout.addRow(self._t("field.aspect"), aspect_input)
             self.form_layout.addRow(self._t("field.blocking_signal"), blocking_input)
+            self.form_layout.addRow(self._t("field.reverse_signal"), reverse_signal_input)
             blocking_input.toggled.connect(self._sync_signal_route_controls)
             self._sync_signal_route_controls()
 
@@ -452,6 +456,9 @@ class PropertiesPanel(QWidget):
                 self._inputs["direction"].currentData() or SignalDirection.RIGHT.value
             )
             updated["is_blocking"] = bool(self._inputs["is_blocking"].isChecked())
+            updated["is_reverse_signal"] = bool(
+                self._inputs["is_reverse_signal"].isChecked()
+            )
             updated["aspect"] = (
                 SignalAspect.RED.value
                 if updated["is_blocking"]

@@ -11,13 +11,20 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">CBI RAILWAY SIGNAL</p>
-        <h1>Dispatcher</h1>
+        <h1 data-i18n="viewer.heading">Dispatcher</h1>
       </div>
       <div class="topbar-actions">
-        <a class="nav-button" href="/dispatcher/editor">Open Editor</a>
-        <button id="toggleRoutesBtn" type="button" class="ghost">Hide Routes</button>
-        <button id="debugLabelsBtn" type="button" class="ghost">Show Debug</button>
-        <span class="status-pill waiting" id="connectionPill">WAITING RUNTIME</span>
+        <label class="language-picker">
+          <span data-i18n="language.label">Language</span>
+          <select id="languageSelect">
+            <option value="en" data-i18n="language.en">English</option>
+            <option value="vi" data-i18n="language.vi">Vietnamese</option>
+          </select>
+        </label>
+        <a class="nav-button" href="/dispatcher/editor" data-i18n="viewer.open_editor">Open Editor</a>
+        <button id="toggleRoutesBtn" type="button" class="ghost" data-i18n="viewer.hide_routes">Hide Routes</button>
+        <button id="debugLabelsBtn" type="button" class="ghost" data-i18n="viewer.show_debug">Show Debug</button>
+        <span class="status-pill waiting" id="connectionPill" data-i18n="viewer.waiting_runtime">WAITING RUNTIME</span>
         <div class="clock-block">
           <span class="clock-label">VN</span>
           <strong id="clockText">--:--:--</strong>
@@ -29,38 +36,38 @@
       <section class="board-panel board-panel-wide">
         <div class="panel-head">
           <div>
-            <p class="panel-kicker">Runtime Feed</p>
-            <h2 id="scenarioTitle">Waiting For Runtime</h2>
-            <p class="hint" id="transportHint">Loading runtime feed...</p>
+            <p class="panel-kicker" data-i18n="viewer.runtime_feed">Runtime Feed</p>
+            <h2 id="scenarioTitle" data-i18n="viewer.waiting_for_runtime">Waiting For Runtime</h2>
+            <p class="hint" id="transportHint" data-i18n="viewer.loading_runtime">Loading runtime feed...</p>
           </div>
           <div class="viewer-compact-meta">
-            <span><strong id="workspaceModeText">waiting</strong> workspace</span>
-            <span><strong id="routeMetric">0</strong> routes</span>
-            <span><strong id="trainMetric">0</strong> trains</span>
-            <span><strong id="occupancyMetric">0</strong> occupied</span>
-            <span>updated <strong id="updatedAtText">--</strong></span>
+            <span><strong id="workspaceModeText">waiting</strong> <span data-i18n="viewer.workspace_suffix">workspace</span></span>
+            <span><strong id="routeMetric">0</strong> <span data-i18n="viewer.routes">routes</span></span>
+            <span><strong id="trainMetric">0</strong> <span data-i18n="viewer.trains">trains</span></span>
+            <span><strong id="occupancyMetric">0</strong> <span data-i18n="viewer.occupied">occupied</span></span>
+            <span><span data-i18n="viewer.updated">updated</span> <strong id="updatedAtText">--</strong></span>
           </div>
         </div>
-        <div class="dispatcher-command-panel" aria-label="Dispatcher route controls">
+        <div class="dispatcher-command-panel" aria-label="Dispatcher route controls" data-i18n-aria-label="viewer.route">
           <label class="command-field">
-            <span>Route</span>
+            <span data-i18n="viewer.route">Route</span>
             <select id="routeSelect"></select>
           </label>
           <div class="route-readout">
-            <span><strong>Entry</strong> <em id="routeEntryText">--</em></span>
-            <span><strong>Exit</strong> <em id="routeExitText">--</em></span>
-            <span><strong>Tracks</strong> <em id="routeTracksText">--</em></span>
-            <span><strong>Points</strong> <em id="routePointsText">--</em></span>
+            <span><strong data-i18n="viewer.entry">Entry</strong> <em id="routeEntryText">--</em></span>
+            <span><strong data-i18n="viewer.exit">Exit</strong> <em id="routeExitText">--</em></span>
+            <span><strong data-i18n="viewer.tracks">Tracks</strong> <em id="routeTracksText">--</em></span>
+            <span><strong data-i18n="viewer.points">Points</strong> <em id="routePointsText">--</em></span>
           </div>
-          <button id="setRouteBtn" type="button" class="primary-button">Set Route</button>
-          <button id="cancelRoutesBtn" type="button" class="danger-button">Cancel Routes</button>
-          <span id="commandStatusText" class="command-status">Runtime controls waiting...</span>
+          <button id="setRouteBtn" type="button" class="primary-button" data-i18n="viewer.set_route">Set Route</button>
+          <button id="cancelRoutesBtn" type="button" class="danger-button" data-i18n="viewer.cancel_routes">Cancel Routes</button>
+          <span id="commandStatusText" class="command-status" data-i18n="viewer.controls_waiting">Runtime controls waiting...</span>
         </div>
         <div class="board-frame">
-          <div class="camera-toolbar" aria-label="Schematic camera controls">
-            <button id="fitBoardBtn" type="button" class="icon-button" title="Fit schematic">Fit</button>
-            <button id="zoomOutBtn" type="button" class="icon-button" title="Zoom out">-</button>
-            <button id="zoomInBtn" type="button" class="icon-button" title="Zoom in">+</button>
+          <div class="camera-toolbar" aria-label="Schematic camera controls" data-i18n-aria-label="viewer.fit_title">
+            <button id="fitBoardBtn" type="button" class="icon-button" title="Fit schematic" data-i18n="viewer.fit" data-i18n-title="viewer.fit_title">Fit</button>
+            <button id="zoomOutBtn" type="button" class="icon-button" title="Zoom out" data-i18n-title="viewer.zoom_out">-</button>
+            <button id="zoomInBtn" type="button" class="icon-button" title="Zoom in" data-i18n-title="viewer.zoom_in">+</button>
           </div>
           <svg id="dispatcherBoard" aria-label="Dispatcher viewer board"></svg>
         </div>

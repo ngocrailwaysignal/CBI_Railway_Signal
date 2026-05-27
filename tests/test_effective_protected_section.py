@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import csv
 
-from core.compiler.interlocking_table import InterlockingTableGenerator
-from core.compiler.interlocking_table import InterlockingTableRow
+from core.compiler.interlocking_table import InterlockingTableGenerator, InterlockingTableRow
 from core.compiler.route_compiler import RouteCompiler
 from core.compiler.spec_models import InterlockingRouteSpec
-from core.domain.model.elements import Point, PointPosition, Signal, TrackSection
-from core.domain.model.topology import RailwayTopology
+from core.domain.model.elements import Point, PointPosition, Signal, SignalAspect, TrackSection
+from core.domain.model.topology import ROUTE_TYPE_REVERSE, RailwayTopology
 from kernel.route_dispatcher.route_engine import RouteEngine
 from runtime.application import AppMode
 from runtime.application.serialization import build_webclient_runtime_state
@@ -31,6 +30,46 @@ def build_branching_topology() -> RailwayTopology:
     topology.connect("R1", "EXIT_R")
     topology.connect("N2", "EXIT_R")
     topology.connect("SECTION_ENTRY", "N1")
+    topology.sync_signal_virtual_routes()
+    return topology
+
+
+def build_linear_multi_exit_topology() -> RailwayTopology:
+    topology = RailwayTopology()
+    for section_id in ("S1", "S2", "S3", "S4", "S5"):
+        topology.add_section(TrackSection(section_id))
+    topology.add_signal(Signal("ENTRY", protects="S1"))
+    topology.add_signal(Signal("EXIT_NEAR", protects="S3"))
+    topology.add_signal(Signal("EXIT_FAR", protects="S5"))
+
+    topology.connect("ENTRY", "S1")
+    topology.connect("S1", "S2")
+    topology.connect("S2", "S3")
+    topology.connect("S3", "S4")
+    topology.connect("S4", "S5")
+    topology.connect("S2", "EXIT_NEAR")
+    topology.connect("EXIT_NEAR", "S3")
+    topology.connect("S4", "EXIT_FAR")
+    topology.connect("EXIT_FAR", "S5")
+    topology.sync_signal_virtual_routes()
+    return topology
+
+
+def build_equal_distance_exit_topology() -> RailwayTopology:
+    topology = RailwayTopology()
+    for section_id in ("S0", "A1", "A2", "B1", "B2"):
+        topology.add_section(TrackSection(section_id))
+    topology.add_signal(Signal("ENTRY", protects="S0"))
+    topology.add_signal(Signal("EXIT_A", protects="A2"))
+    topology.add_signal(Signal("EXIT_B", protects="B2"))
+
+    topology.connect("ENTRY", "S0")
+    topology.connect("S0", "A1")
+    topology.connect("S0", "B1")
+    topology.connect("A1", "EXIT_A")
+    topology.connect("EXIT_A", "A2")
+    topology.connect("B1", "EXIT_B")
+    topology.connect("EXIT_B", "B2")
     topology.sync_signal_virtual_routes()
     return topology
 
@@ -60,6 +99,7 @@ def test_signal_protecting_track_section_resolves_that_section() -> None:
 
 def test_interlocking_outputs_raw_protected_node_and_effective_section() -> None:
     topology = build_branching_topology()
+    topology.set_route_type("ENTRY", "EXIT_R", ROUTE_TYPE_REVERSE)
     rows = InterlockingTableGenerator(topology).generate(
         entry_signal_ids=["ENTRY"],
         exit_signal_ids=["EXIT_N", "EXIT_R"],
@@ -86,6 +126,100 @@ def test_interlocking_outputs_raw_protected_node_and_effective_section() -> None
     assert restored.entry_protected_section == "N1"
 
 
+def test_interlocking_generates_only_nearest_exit_for_each_entry() -> None:
+    topology = build_linear_multi_exit_topology()
+
+    rows = InterlockingTableGenerator(topology).generate(
+        entry_signal_ids=["ENTRY"],
+        exit_signal_ids=["EXIT_NEAR", "EXIT_FAR"],
+    )
+
+    assert [row.exit_signal for row in rows] == ["EXIT_NEAR"]
+
+
+def test_interlocking_tie_breaks_nearest_exit_by_signal_id() -> None:
+    topology = build_equal_distance_exit_topology()
+
+    rows = InterlockingTableGenerator(topology).generate(
+        entry_signal_ids=["ENTRY"],
+        exit_signal_ids=["EXIT_B", "EXIT_A"],
+    )
+
+    assert [row.exit_signal for row in rows] == ["EXIT_A"]
+
+
+def test_interlocking_keeps_manual_reverse_route_beyond_nearest_exit() -> None:
+    topology = build_linear_multi_exit_topology()
+    topology.set_route_type("ENTRY", "EXIT_FAR", ROUTE_TYPE_REVERSE)
+
+    rows = InterlockingTableGenerator(topology).generate(
+        entry_signal_ids=["ENTRY"],
+        exit_signal_ids=["EXIT_NEAR", "EXIT_FAR"],
+    )
+
+    by_exit = {row.exit_signal: row for row in rows}
+    assert set(by_exit) == {"EXIT_NEAR", "EXIT_FAR"}
+    assert by_exit["EXIT_NEAR"].is_reverse is False
+    assert by_exit["EXIT_FAR"].is_reverse is True
+    assert by_exit["EXIT_FAR"].signal_aspect == SignalAspect.YELLOW_BLUE
+
+
+def test_interlocking_does_not_add_far_reverse_route_from_reverse_entry_only() -> None:
+    topology = build_linear_multi_exit_topology()
+    topology.signals["ENTRY"].is_reverse_signal = True
+
+    rows = InterlockingTableGenerator(topology).generate(
+        entry_signal_ids=["ENTRY"],
+        exit_signal_ids=["EXIT_NEAR", "EXIT_FAR"],
+    )
+
+    assert [row.exit_signal for row in rows] == ["EXIT_NEAR"]
+    assert rows[0].is_reverse is False
+
+
+def test_interlocking_does_not_add_far_reverse_route_to_reverse_exit_only() -> None:
+    topology = build_linear_multi_exit_topology()
+    topology.signals["EXIT_FAR"].is_reverse_signal = True
+
+    rows = InterlockingTableGenerator(topology).generate(
+        entry_signal_ids=["ENTRY"],
+        exit_signal_ids=["EXIT_NEAR", "EXIT_FAR"],
+    )
+
+    assert [row.exit_signal for row in rows] == ["EXIT_NEAR"]
+    assert rows[0].is_reverse is False
+
+
+def test_interlocking_adds_far_reverse_route_when_entry_and_exit_are_reverse_signals() -> None:
+    topology = build_linear_multi_exit_topology()
+    topology.signals["ENTRY"].is_reverse_signal = True
+    topology.signals["EXIT_FAR"].is_reverse_signal = True
+
+    rows = InterlockingTableGenerator(topology).generate(
+        entry_signal_ids=["ENTRY"],
+        exit_signal_ids=["EXIT_NEAR", "EXIT_FAR"],
+    )
+
+    by_exit = {row.exit_signal: row for row in rows}
+    assert set(by_exit) == {"EXIT_NEAR", "EXIT_FAR"}
+    assert by_exit["EXIT_NEAR"].is_reverse is False
+    assert by_exit["EXIT_FAR"].is_reverse is True
+    assert by_exit["EXIT_FAR"].signal_aspect == SignalAspect.YELLOW_BLUE
+
+
+def test_interlocking_keeps_reverse_signal_nearest_route_normal() -> None:
+    topology = build_linear_multi_exit_topology()
+    topology.signals["EXIT_NEAR"].is_reverse_signal = True
+
+    rows = InterlockingTableGenerator(topology).generate(
+        entry_signal_ids=["ENTRY"],
+        exit_signal_ids=["EXIT_NEAR", "EXIT_FAR"],
+    )
+
+    assert [row.exit_signal for row in rows] == ["EXIT_NEAR"]
+    assert rows[0].is_reverse is False
+
+
 def test_interlocking_export_splits_normal_and_reverse_point_columns(tmp_path) -> None:
     row = InterlockingTableRow(
         route_name="ENTRY->EXIT",
@@ -109,7 +243,10 @@ def test_interlocking_export_splits_normal_and_reverse_point_columns(tmp_path) -
 
     markdown = generator.to_markdown([row])
 
-    assert "| Route | Entry | Exit | Signal Aspect | Entry protected section | Exit protected section | Normal | Reverse |" in markdown
+    assert (
+        "| Route | Entry | Exit | Signal Aspect | Entry protected section | "
+        "Exit protected section | Normal | Reverse |"
+    ) in markdown
     assert "| ENTRY->EXIT | ENTRY (P1) | EXIT (S2) | GREEN | N1 | S2 | P1 | P2 |" in markdown
 
     csv_path = tmp_path / "interlocking.csv"
@@ -126,6 +263,7 @@ def test_interlocking_export_splits_normal_and_reverse_point_columns(tmp_path) -
 
 def test_webclient_interlocking_payload_includes_split_point_columns() -> None:
     topology = build_branching_topology()
+    topology.set_route_type("ENTRY", "EXIT_R", ROUTE_TYPE_REVERSE)
 
     payload = build_webclient_runtime_state(
         topology=topology,

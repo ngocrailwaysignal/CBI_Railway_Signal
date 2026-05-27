@@ -72,36 +72,36 @@ def first_route_pair(application_service: GenericApplicationService, topology):
     raise AssertionError("No valid route pair found in sample topology")
 
 
-def test_route_point_isolates_occupied_flank_branch_for_a_to_g2() -> None:
+def test_route_point_isolates_occupied_flank_branch_for_x0104_to_xc0204() -> None:
     application_service, runtime_workspace = build_services()
     topology = load_topology(application_service)
 
-    s14 = topology.get_element("S14")
-    assert isinstance(s14, TrackSection)
-    s14.occupied = True
+    flank_branch = topology.get_element("S8")
+    assert isinstance(flank_branch, TrackSection)
+    flank_branch.occupied = True
 
     route = application_service.find_route(
         topology,
-        "A",
-        "G2",
+        "X0104",
+        "XC0204",
         overlap_length=1,
     )
 
-    assert route.required_point_positions["P2"] == PointPosition.REVERSE
-    assert "S14" not in route.monitored_flank_sections
+    assert route.required_point_positions["P0106"] == PointPosition.NORMAL
+    assert "S8" not in route.monitored_flank_sections
 
     result = runtime_workspace.set_or_reuse_route(
         topology=topology,
-        entry_signal_id="A",
-        exit_signal_id="G2",
+        entry_signal_id="X0104",
+        exit_signal_id="XC0204",
         overlap_length=1,
         approach_time_lock_seconds=1.0,
         overlap_release_seconds=1.0,
     )
 
     assert result.created is True
-    assert result.route.entry_signal_id == "A"
-    assert result.route.exit_signal_id == "G2"
+    assert result.route.entry_signal_id == "X0104"
+    assert result.route.exit_signal_id == "XC0204"
 
 
 def test_runtime_workspace_route_lifecycle_and_view_state() -> None:
@@ -387,6 +387,46 @@ def test_state_update_outside_runtime_mode_returns_failed_command_result() -> No
     result_payload = sent_messages[0]["payload"]
     assert result_payload["command_id"] == "su-test-1"
     assert result_payload["status"] == "rejected"
+
+
+def test_smartio_does_not_auto_connect_in_design_layout_mode() -> None:
+    application_service, runtime_workspace = build_services()
+    topology = load_topology(application_service)
+    mode = AppMode.DESIGN_LAYOUT
+
+    class StubSocketClient:
+        def __init__(self) -> None:
+            self.is_connected = False
+            self.connect_count = 0
+            self.disconnect_count = 0
+
+        def connect(self) -> None:
+            self.connect_count += 1
+            self.is_connected = True
+
+        def disconnect(self) -> None:
+            self.disconnect_count += 1
+            self.is_connected = False
+
+    parent = QObject()
+    coordinator = SmartIORuntimeCoordinator(
+        profile=GenericApplicationProfile(smart_io_ws_url="ws://example.test/smartio"),
+        application_service=application_service,
+        runtime_workspace_service=runtime_workspace,
+        topology_provider=lambda: topology,
+        operating_mode_provider=lambda: mode,
+        parent=parent,
+    )
+    stub_client = StubSocketClient()
+    coordinator._smartio_client = stub_client
+
+    coordinator.sync_connection_for_mode(AppMode.DESIGN_LAYOUT)
+    assert stub_client.connect_count == 0
+    assert stub_client.disconnect_count == 1
+
+    mode = AppMode.RUNTIME
+    coordinator.sync_connection_for_mode(AppMode.RUNTIME)
+    assert stub_client.connect_count == 1
 
 
 def test_local_smartio_in_simulation_mode_publishes_snapshot() -> None:

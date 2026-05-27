@@ -62,8 +62,11 @@ from ui.views.canvas_view_helpers import (
     node_scene_anchor,
     resolve_connection_direction,
 )
-from ui.views.components_palette_view import PaletteListWidget
-from ui.views.components_palette_view import combo_color_value, create_color_combo
+from ui.views.components_palette_view import (
+    PaletteListWidget,
+    combo_color_value,
+    create_color_combo,
+)
 
 POINT_SYMBOL_CHOICES: tuple[tuple[str, PointSymbolOrientation], ...] = (
     ("1", PointSymbolOrientation.RIGHT),
@@ -400,6 +403,16 @@ class NodeItem(QGraphicsObject):
             self.editor.handle_node_moved(self)
         return super().itemChange(change, value)
 
+    def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        if self.editor is not None:
+            self.editor.begin_node_drag(self)
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        super().mouseReleaseEvent(event)
+        if self.editor is not None:
+            self.editor.finish_node_drag()
+
     def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if self.editor is not None:
             if self.element_type == ANNOTATION_LABEL_NODE_TYPE:
@@ -549,7 +562,7 @@ class AnnotationLineItem(QGraphicsObject):
         self._drag_handle = self._hit_handle(pos)
         self._drag_line = self._drag_handle is None
         if self.editor is not None:
-            self.editor._push_undo_state()
+            self.editor.begin_annotation_line_drag(self.line.id)
         event.accept()
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
@@ -559,19 +572,29 @@ class AnnotationLineItem(QGraphicsObject):
         if self._drag_handle:
             snapped = self.editor.snap_to_grid(event.scenePos())
             if self._drag_handle == "start":
-                self.editor.update_annotation_line_geometry(self.line.id, start=snapped)
+                self.editor.update_annotation_line_geometry(
+                    self.line.id,
+                    start=snapped,
+                    emit_change=False,
+                )
             else:
-                self.editor.update_annotation_line_geometry(self.line.id, end=snapped)
+                self.editor.update_annotation_line_geometry(
+                    self.line.id,
+                    end=snapped,
+                    emit_change=False,
+                )
             event.accept()
             return
         if self._drag_line:
             delta = event.scenePos() - event.lastScenePos()
-            self.editor.move_annotation_line(self.line.id, delta)
+            self.editor.move_annotation_line(self.line.id, delta, emit_change=False)
             event.accept()
             return
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        if self.editor is not None:
+            self.editor.finish_annotation_line_drag(self.line.id)
         self._drag_handle = None
         self._drag_line = False
         event.accept()
@@ -713,17 +736,19 @@ class CanvasEditor(QGraphicsView):
         self.viewport().setAcceptDrops(True)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+        self.setRubberBandSelectionMode(Qt.ItemSelectionMode.IntersectsItemShape)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.scene_ref = QGraphicsScene(self)
         self.setScene(self.scene_ref)
-        self.scene_ref.setSceneRect(-1000.0, -1000.0, 2200.0, 2200.0)
+        self.scene_ref.setSceneRect(-3000.0, -1800.0, 6000.0, 3600.0)
         self.scene_ref.selectionChanged.connect(self._on_selection_changed)
 
         self.topology = RailwayTopology()
         self.nodes: dict[str, NodeItem] = {}
         self.annotation_line_items: dict[str, AnnotationLineItem] = {}
         self.edges: list[EdgeItem] = []
+        self._edges_by_node: dict[str, set[EdgeItem]] = {}
         self.signal_links: set[tuple[str, str]] = self.topology.signal_links
         self._counter = {
             "TrackSection": 0,
@@ -748,6 +773,12 @@ class CanvasEditor(QGraphicsView):
         self._undo_stack: list[RailwayTopology] = []
         self._redo_stack: list[RailwayTopology] = []
         self._max_undo_depth = 50
+        self._pending_node_drag_snapshot: RailwayTopology | None = None
+        self._pending_node_drag_positions: dict[str, tuple[float, float]] = {}
+        self._pending_annotation_line_snapshot: RailwayTopology | None = None
+        self._pending_annotation_line_state: (
+            tuple[str, tuple[float, float], tuple[float, float]] | None
+        ) = None
         self._runtime_edit_locked = False
         self._runtime_edit_lock_reason = ""
         self._layout_edit_locked = False
@@ -775,6 +806,19 @@ class CanvasEditor(QGraphicsView):
 
     def _t(self, key: str, **kwargs: object) -> str:
         return self._translator.t(key, **kwargs)
+
+    @staticmethod
+    def _is_canvas_pan_request(button: Qt.MouseButton, modifiers: Qt.KeyboardModifier) -> bool:
+        return button in {Qt.MouseButton.MiddleButton, Qt.MouseButton.RightButton} or (
+            button == Qt.MouseButton.LeftButton
+            and bool(modifiers & Qt.KeyboardModifier.AltModifier)
+        )
+
+    def _begin_canvas_pan(self, view_pos: Any) -> None:
+        self._is_panning = True
+        self._pan_last_pos = view_pos
+        self._pan_has_moved = False
+        self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
 
     def set_translator(self, translator: UITranslator) -> None:
         self._translator = translator
@@ -852,7 +896,10 @@ class CanvasEditor(QGraphicsView):
             event.accept()
             return
 
-        if event.button() == Qt.MouseButton.LeftButton and not self._connect_mode:
+        if (
+            self._is_canvas_pan_request(event.button(), event.modifiers())
+            and not self._connect_mode
+        ):
             scene_pos = self.mapToScene(event.position().toPoint())
             item = self.scene_ref.itemAt(scene_pos, self.transform())
             if (
@@ -860,10 +907,7 @@ class CanvasEditor(QGraphicsView):
                 and self._extract_annotation_line_item(item) is None
                 and not isinstance(item, EdgeItem)
             ):
-                self._is_panning = True
-                self._pan_last_pos = event.position().toPoint()
-                self._pan_has_moved = False
-                self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
+                self._begin_canvas_pan(event.position().toPoint())
                 event.accept()
                 return
 
@@ -970,7 +1014,10 @@ class CanvasEditor(QGraphicsView):
             self._annotation_preview_line.setLine(start.x(), start.y(), end.x(), end.y())
             event.accept()
             return
-        if self._annotation_text_preview_rect is not None and self._annotation_text_start is not None:
+        if (
+            self._annotation_text_preview_rect is not None
+            and self._annotation_text_start is not None
+        ):
             rect = QRectF(
                 self._annotation_text_start,
                 self.snap_to_grid(self.mapToScene(event.position().toPoint())),
@@ -981,7 +1028,11 @@ class CanvasEditor(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: Any) -> None:
-        if event.button() == Qt.MouseButton.LeftButton and self._is_panning:
+        if self._is_panning and event.button() in {
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.MiddleButton,
+            Qt.MouseButton.RightButton,
+        }:
             self._is_panning = False
             self._pan_last_pos = None
             self._suppress_context_menu_once = self._pan_has_moved
@@ -1448,12 +1499,73 @@ class CanvasEditor(QGraphicsView):
         """Capture a deep-copy snapshot for undo/redo."""
         return deepcopy(self.topology)
 
-    def _push_undo_state(self) -> None:
-        """Push current state to undo stack and clear redo stack."""
-        self._undo_stack.append(self._snapshot_topology())
+    def _push_undo_snapshot(self, snapshot: RailwayTopology) -> None:
+        """Push a pre-mutation snapshot captured before an interactive drag."""
+        self._undo_stack.append(snapshot)
         if len(self._undo_stack) > self._max_undo_depth:
             self._undo_stack.pop(0)
         self._redo_stack.clear()
+
+    def _push_undo_state(self) -> None:
+        """Push current state to undo stack and clear redo stack."""
+        self._push_undo_snapshot(self._snapshot_topology())
+
+    def begin_node_drag(self, node: NodeItem) -> None:
+        """Capture one pre-drag snapshot without committing an undo entry yet."""
+        if self._pending_node_drag_snapshot is not None:
+            return
+        selected_nodes = [
+            item for item in self.scene_ref.selectedItems() if isinstance(item, NodeItem)
+        ]
+        if node not in selected_nodes:
+            selected_nodes.append(node)
+        self._pending_node_drag_snapshot = self._snapshot_topology()
+        self._pending_node_drag_positions = {
+            item.element_id: (item.pos().x(), item.pos().y()) for item in selected_nodes
+        }
+
+    def finish_node_drag(self) -> None:
+        """Commit one undo entry only if an interactive node drag changed positions."""
+        snapshot = self._pending_node_drag_snapshot
+        start_positions = self._pending_node_drag_positions
+        self._pending_node_drag_snapshot = None
+        self._pending_node_drag_positions = {}
+        if snapshot is None or not start_positions:
+            return
+        for element_id, start_position in start_positions.items():
+            node = self.nodes.get(element_id)
+            if node is None:
+                continue
+            if (node.pos().x(), node.pos().y()) != start_position:
+                self._push_undo_snapshot(snapshot)
+                return
+
+    def begin_annotation_line_drag(self, line_id: str) -> None:
+        """Capture one pre-drag snapshot for annotation line movement."""
+        if self._pending_annotation_line_snapshot is not None:
+            return
+        line = self.topology.annotation_lines.get(line_id)
+        if line is None:
+            return
+        self._pending_annotation_line_snapshot = self._snapshot_topology()
+        self._pending_annotation_line_state = (line_id, tuple(line.start), tuple(line.end))
+
+    def finish_annotation_line_drag(self, line_id: str) -> None:
+        """Commit annotation drag once and emit one topology change after release."""
+        snapshot = self._pending_annotation_line_snapshot
+        state = self._pending_annotation_line_state
+        self._pending_annotation_line_snapshot = None
+        self._pending_annotation_line_state = None
+        if snapshot is None or state is None or state[0] != line_id:
+            return
+        line = self.topology.annotation_lines.get(line_id)
+        if line is None:
+            return
+        if tuple(line.start) == state[1] and tuple(line.end) == state[2]:
+            return
+        self._push_undo_snapshot(snapshot)
+        self._on_selection_changed()
+        self.topology_changed.emit()
 
     def undo(self) -> bool:
         """Restore previous topology snapshot."""
@@ -1999,6 +2111,7 @@ class CanvasEditor(QGraphicsView):
         start: QPointF | None = None,
         end: QPointF | None = None,
         record_undo: bool = False,
+        emit_change: bool = True,
     ) -> None:
         line = self.topology.annotation_lines.get(line_id)
         item = self.annotation_line_items.get(line_id)
@@ -2011,21 +2124,28 @@ class CanvasEditor(QGraphicsView):
         if end is not None:
             line.end = (float(end.x()), float(end.y()))
         item.refresh_geometry()
-        self.topology_changed.emit()
+        if emit_change:
+            self.topology_changed.emit()
 
-    def move_annotation_line(self, line_id: str, delta: QPointF) -> None:
+    def move_annotation_line(
+        self,
+        line_id: str,
+        delta: QPointF,
+        *,
+        emit_change: bool = True,
+    ) -> None:
         line = self.topology.annotation_lines.get(line_id)
         item = self.annotation_line_items.get(line_id)
         if line is None or item is None:
             raise KeyError(self._t("canvas.error.unknown_element", element_id=line_id))
         start = QPointF(line.start[0] + delta.x(), line.start[1] + delta.y())
-        end = QPointF(line.end[0] + delta.x(), line.end[1] + delta.y())
         snapped_start = self.snap_to_grid(start)
         snap_delta = snapped_start - QPointF(*line.start)
         line.start = (line.start[0] + snap_delta.x(), line.start[1] + snap_delta.y())
         line.end = (line.end[0] + snap_delta.x(), line.end[1] + snap_delta.y())
         item.refresh_geometry()
-        self.topology_changed.emit()
+        if emit_change:
+            self.topology_changed.emit()
 
     def edit_annotation_line_properties_dialog(self, line_item: AnnotationLineItem) -> None:
         """Open a double-click edit dialog for a visual annotation line."""
@@ -2227,16 +2347,20 @@ class CanvasEditor(QGraphicsView):
             aspect.setCurrentIndex(aspect_index if aspect_index >= 0 else 0)
             blocking = QCheckBox(dialog)
             blocking.setChecked(bool(node.payload.get("is_blocking", False)))
+            reverse_signal = QCheckBox(dialog)
+            reverse_signal.setChecked(bool(node.payload.get("is_reverse_signal", False)))
             controls["protects"] = protects
             controls["approach_section"] = approach_section
             controls["direction"] = direction
             controls["aspect"] = aspect
             controls["is_blocking"] = blocking
+            controls["is_reverse_signal"] = reverse_signal
             form.addRow(self._t("field.protects"), protects)
             form.addRow(self._t("field.approach_section"), approach_section)
             form.addRow(self._t("field.direction"), direction)
             form.addRow(self._t("field.aspect"), aspect)
             form.addRow(self._t("field.blocking_signal"), blocking)
+            form.addRow(self._t("field.reverse_signal"), reverse_signal)
 
             def sync_signal_route_controls() -> None:
                 is_blocking = blocking.isChecked()
@@ -2253,11 +2377,13 @@ class CanvasEditor(QGraphicsView):
                 direction.setEnabled(False)
                 aspect.setEnabled(False)
                 blocking.setEnabled(False)
+                reverse_signal.setEnabled(False)
                 protects.setToolTip(layout_lock_hint)
                 approach_section.setToolTip(layout_lock_hint)
                 direction.setToolTip(layout_lock_hint)
                 aspect.setToolTip(layout_lock_hint)
                 blocking.setToolTip(layout_lock_hint)
+                reverse_signal.setToolTip(layout_lock_hint)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -2292,9 +2418,8 @@ class CanvasEditor(QGraphicsView):
                         updates[key] = bool(widget.isChecked())
                     elif isinstance(widget, QLineEdit):
                         updates[key] = str(widget.text()).strip()
-                if "is_blocking" in updates:
-                    if updates["is_blocking"]:
-                        updates["aspect"] = SignalAspect.RED.value
+                if "is_blocking" in updates and updates["is_blocking"]:
+                    updates["aspect"] = SignalAspect.RED.value
                 if updates:
                     self.update_node_properties(node.element_id, updates)
             except Exception as exc:
@@ -2416,6 +2541,9 @@ class CanvasEditor(QGraphicsView):
                 if element.is_blocking:
                     element.aspect = SignalAspect.RED
                 emit_topology_change = True
+            if "is_reverse_signal" in updates:
+                element.is_reverse_signal = bool(updates["is_reverse_signal"])
+                emit_topology_change = True
             if "aspect" in updates:
                 element.aspect = (
                     SignalAspect.RED
@@ -2453,7 +2581,7 @@ class CanvasEditor(QGraphicsView):
                 line_item.refresh_geometry()
             emit_topology_change = True
 
-        self.refresh_visual_state()
+        self.refresh_element_visuals({element_id})
         self._on_selection_changed()
         if emit_topology_change:
             self.topology_changed.emit()
@@ -2570,6 +2698,7 @@ class CanvasEditor(QGraphicsView):
                     )
             static_fields = {
                 "is_blocking",
+                "is_reverse_signal",
             }
             for field_name in static_fields.intersection(updates):
                 current_value = getattr(element, field_name)
@@ -2653,9 +2782,8 @@ class CanvasEditor(QGraphicsView):
     def handle_node_moved(self, node: NodeItem) -> None:
         """Persist node position and update connected edges."""
         self.topology.update_position(node.element_id, (node.pos().x(), node.pos().y()))
-        for edge in self.edges:
-            if edge.source is node or edge.target is node:
-                edge.update_geometry()
+        for edge in self._connected_edges_for_node(node.element_id):
+            edge.update_geometry()
 
     def _on_selection_changed(self) -> None:
         self.canvas_selection_changed.emit()
@@ -2846,6 +2974,22 @@ class CanvasEditor(QGraphicsView):
             line.refresh_geometry()
         self._sync_train_visuals()
 
+    def refresh_element_visuals(self, element_ids: set[str]) -> None:
+        """Refresh a small set of nodes and directly connected visual edges."""
+        refreshed_edges: set[EdgeItem] = set()
+        for element_id in element_ids:
+            node = self.nodes.get(element_id)
+            if node is None:
+                continue
+            node.payload = self._element_payload(element_id)
+            node.update()
+            for edge in self._connected_edges_for_node(element_id):
+                if edge in refreshed_edges:
+                    continue
+                edge.update_geometry()
+                refreshed_edges.add(edge)
+        self._sync_train_visuals()
+
     def _connection_pairs(self) -> list[tuple[str, str]]:
         """Return visualized connections in deterministic order."""
         return connection_pairs(
@@ -2854,11 +2998,20 @@ class CanvasEditor(QGraphicsView):
             signal_links=self.signal_links,
         )
 
+    def _connected_edges_for_node(self, node_id: str) -> tuple[EdgeItem, ...]:
+        return tuple(self._edges_by_node.get(node_id, ()))
+
+    def _register_edge_item(self, edge: EdgeItem) -> None:
+        self.edges.append(edge)
+        self._edges_by_node.setdefault(edge.source.element_id, set()).add(edge)
+        self._edges_by_node.setdefault(edge.target.element_id, set()).add(edge)
+
     def _rebuild_edge_items(self) -> None:
         """Recreate all edge graphics from current topology links."""
         for edge in list(self.edges):
             self.scene_ref.removeItem(edge)
         self.edges.clear()
+        self._edges_by_node.clear()
 
         seen: set[tuple[str, str]] = set()
         for source_id, target_id in self._connection_pairs():
@@ -2870,7 +3023,7 @@ class CanvasEditor(QGraphicsView):
                 continue
             edge = EdgeItem(source_node, target_node)
             self.scene_ref.addItem(edge)
-            self.edges.append(edge)
+            self._register_edge_item(edge)
             seen.add((source_id, target_id))
 
     def load_topology(self, topology: RailwayTopology) -> None:
@@ -2892,6 +3045,7 @@ class CanvasEditor(QGraphicsView):
         self.nodes.clear()
         self.annotation_line_items.clear()
         self.edges.clear()
+        self._edges_by_node.clear()
         self._connect_source = None
         self.topology = topology
         self.signal_links = self.topology.signal_links

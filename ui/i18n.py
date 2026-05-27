@@ -162,7 +162,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "interlocking_table.header.signal_aspect": {
         "en": "Signal Aspect",
-        "vi": "Signal Aspect",
+        "vi": "Biểu thị",
     },
     "interlocking_table.header.point": {
         "en": "Point",
@@ -170,19 +170,19 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "interlocking_table.header.normal": {
         "en": "Normal",
-        "vi": "Normal",
+        "vi": "Định vị",
     },
     "interlocking_table.header.reverse": {
         "en": "Reverse",
-        "vi": "Reverse",
+        "vi": "Phản vị",
     },
     "interlocking_table.header.reverse_route": {
         "en": "Reverse Route",
-        "vi": "Reverse Route",
+        "vi": "Hành trình chạy ngược",
     },
     "interlocking_table.header.calling_on_route": {
         "en": "Calling-on Route",
-        "vi": "Calling-on Route",
+        "vi": "Hành trình gọi tàu",
     },
     "interlocking_table.header.opposing_signal": {
         "en": "Opposing Signal",
@@ -194,7 +194,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "interlocking_table.header.approach_lock_track": {
         "en": "Approach Locking\nTrack",
-        "vi": "Khóa tiếp cận\nPhân khu",
+        "vi": "Khóa tiếp cận\n",
     },
     "interlocking_table.header.approach_lock_release": {
         "en": "Approach Locking\nRelease Time",
@@ -282,11 +282,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "field.aspect": {
         "en": "Aspect",
-        "vi": "Chỉ thị",
+        "vi": "Biểu thị",
     },
     "field.blocking_signal": {
         "en": "Blocking Signal",
-        "vi": "Blocking Signal",
+        "vi": "Tín hiệu chặn",
+    },
+    "field.reverse_signal": {
+        "en": "Reverse Signal",
+        "vi": "Tín hiệu chạy ngược",
     },
     "field.text": {
         "en": "Text",
@@ -298,31 +302,31 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "field.color": {
         "en": "Color",
-        "vi": "Color",
+        "vi": "Màu",
     },
     "field.width": {
         "en": "Width",
-        "vi": "Width",
+        "vi": "Chiều rộng",
     },
     "field.height": {
         "en": "Height",
-        "vi": "Height",
+        "vi": "Chiều cao",
     },
     "field.start_x": {
         "en": "Start X",
-        "vi": "Start X",
+        "vi": "X bắt đầu",
     },
     "field.start_y": {
         "en": "Start Y",
-        "vi": "Start Y",
+        "vi": "Y bắt đầu",
     },
     "field.end_x": {
         "en": "End X",
-        "vi": "End X",
+        "vi": "X kết thúc",
     },
     "field.end_y": {
         "en": "End Y",
-        "vi": "End Y",
+        "vi": "Y kết thúc",
     },
     "field.element_id_placeholder": {
         "en": "Element ID",
@@ -402,19 +406,27 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "signal_aspect.red": {
         "en": "RED",
-        "vi": "RED",
+        "vi": "ĐỎ",
     },
     "signal_aspect.yellow": {
         "en": "YELLOW",
-        "vi": "YELLOW",
+        "vi": "VÀNG",
     },
     "signal_aspect.green": {
         "en": "GREEN",
-        "vi": "GREEN",
+        "vi": "Lục",
     },
     "signal_aspect.blue": {
         "en": "BLUE",
-        "vi": "BLUE",
+        "vi": "Lam",
+    },
+    "signal_aspect.yellow_blue": {
+        "en": "YELLOW BLUE",
+        "vi": "Vàng Lam",
+    },
+    "signal_aspect.green_blue": {
+        "en": "GREEN BLUE",
+        "vi": "Lục Lam",
     },
     "palette.components": {
         "en": "Components",
@@ -445,8 +457,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "vi": "Thêm nhãn chữ",
     },
     "palette.add_line": {
-        "en": "Add line",
-        "vi": "Add line",
+        "en": "Add line Direction",
+        "vi": "Hướng chạy tàu",
     },
     "properties.title": {
         "en": "Properties",
@@ -482,7 +494,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "dialog.cannot_add_line.title": {
         "en": "Cannot add line",
-        "vi": "Cannot add line",
+        "vi": "Không thể thêm đường",
     },
     "dialog.property_update_failed.title": {
         "en": "Property update failed",
@@ -578,15 +590,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "dialog.runtime_requires_smartio.title": {
         "en": "Runtime unavailable",
-        "vi": "Không thể vào Runtime",
+        "vi": "Không thể vào vận hành",
     },
     "dialog.runtime_requires_smartio.message": {
         "en": "Runtime workspace requires SmartIO connection.\nURL: {url}\nCurrent state: {state}",
-        "vi": "Workspace Runtime yêu cầu kết nối SmartIO.\nURL: {url}\nTrạng thái hiện tại: {state}",
+        "vi": "Không gian vận hành yêu cầu kết nối SmartIO.\nURL: {url}\nTrạng thái hiện tại: {state}",
     },
     "dialog.smartio_local_failed.title": {
         "en": "SmartIO Local failed",
-        "vi": "SmartIO Local kh?ng kh?i ??ng ???c",
+        "vi": "SmartIO Local không khởi động được",
     },
     "dialog.fail_safe_stop.title": {
         "en": "Fail-safe STOP",
@@ -638,15 +650,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "status.line_added": {
         "en": "Added line",
-        "vi": "Added line",
+        "vi": "Đã thêm đường",
     },
     "status.label_tool_active": {
         "en": "Text label tool active",
-        "vi": "Text label tool active",
+        "vi": "Đã bật công cụ nhãn chữ",
     },
     "status.line_tool_active": {
         "en": "Line tool active",
-        "vi": "Line tool active",
+        "vi": "Đã bật công cụ vẽ đường",
     },
     "status.simulation_stopped_workspace": {
         "en": "Simulation stopped after leaving Simulation workspace.",
@@ -696,6 +708,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Simulation complete",
         "vi": "Mô phỏng hoàn tất",
     },
+    "status.set_route_disabled": {
+        "en": "Set route is disabled in Design Layout workspace",
+        "vi": "Không thể thiết lập hành trình trong không gian Thiết kế sa bàn",
+    },
     "status.cancel_route_disabled": {
         "en": "Cancel route is disabled in Design Layout workspace",
         "vi": "Không thể hủy hành trình trong không gian Thiết kế sa bàn",
@@ -722,23 +738,83 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "status.smartio_error": {
         "en": "SmartIO error: {message}",
-        "vi": "SmartIO error: {message}",
+        "vi": "Lỗi SmartIO: {message}",
     },
     "status.smartio_local_started": {
         "en": "SmartIO Local started with {path} at {url}",
-        "vi": "SmartIO Local ?? kh?i ??ng v?i {path} t?i {url}",
+        "vi": "SmartIO Local đã khởi động với {path} tại {url}",
     },
     "status.smartio_local_opened": {
         "en": "Opened SmartIO Local at {url}",
-        "vi": "?? m? SmartIO Local t?i {url}",
+        "vi": "Đã mở SmartIO Local tại {url}",
     },
     "status.smartio_local_failed": {
         "en": "SmartIO Local failed to start",
-        "vi": "SmartIO Local kh?ng kh?i ??ng ???c",
+        "vi": "SmartIO Local không khởi động được",
     },
     "status.runtime_requires_smartio": {
         "en": "Runtime requires SmartIO connected (current: {state})",
-        "vi": "Runtime yêu cầu SmartIO đã kết nối (hiện tại: {state})",
+        "vi": "Vận hành yêu cầu SmartIO đã kết nối (hiện tại: {state})",
+    },
+    "status.webclient_runtime_export_failed": {
+        "en": "Webclient runtime export failed: {message}",
+        "vi": "Xuất trạng thái vận hành cho webclient thất bại: {message}",
+    },
+    "status.webclient_command_inbox_unavailable": {
+        "en": "Webclient command inbox unavailable: {message}",
+        "vi": "Hộp lệnh webclient không khả dụng: {message}",
+    },
+    "status.webclient_command_invalid_ignored": {
+        "en": "Invalid webclient command ignored: {message}",
+        "vi": "Đã bỏ qua lệnh webclient không hợp lệ: {message}",
+    },
+    "status.webclient_unsupported_command": {
+        "en": "Unsupported webclient command: {kind}",
+        "vi": "Lệnh webclient không được hỗ trợ: {kind}",
+    },
+    "status.webclient_missing_command": {
+        "en": "missing",
+        "vi": "thiếu loại lệnh",
+    },
+    "status.webclient_command_rejected": {
+        "en": "Webclient command rejected: {message}",
+        "vi": "Lệnh webclient bị từ chối: {message}",
+    },
+    "status.webclient_command_result_write_failed": {
+        "en": "Webclient command result write failed: {message}",
+        "vi": "Ghi kết quả lệnh webclient thất bại: {message}",
+    },
+    "status.webclient_monitor_started": {
+        "en": "Webclient runtime monitor started at {url}",
+        "vi": "Đã khởi động màn hình giám sát webclient tại {url}",
+    },
+    "status.webclient_monitor_start_failed": {
+        "en": "Webclient runtime monitor start failed: {message}",
+        "vi": "Không thể khởi động màn hình giám sát webclient: {message}",
+    },
+    "smartio.error.snapshot_stale": {
+        "en": "TRANSPORT_UNAVAILABLE: snapshot stale for {seconds}s",
+        "vi": "TRANSPORT_UNAVAILABLE: snapshot đã quá hạn {seconds}s",
+    },
+    "smartio.error.runtime_snapshot_send_failed": {
+        "en": "runtime_snapshot send failed: {message}",
+        "vi": "Gửi runtime_snapshot thất bại: {message}",
+    },
+    "smartio.error.unknown": {
+        "en": "Unknown SmartIO error",
+        "vi": "Lỗi SmartIO không xác định",
+    },
+    "smartio.error.cbi_not_runtime": {
+        "en": "CBI is not in Runtime mode",
+        "vi": "CBI chưa ở chế độ vận hành",
+    },
+    "smartio.error.hello_send_failed": {
+        "en": "hello send failed: {message}",
+        "vi": "Gửi hello thất bại: {message}",
+    },
+    "smartio.error.command_result_send_failed": {
+        "en": "command_result send failed: {message}",
+        "vi": "Gửi command_result thất bại: {message}",
     },
     "runtime.smartio.status": {
         "en": "SmartIO: {state}",
@@ -746,27 +822,27 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "smartio.state.connected": {
         "en": "connected",
-        "vi": "connected",
+        "vi": "đã kết nối",
     },
     "smartio.state.connecting": {
         "en": "connecting",
-        "vi": "connecting",
+        "vi": "đang kết nối",
     },
     "smartio.state.disconnected": {
         "en": "disconnected",
-        "vi": "disconnected",
+        "vi": "mất kết nối",
     },
     "smartio.state.reconnecting": {
         "en": "reconnecting in {seconds}s",
-        "vi": "reconnecting in {seconds}s",
+        "vi": "đang kết nối lại sau {seconds}s",
     },
     "smartio.state.error": {
         "en": "error",
-        "vi": "error",
+        "vi": "lỗi",
     },
     "smartio.state.disabled": {
         "en": "disabled (missing URL)",
-        "vi": "disabled (missing URL)",
+        "vi": "đã tắt (thiếu URL)",
     },
     "main.lock.layout_edit_reason": {
         "en": "Switch to Design Layout workspace to modify topology and static properties.",
@@ -870,15 +946,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     },
     "canvas.message.annotation_text_mode": {
         "en": "Text label mode: click the canvas to place a label. Press Esc to cancel.",
-        "vi": "Text label mode: click the canvas to place a label. Press Esc to cancel.",
+        "vi": "Chế độ nhãn chữ: bấm lên canvas để đặt nhãn. Nhấn Esc để hủy.",
     },
     "canvas.message.annotation_line_mode_start": {
         "en": "Line mode: click the start point. Press Esc to cancel.",
-        "vi": "Line mode: click the start point. Press Esc to cancel.",
+        "vi": "Chế độ vẽ đường: bấm điểm bắt đầu. Nhấn Esc để hủy.",
     },
     "canvas.message.annotation_line_mode_end": {
         "en": "Line mode: click the end point.",
-        "vi": "Line mode: click the end point.",
+        "vi": "Chế độ vẽ đường: bấm điểm kết thúc.",
     },
     "canvas.message.manual_free_removed_trains": {
         "en": "Manual FREE on {section_id}: removed train(s) {train_ids} from simulation state.",

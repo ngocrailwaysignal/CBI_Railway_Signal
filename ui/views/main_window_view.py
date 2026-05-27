@@ -11,7 +11,7 @@ from contextlib import suppress
 from pathlib import Path
 
 from PyQt6.QtCore import QProcess, QRect, QSize, Qt, QTimer, QUrl
-from PyQt6.QtGui import QCloseEvent, QDesktopServices, QPaintEvent, QPainter
+from PyQt6.QtGui import QCloseEvent, QDesktopServices, QPainter, QPaintEvent
 from PyQt6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -37,11 +37,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.compiler.interlocking_table import InterlockingTableRow
-from core.compiler.interlocking_table import InterlockingTableGenerator
+from config import DEFAULT_APP_CONFIG
+from core.compiler.interlocking_table import InterlockingTableGenerator, InterlockingTableRow
 from core.domain.model.elements import PointPosition, SignalAspect, TrackSection
 from core.domain.model.route import Route
-from core.domain.model.topology import ROUTE_TYPE_REVERSE
 from kernel.route_dispatcher.route_engine import RouteEngine
 from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
 from runtime.application import AppMode
@@ -231,13 +230,31 @@ class MainWindow(QMainWindow):
         self._simulation_timer = QTimer(self)
         self._simulation_timer.timeout.connect(self._simulation_tick)
         self._simulation_ticks_remaining = 0
+        self._topology_change_timer = QTimer(self)
+        self._topology_change_timer.setSingleShot(True)
+        self._topology_change_timer.setInterval(50)
+        self._topology_change_timer.timeout.connect(self._flush_topology_changed)
         self._webclient_runtime_timer = QTimer(self)
-        self._webclient_runtime_timer.setInterval(1000)
+        self._webclient_runtime_timer.setInterval(
+            int(
+                getattr(
+                    self.application_profile,
+                    "webclient_runtime_publish_interval_ms",
+                    DEFAULT_APP_CONFIG.webclient.runtime_publish_interval_ms,
+                )
+            )
+        )
         self._webclient_runtime_timer.timeout.connect(self._publish_webclient_runtime_state)
         self._last_webclient_runtime_export_error = ""
         self._initialize_smartio_client()
 
-        sample_path = Path("data/station_layout/main_layout.json")
+        sample_path = self._repo_root() / str(
+            getattr(
+                self.application_profile,
+                "default_layout_path",
+                DEFAULT_APP_CONFIG.paths.default_layout_path,
+            )
+        )
         if sample_path.exists():
             self._load_layout_into_canvas(
                 self.layout_editor_service.load_layout(
@@ -250,7 +267,7 @@ class MainWindow(QMainWindow):
             self.status.showMessage(self._t("status.loaded_sample_layout", path=sample_path))
         else:
             self.canvas.load_topology(self.current_layout.topology)
-        self._set_operating_mode(OperatingMode.RUNTIME, announce=False)
+        self._set_operating_mode(OperatingMode.DESIGN_LAYOUT, announce=False)
         self._sync_ui_state()
         self._retranslate_ui()
 
@@ -267,6 +284,9 @@ class MainWindow(QMainWindow):
 
     def _mode_text(self, mode: OperatingMode) -> str:
         return self._t(self._mode_translation_key(mode))
+
+    def _signal_aspect_text(self, aspect: SignalAspect) -> str:
+        return self._t(f"signal_aspect.{aspect.value.lower()}")
 
     def _populate_language_selector(self) -> None:
         current_language = self._translator.language
@@ -814,10 +834,27 @@ class MainWindow(QMainWindow):
         self._update_runtime_connection_label()
 
     def _on_smartio_error(self, message: str) -> None:
-        text = str(message).strip()
+        text = self._localized_smartio_error(str(message).strip())
         if text:
             self.status.showMessage(self._t("status.smartio_error", message=text), 5000)
         self._update_runtime_connection_label()
+
+    def _localized_smartio_error(self, message: str) -> str:
+        if not message:
+            return ""
+        prefix_key_pairs = (
+            ("runtime_snapshot send failed: ", "smartio.error.runtime_snapshot_send_failed"),
+            ("hello send failed: ", "smartio.error.hello_send_failed"),
+            ("command_result send failed: ", "smartio.error.command_result_send_failed"),
+        )
+        for prefix, key in prefix_key_pairs:
+            if message.startswith(prefix):
+                return self._t(key, message=message.removeprefix(prefix))
+        if message == "Unknown SmartIO error":
+            return self._t("smartio.error.unknown")
+        if message == "CBI is not in Runtime mode":
+            return self._t("smartio.error.cbi_not_runtime")
+        return message
 
     def _on_runtime_state_changed(self, payload: object) -> None:
         data = payload if isinstance(payload, dict) else {}
@@ -841,19 +878,31 @@ class MainWindow(QMainWindow):
     def _webclient_runtime_state_path(self) -> Path:
         return webclient_runtime_state_path(
             self._repo_root(),
-            getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"),
+            getattr(
+                self.application_profile,
+                "runtime_journal_dir",
+                DEFAULT_APP_CONFIG.paths.runtime_journal_dir,
+            ),
         )
 
     def _webclient_runtime_command_path(self) -> Path:
         return webclient_runtime_command_path(
             self._repo_root(),
-            getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"),
+            getattr(
+                self.application_profile,
+                "runtime_journal_dir",
+                DEFAULT_APP_CONFIG.paths.runtime_journal_dir,
+            ),
         )
 
     def _webclient_runtime_command_result_path(self) -> Path:
         return webclient_runtime_command_result_path(
             self._repo_root(),
-            getattr(self.application_profile, "runtime_journal_dir", "data/runtime_journal"),
+            getattr(
+                self.application_profile,
+                "runtime_journal_dir",
+                DEFAULT_APP_CONFIG.paths.runtime_journal_dir,
+            ),
         )
 
     def _publish_webclient_runtime_state(self) -> None:
@@ -878,7 +927,10 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             message = str(exc).strip()
             if message and message != self._last_webclient_runtime_export_error:
-                self.status.showMessage(f"Webclient runtime export failed: {message}", 5000)
+                self.status.showMessage(
+                    self._t("status.webclient_runtime_export_failed", message=message),
+                    5000,
+                )
                 self._last_webclient_runtime_export_error = message
 
     def _drain_webclient_runtime_commands(self) -> list[dict]:
@@ -891,7 +943,10 @@ class MainWindow(QMainWindow):
         except FileNotFoundError:
             return []
         except OSError as exc:
-            self.status.showMessage(f"Webclient command inbox unavailable: {exc}", 5000)
+            self.status.showMessage(
+                self._t("status.webclient_command_inbox_unavailable", message=exc),
+                5000,
+            )
             return []
 
         commands: list[dict] = []
@@ -902,7 +957,10 @@ class MainWindow(QMainWindow):
                 try:
                     payload = json.loads(line)
                 except json.JSONDecodeError as exc:
-                    self.status.showMessage(f"Invalid webclient command ignored: {exc}", 5000)
+                    self.status.showMessage(
+                        self._t("status.webclient_command_invalid_ignored", message=exc),
+                        5000,
+                    )
                     continue
                 if isinstance(payload, dict):
                     commands.append(payload)
@@ -923,13 +981,21 @@ class MainWindow(QMainWindow):
                 elif kind == "cancel_active_routes":
                     result_payload = self._cancel_active_routes_from_webclient()
                 else:
-                    raise RuntimeError(f"Unsupported webclient command: {kind or '<missing>'}")
+                    raise RuntimeError(
+                        self._t(
+                            "status.webclient_unsupported_command",
+                            kind=kind or self._t("status.webclient_missing_command"),
+                        )
+                    )
             except Exception as exc:
                 message = str(exc)
                 self._record_webclient_runtime_command_result(
                     command, status="rejected", message=message
                 )
-                self.status.showMessage(f"Webclient command rejected: {message}", 5000)
+                self.status.showMessage(
+                    self._t("status.webclient_command_rejected", message=message),
+                    5000,
+                )
             else:
                 self._record_webclient_runtime_command_result(
                     command,
@@ -963,7 +1029,10 @@ class MainWindow(QMainWindow):
                 handle.flush()
                 os.fsync(handle.fileno())
         except OSError as exc:
-            self.status.showMessage(f"Webclient command result write failed: {exc}", 5000)
+            self.status.showMessage(
+                self._t("status.webclient_command_result_write_failed", message=exc),
+                5000,
+            )
 
     def _set_route_from_webclient(self, payload: dict) -> dict:
         if not self.mode_policy.capabilities(self._operating_mode).can_set_route:
@@ -1088,6 +1157,11 @@ class MainWindow(QMainWindow):
             details.append(f"cmd={float(command_age):.1f}s")
         suffix = " | ".join(details)
         if degraded and degraded_reason:
+            if degraded_reason.startswith("TRANSPORT_UNAVAILABLE: snapshot stale for "):
+                seconds = degraded_reason.removeprefix(
+                    "TRANSPORT_UNAVAILABLE: snapshot stale for "
+                ).removesuffix("s")
+                degraded_reason = self._t("smartio.error.snapshot_stale", seconds=seconds)
             return f"\nDEGRADED: {degraded_reason}\n{suffix}"
         return f"\n{suffix}" if suffix else ""
 
@@ -1122,20 +1196,51 @@ class MainWindow(QMainWindow):
             self._smartio_status_token = self.smartio_coordinator.smartio_status_token
             self._update_runtime_connection_label()
 
-    @staticmethod
-    def _smartio_local_http_url() -> str:
-        return "http://127.0.0.1:8088/"
+    def _smartio_local_host(self) -> str:
+        return str(
+            getattr(
+                self.application_profile,
+                "smart_io_local_host",
+                DEFAULT_APP_CONFIG.smartio.local_host,
+            )
+        )
 
-    @staticmethod
-    def _smartio_local_ws_url() -> str:
-        return "ws://127.0.0.1:8088/smartio"
+    def _smartio_local_port(self) -> int:
+        return int(
+            getattr(
+                self.application_profile,
+                "smart_io_local_port",
+                DEFAULT_APP_CONFIG.smartio.local_port,
+            )
+        )
+
+    def _smartio_local_http_url(self) -> str:
+        return f"http://{self._smartio_local_host()}:{self._smartio_local_port()}/"
+
+    def _smartio_local_ws_url(self) -> str:
+        host = self._smartio_local_host()
+        port = self._smartio_local_port()
+        path = str(
+            getattr(
+                self.application_profile,
+                "smart_io_local_ws_path",
+                DEFAULT_APP_CONFIG.smartio.local_ws_path,
+            )
+        )
+        return f"ws://{host}:{port}{path}"
 
     @staticmethod
     def _repo_root() -> Path:
         return Path(__file__).resolve().parents[2]
 
     def _smartio_local_layout_path(self) -> Path:
-        target_dir = self._repo_root() / "data" / "_smartio_local"
+        target_dir = self._repo_root() / str(
+            getattr(
+                self.application_profile,
+                "smartio_local_layout_dir",
+                DEFAULT_APP_CONFIG.paths.smartio_local_layout_dir,
+            )
+        )
         target_dir.mkdir(parents=True, exist_ok=True)
         layout_name = (
             self.current_layout.source_path.stem
@@ -1168,9 +1273,16 @@ class MainWindow(QMainWindow):
             return
         if self._smartio_local_process.state() is not QProcess.ProcessState.NotRunning:
             self._smartio_local_process.terminate()
-            if not self._smartio_local_process.waitForFinished(1500):
+            stop_timeout_ms = int(
+                getattr(
+                    self.application_profile,
+                    "process_stop_timeout_ms",
+                    DEFAULT_APP_CONFIG.webclient.process_stop_timeout_ms,
+                )
+            )
+            if not self._smartio_local_process.waitForFinished(stop_timeout_ms):
                 self._smartio_local_process.kill()
-                self._smartio_local_process.waitForFinished(1500)
+                self._smartio_local_process.waitForFinished(stop_timeout_ms)
         self._smartio_local_process.deleteLater()
         self._smartio_local_process = None
 
@@ -1190,16 +1302,23 @@ class MainWindow(QMainWindow):
                     "--layout",
                     str(layout_path),
                     "--host",
-                    "127.0.0.1",
+                    self._smartio_local_host(),
                     "--port",
-                    "8088",
+                    str(self._smartio_local_port()),
                     "--no-browser",
                 ]
             )
             process.setWorkingDirectory(str(self._repo_root()))
             process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
             process.start()
-            if not process.waitForStarted(3000):
+            start_timeout_ms = int(
+                getattr(
+                    self.application_profile,
+                    "process_start_timeout_ms",
+                    DEFAULT_APP_CONFIG.webclient.process_start_timeout_ms,
+                )
+            )
+            if not process.waitForStarted(start_timeout_ms):
                 error_text = str(process.errorString()).strip() or self._t(
                     "status.smartio_local_failed"
                 )
@@ -1233,14 +1352,40 @@ class MainWindow(QMainWindow):
         self._ensure_smartio_connection(force=True)
         return self.smartio_coordinator.is_connected
 
-    @staticmethod
-    def _webclient_http_url() -> str:
-        return "http://127.0.0.1:8091/"
+    def _webclient_host(self) -> str:
+        return str(
+            getattr(
+                self.application_profile,
+                "webclient_host",
+                DEFAULT_APP_CONFIG.webclient.host,
+            )
+        )
+
+    def _webclient_port(self) -> int:
+        return int(
+            getattr(
+                self.application_profile,
+                "webclient_port",
+                DEFAULT_APP_CONFIG.webclient.port,
+            )
+        )
+
+    def _webclient_http_url(self) -> str:
+        return f"http://{self._webclient_host()}:{self._webclient_port()}/?lang={self._translator.language}"
 
     def _webclient_layout_path(self) -> Path:
         if self.current_layout is not None and self.current_layout.source_path is not None:
             return self.current_layout.source_path.resolve()
-        return (self._repo_root() / "data" / "station_layout" / "main_layout.json").resolve()
+        return (
+            self._repo_root()
+            / str(
+                getattr(
+                    self.application_profile,
+                    "default_layout_path",
+                    DEFAULT_APP_CONFIG.paths.default_layout_path,
+                )
+            )
+        ).resolve()
 
     def _is_webclient_server_running(self) -> bool:
         return (
@@ -1253,9 +1398,16 @@ class MainWindow(QMainWindow):
             return
         if self._webclient_process.state() is not QProcess.ProcessState.NotRunning:
             self._webclient_process.terminate()
-            if not self._webclient_process.waitForFinished(1500):
+            stop_timeout_ms = int(
+                getattr(
+                    self.application_profile,
+                    "process_stop_timeout_ms",
+                    DEFAULT_APP_CONFIG.webclient.process_stop_timeout_ms,
+                )
+            )
+            if not self._webclient_process.waitForFinished(stop_timeout_ms):
                 self._webclient_process.kill()
-                self._webclient_process.waitForFinished(1500)
+                self._webclient_process.waitForFinished(stop_timeout_ms)
         self._webclient_process.deleteLater()
         self._webclient_process = None
 
@@ -1268,9 +1420,9 @@ class MainWindow(QMainWindow):
                 [
                     str(self._repo_root() / "webclient" / "serve.py"),
                     "--host",
-                    "127.0.0.1",
+                    self._webclient_host(),
                     "--port",
-                    "8091",
+                    str(self._webclient_port()),
                     "--layout-file",
                     str(self._webclient_layout_path()),
                     "--runtime-command-file",
@@ -1282,10 +1434,17 @@ class MainWindow(QMainWindow):
             process.setWorkingDirectory(str(self._repo_root()))
             process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
             process.start()
-            if process.waitForStarted(3000):
+            start_timeout_ms = int(
+                getattr(
+                    self.application_profile,
+                    "process_start_timeout_ms",
+                    DEFAULT_APP_CONFIG.webclient.process_start_timeout_ms,
+                )
+            )
+            if process.waitForStarted(start_timeout_ms):
                 self._webclient_process = process
                 self.status.showMessage(
-                    f"Webclient runtime monitor started at {self._webclient_http_url()}",
+                    self._t("status.webclient_monitor_started", url=self._webclient_http_url()),
                     5000,
                 )
             else:
@@ -1293,7 +1452,7 @@ class MainWindow(QMainWindow):
                 process.deleteLater()
                 if error_text:
                     self.status.showMessage(
-                        f"Webclient runtime monitor start failed: {error_text}",
+                        self._t("status.webclient_monitor_start_failed", message=error_text),
                         5000,
                     )
         if not self._webclient_browser_opened:
@@ -1548,6 +1707,11 @@ class MainWindow(QMainWindow):
     def _on_topology_changed(self) -> None:
         if self.current_layout is not None:
             self.current_layout.topology = self.canvas.topology
+        self._topology_change_timer.start()
+
+    def _flush_topology_changed(self) -> None:
+        if self.current_layout is not None:
+            self.current_layout.topology = self.canvas.topology
         if self._simulation_timer.isActive():
             self._simulation_timer.stop()
         self.runtime_workspace_service.invalidate_runtime_journal()
@@ -1615,7 +1779,7 @@ class MainWindow(QMainWindow):
                 str(row_index + 1),
                 self._format_route_label(row),
                 row.entry_signal,
-                row.signal_aspect.value,
+                self._signal_aspect_text(row.signal_aspect),
                 self._format_points_for_position(
                     main_point_positions,
                     PointPosition.NORMAL,
@@ -1842,24 +2006,7 @@ class MainWindow(QMainWindow):
             self._render_interlocking_row_log(row)
             return
         if column_index == self.REVERSE_ROUTE_COLUMN:
-            if self._operating_mode is not OperatingMode.DESIGN_LAYOUT:
-                self._render_interlocking_row_log(row)
-                return
-            route_type = ROUTE_TYPE_REVERSE
-            current_type = self.canvas.topology.route_type(row.entry_signal, row.exit_signal)
-            self.canvas.topology.set_route_type(
-                row.entry_signal,
-                row.exit_signal,
-                "" if current_type == route_type else route_type,
-            )
-            route_name = row.route_name
-            self.canvas.topology_changed.emit()
-            self._refresh_interlocking_table()
-            for next_row_index, next_row in enumerate(self.interlocking_rows):
-                if next_row.route_name == route_name:
-                    self.table_widget.setCurrentCell(next_row_index, column_index)
-                    self._render_interlocking_row_log(next_row)
-                    break
+            self._render_interlocking_row_log(row)
             return
         self.entry_combo.setCurrentText(row.entry_signal)
         self.exit_combo.setCurrentText(row.exit_signal)

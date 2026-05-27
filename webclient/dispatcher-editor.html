@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dispatcher Editor</title>
+    <title data-i18n="editor.title">Dispatcher Editor</title>
     <link rel="stylesheet" href="/styles.css" />
     <script type="module" src="/editor.js" defer></script>
   </head>
@@ -11,88 +11,95 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">CBI RAILWAY SIGNAL</p>
-        <h1>Dispatcher Editor</h1>
-        <p class="subtitle">Draw the station schematic manually, then bind each visual element to CBI IDs.</p>
+        <h1 data-i18n="editor.heading">Dispatcher Editor</h1>
+        <p class="subtitle" data-i18n="editor.subtitle">Draw the station schematic manually, then bind each visual element to CBI IDs.</p>
       </div>
       <div class="topbar-actions">
-        <a class="nav-button" href="/dispatcher">Open Viewer</a>
-        <button id="saveLayoutBtn" type="button" class="primary-button" disabled>Save Schematic</button>
-        <button id="clearCanvasBtn" type="button" class="danger-button">Clear Canvas</button>
-        <button id="reloadLayoutBtn" type="button" class="ghost">Reload</button>
+        <label class="language-picker">
+          <span data-i18n="language.label">Language</span>
+          <select id="languageSelect">
+            <option value="en" data-i18n="language.en">English</option>
+            <option value="vi" data-i18n="language.vi">Vietnamese</option>
+          </select>
+        </label>
+        <a class="nav-button" href="/dispatcher" data-i18n="editor.open_viewer">Open Viewer</a>
+        <button id="saveLayoutBtn" type="button" class="primary-button" disabled data-i18n="editor.save_schematic">Save Schematic</button>
+        <button id="clearCanvasBtn" type="button" class="danger-button" data-i18n="editor.clear_canvas">Clear Canvas</button>
+        <button id="reloadLayoutBtn" type="button" class="ghost" data-i18n="editor.reload">Reload</button>
       </div>
     </header>
 
     <main class="editor-layout">
       <aside class="toolbox">
         <section class="card">
-          <h3>Toolbox</h3>
+          <h3 data-i18n="editor.toolbox">Toolbox</h3>
           <div class="tool-grid">
-            <button type="button" data-tool-kind="track_section">Track Section</button>
-            <button type="button" data-tool-kind="signal">Signal</button>
-            <button type="button" data-tool-kind="point">Point</button>
-            <button type="button" data-tool-kind="label">Label</button>
-            <button type="button" data-tool-kind="block_marker">Block Marker</button>
+            <button type="button" data-tool-kind="track_section" data-i18n="editor.track_section">Track Section</button>
+            <button type="button" data-tool-kind="signal" data-i18n="editor.signal">Signal</button>
+            <button type="button" data-tool-kind="point" data-i18n="editor.point">Point</button>
+            <button type="button" data-tool-kind="label" data-i18n="editor.label">Label</button>
+            <button type="button" data-tool-kind="block_marker" data-i18n="editor.block_marker">Block Marker</button>
           </div>
-          <p class="hint">Drag a tool onto the board or click a tool to insert it at the center.</p>
+          <p class="hint" data-i18n="editor.toolbox_hint">Drag a tool onto the board or click a tool to insert it at the center.</p>
         </section>
 
         <section class="card">
-          <h3>Canvas</h3>
+          <h3 data-i18n="editor.canvas">Canvas</h3>
           <label class="toggle-row">
-            <span>Snap To Grid</span>
+            <span data-i18n="editor.snap_to_grid">Snap To Grid</span>
             <input id="snapToggle" type="checkbox" />
           </label>
           <label class="inspector-field">
-            <span class="inspector-label">Grid Size</span>
+            <span class="inspector-label" data-i18n="editor.grid_size">Grid Size</span>
             <input id="gridSizeInput" type="number" min="4" step="2" />
           </label>
           <label class="inspector-field">
-            <span class="inspector-label">Canvas Width</span>
+            <span class="inspector-label" data-i18n="editor.canvas_width">Canvas Width</span>
             <input id="canvasWidthInput" type="number" min="640" step="20" />
           </label>
           <label class="inspector-field">
-            <span class="inspector-label">Canvas Height</span>
+            <span class="inspector-label" data-i18n="editor.canvas_height">Canvas Height</span>
             <input id="canvasHeightInput" type="number" min="480" step="20" />
           </label>
           <label class="toggle-row">
-            <span>Show Debug IDs</span>
+            <span data-i18n="editor.show_debug_ids">Show Debug IDs</span>
             <input id="editorShowDebug" type="checkbox" />
           </label>
         </section>
 
         <section class="card">
-          <h3>Status</h3>
+          <h3 data-i18n="editor.status">Status</h3>
           <div class="kv-list">
             <div class="kv-row">
-              <span>Layout File</span>
+              <span data-i18n="editor.layout_file">Layout File</span>
               <strong id="layoutPathText" class="mono">-</strong>
             </div>
           </div>
-          <p class="hint" id="editorStatus">Loading dispatcher schematic...</p>
+          <p class="hint" id="editorStatus" data-i18n="editor.loading">Loading dispatcher schematic...</p>
         </section>
       </aside>
 
       <section class="board-panel editor-board-panel">
         <div class="panel-head">
           <div>
-            <p class="panel-kicker">Authoring Surface</p>
-            <h2>Dispatcher Schematic Canvas</h2>
+            <p class="panel-kicker" data-i18n="editor.authoring_surface">Authoring Surface</p>
+            <h2 data-i18n="editor.canvas_heading">Dispatcher Schematic Canvas</h2>
           </div>
-          <p class="hint">Shift/Ctrl click to multi-select, drag selected elements to move, and use handles to rotate or reshape.</p>
+          <p class="hint" data-i18n="editor.board_hint">Shift/Ctrl click to multi-select, drag selected elements to move, and use handles to rotate or reshape.</p>
         </div>
         <div id="boardViewport" class="board-frame editor-frame">
-          <div class="camera-toolbar" aria-label="Schematic camera controls">
-            <button id="fitBoardBtn" type="button" class="icon-button" title="Fit schematic">Fit</button>
-            <button id="zoomOutBtn" type="button" class="icon-button" title="Zoom out">-</button>
-            <button id="zoomInBtn" type="button" class="icon-button" title="Zoom in">+</button>
+          <div class="camera-toolbar" aria-label="Schematic camera controls" data-i18n-aria-label="viewer.fit_title">
+            <button id="fitBoardBtn" type="button" class="icon-button" title="Fit schematic" data-i18n="viewer.fit" data-i18n-title="viewer.fit_title">Fit</button>
+            <button id="zoomOutBtn" type="button" class="icon-button" title="Zoom out" data-i18n-title="viewer.zoom_out">-</button>
+            <button id="zoomInBtn" type="button" class="icon-button" title="Zoom in" data-i18n-title="viewer.zoom_in">+</button>
           </div>
-          <svg id="editorBoard" aria-label="Dispatcher editor board"></svg>
+          <svg id="editorBoard" aria-label="Dispatcher editor board" data-i18n-aria-label="editor.canvas_heading"></svg>
         </div>
       </section>
 
       <aside class="inspector-column">
         <section class="card">
-          <h3>Inspector</h3>
+          <h3 data-i18n="editor.inspector">Inspector</h3>
           <div id="inspectorPanel"></div>
         </section>
       </aside>
