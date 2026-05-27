@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import csv
+import heapq
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
 import networkx as nx
 
-from core.domain.model.elements import PointPosition, SignalAspect, TrackSection
+from core.domain.model.elements import PointPosition, SignalAspect, SignalDirection, TrackSection
 from core.domain.model.route import Route
 from core.domain.model.topology import ROUTE_TYPE_REVERSE, RailwayTopology
 from kernel.route_dispatcher.route_engine import RouteEngine
@@ -44,6 +45,8 @@ class InterlockingTableGenerator:
         self.topology = topology
         self.overlap_length = max(0, overlap_length)
         self.route_engine = RouteEngine(topology)
+        self._route_graph_cache: dict[SignalDirection, nx.DiGraph] = {}
+        self._pair_route_cache: dict[tuple[str, str, int, bool, bool], Route | None] = {}
 
     def generate(
         self,
@@ -52,6 +55,8 @@ class InterlockingTableGenerator:
         max_depth: int = 24,
     ) -> list[InterlockingTableRow]:
         """Generate nearest automatic route per entry plus manually marked routes."""
+        self._route_graph_cache.clear()
+        self._pair_route_cache.clear()
         self.topology.sync_signal_virtual_routes()
         entry_set = {str(signal_id) for signal_id in entry_signal_ids}
         exit_set = {str(signal_id) for signal_id in exit_signal_ids}
@@ -361,51 +366,60 @@ class InterlockingTableGenerator:
         is_reverse: bool = False,
     ) -> Route | None:
         """Return the shortest valid route for a signal pair, if any."""
+        cache_key = (
+            entry_signal_id,
+            exit_signal_id,
+            int(max_depth),
+            bool(is_calling_on),
+            bool(is_reverse),
+        )
+        if cache_key in self._pair_route_cache:
+            return self._pair_route_cache[cache_key]
+
         entry_signal = self.topology.signals.get(entry_signal_id)
         exit_signal = self.topology.signals.get(exit_signal_id)
         if entry_signal is None or exit_signal is None:
+            self._pair_route_cache[cache_key] = None
             return None
         if entry_signal.is_blocking:
+            self._pair_route_cache[cache_key] = None
             return None
         if exit_signal.is_blocking and not is_calling_on:
+            self._pair_route_cache[cache_key] = None
             return None
         if entry_signal.direction != exit_signal.direction:
+            self._pair_route_cache[cache_key] = None
             return None
         if not entry_signal.protects or not exit_signal.protects:
+            self._pair_route_cache[cache_key] = None
             return None
         entry_protected = self.topology.signal_protected_node(entry_signal_id)
         exit_protected = self.topology.signal_protected_node(exit_signal_id)
         if entry_protected is None or exit_protected is None:
+            self._pair_route_cache[cache_key] = None
             return None
         if entry_protected == exit_protected:
+            self._pair_route_cache[cache_key] = None
             return None
         exit_target_nodes = self.route_engine.route_exit_target_nodes(exit_signal_id)
         if not exit_target_nodes:
+            self._pair_route_cache[cache_key] = None
             return None
 
-        try:
-            route_graph = self.route_engine.routing_graph_for_direction(entry_signal.direction)
-            path_list: list[list[str]] = []
-            for target_node in exit_target_nodes:
-                try:
-                    all_paths = nx.all_simple_paths(
-                        route_graph,
-                        source=entry_protected,
-                        target=target_node,
-                        cutoff=max_depth,
-                    )
-                    path_list.extend(list(all_paths))
-                except nx.NetworkXNoPath:
-                    continue
-            # Sort shortest first by hop count, then lexicographically for deterministic tie-break.
-            path_list = sorted(path_list, key=lambda p: (len(p), p))
-        except nx.NetworkXNoPath:
+        route_graph = self._routing_graph_for_direction(entry_signal.direction)
+        if entry_protected not in route_graph:
+            self._pair_route_cache[cache_key] = None
             return None
 
-        if not path_list:
-            return None
-
-        for index, path in enumerate(path_list, start=1):
+        for index, path in enumerate(
+            self._iter_bounded_simple_paths(
+                route_graph,
+                source=entry_protected,
+                targets=exit_target_nodes,
+                max_depth=max_depth,
+            ),
+            start=1,
+        ):
             overlap_path = self.route_engine.compute_overlap_for_path(
                 path,
                 overlap_length=self.overlap_length,
@@ -450,8 +464,53 @@ class InterlockingTableGenerator:
                 is_reverse=is_reverse,
                 signal_aspect=signal_aspect,
             )
+            self._pair_route_cache[cache_key] = route
             return route
+        self._pair_route_cache[cache_key] = None
         return None
+
+    def _routing_graph_for_direction(self, direction: SignalDirection) -> nx.DiGraph:
+        graph = self._route_graph_cache.get(direction)
+        if graph is None:
+            graph = self.route_engine.routing_graph_for_direction(direction)
+            self._route_graph_cache[direction] = graph
+        return graph
+
+    @staticmethod
+    def _iter_bounded_simple_paths(
+        graph: nx.DiGraph,
+        *,
+        source: str,
+        targets: Iterable[str],
+        max_depth: int,
+    ) -> Iterable[list[str]]:
+        """Yield simple paths by hop count, then lexicographic node order."""
+        target_set = {target for target in targets if target in graph}
+        if not target_set or source not in graph:
+            return
+
+        max_edges = max(0, int(max_depth))
+        sequence = 0
+        heap: list[tuple[int, tuple[str, ...], int, list[str]]] = [
+            (1, (source,), sequence, [source])
+        ]
+        while heap:
+            _path_length, _path_key, _sequence, path = heapq.heappop(heap)
+            current = path[-1]
+            if current in target_set:
+                yield path
+                continue
+            if len(path) - 1 >= max_edges:
+                continue
+            for successor in sorted(graph.successors(current)):
+                if successor in path:
+                    continue
+                next_path = [*path, successor]
+                sequence += 1
+                heapq.heappush(
+                    heap,
+                    (len(next_path), tuple(next_path), sequence, next_path),
+                )
 
     def _compute_conflicts(self, rows: list[InterlockingTableRow]) -> None:
         for i, row_i in enumerate(rows):

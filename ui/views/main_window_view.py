@@ -44,6 +44,7 @@ from core.domain.model.route import Route
 from kernel.route_dispatcher.route_engine import RouteEngine
 from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
 from runtime.application import AppMode
+from runtime.application.serialization import build_topology_revision
 from runtime.journal_paths import (
     webclient_runtime_command_path,
     webclient_runtime_command_result_path,
@@ -227,6 +228,7 @@ class MainWindow(QMainWindow):
         self.preview_route: Route | None = None
         self.interlocking_rows: list[InterlockingTableRow] = []
         self.valid_route_pairs: set[tuple[str, str]] = set()
+        self._interlocking_rows_cache: dict[tuple[str, int], list[InterlockingTableRow]] = {}
         self._simulation_timer = QTimer(self)
         self._simulation_timer.timeout.connect(self._simulation_tick)
         self._simulation_ticks_remaining = 0
@@ -266,7 +268,7 @@ class MainWindow(QMainWindow):
             )
             self.status.showMessage(self._t("status.loaded_sample_layout", path=sample_path))
         else:
-            self.canvas.load_topology(self.current_layout.topology)
+            self.canvas.load_topology(self.current_layout.topology, emit_change=False)
         self._set_operating_mode(OperatingMode.DESIGN_LAYOUT, announce=False)
         self._sync_ui_state()
         self._retranslate_ui()
@@ -1689,10 +1691,17 @@ class MainWindow(QMainWindow):
 
     def _load_layout_into_canvas(self, layout: StationLayout) -> None:
         self.current_layout = layout
-        self.canvas.load_topology(layout.topology)
+        self.canvas.load_topology(layout.topology, emit_change=False)
+        self._topology_change_timer.stop()
         self.runtime_workspace_service.invalidate_runtime_journal()
         self.controller.clear_runtime_session()
         self.canvas.set_runtime_view_state(None)
+        self.preview_route = None
+        self.canvas.clear_route_visualization()
+        self._refresh_signal_selectors()
+        self._refresh_interlocking_table()
+        self.canvas.refresh_visual_state()
+        self._sync_ui_state()
         self._send_smartio_runtime_snapshot()
 
     def _on_timing_controls_changed(self, _value: float) -> None:
@@ -1758,11 +1767,18 @@ class MainWindow(QMainWindow):
             self.table_widget.setRowCount(0)
             return
 
-        rows = self.application_service.generate_interlocking_rows(
-            topology=self.canvas.topology,
-            overlap_length=self.overlap_spin.value(),
-        )
-        rows.sort(key=lambda item: item.route_name)
+        overlap_length = int(self.overlap_spin.value())
+        cache_key = (build_topology_revision(self.canvas.topology), overlap_length)
+        rows = self._interlocking_rows_cache.get(cache_key)
+        if rows is None:
+            rows = self.application_service.generate_interlocking_rows(
+                topology=self.canvas.topology,
+                overlap_length=overlap_length,
+            )
+            rows.sort(key=lambda item: item.route_name)
+            self._interlocking_rows_cache[cache_key] = rows
+            if len(self._interlocking_rows_cache) > 8:
+                self._interlocking_rows_cache.pop(next(iter(self._interlocking_rows_cache)))
         self.interlocking_rows = rows
         self.valid_route_pairs = {(row.entry_signal, row.exit_signal) for row in rows}
 

@@ -92,6 +92,7 @@ class NodeItem(QGraphicsObject):
         self.element_type = element_type
         self.payload = payload
         self.editor: CanvasEditor | None = None
+        self.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
         self.setFlags(
             QGraphicsItem.GraphicsItemFlag.ItemIsMovable
             | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
@@ -109,25 +110,29 @@ class NodeItem(QGraphicsObject):
         return QRectF(0.0, 0.0, self.WIDTH, self.HEIGHT)
 
     def paint(self, painter: QPainter, _option: Any, _widget: Any = None) -> None:
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = self.boundingRect().adjusted(0.5, 0.5, -0.5, -0.5)
-        if self.element_type not in {"Point", ANNOTATION_LABEL_NODE_TYPE}:
-            border_pen = QPen(QColor("#111111"), 2.0 if self.isSelected() else 1.2)
-            painter.setPen(border_pen)
-            painter.setBrush(QBrush(QColor("#ffffff")))
-            painter.drawRect(rect)
+        painter.save()
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            rect = self.boundingRect().adjusted(0.5, 0.5, -0.5, -0.5)
+            if self.element_type not in {"Point", ANNOTATION_LABEL_NODE_TYPE}:
+                border_pen = QPen(QColor("#111111"), 2.0 if self.isSelected() else 1.2)
+                painter.setPen(border_pen)
+                painter.setBrush(QBrush(QColor("#ffffff")))
+                painter.drawRect(rect)
 
-        if self.element_type == ANNOTATION_LABEL_NODE_TYPE:
-            self._paint_label(painter, rect)
-        elif self.element_type in {"TrackSection", "ApproachSection"}:
-            self._paint_section(painter, rect)
-        elif self.element_type == "Point":
-            self._paint_point(painter, rect)
-        else:
-            self._paint_signal(painter, rect)
+            if self.element_type == ANNOTATION_LABEL_NODE_TYPE:
+                self._paint_label(painter, rect)
+            elif self.element_type in {"TrackSection", "ApproachSection"}:
+                self._paint_section(painter, rect)
+            elif self.element_type == "Point":
+                self._paint_point(painter, rect)
+            else:
+                self._paint_signal(painter, rect)
 
-        self._paint_state_marker(painter, rect)
-        self._paint_route_highlight(painter)
+            self._paint_state_marker(painter, rect)
+            self._paint_route_highlight(painter)
+        finally:
+            painter.restore()
 
     def _paint_section(self, painter: QPainter, rect: QRectF) -> None:
         if self.element_type == "ApproachSection":
@@ -735,12 +740,16 @@ class CanvasEditor(QGraphicsView):
         self.setAcceptDrops(True)
         self.viewport().setAcceptDrops(True)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.setCacheMode(QGraphicsView.CacheModeFlag.CacheBackground)
+        self.setOptimizationFlag(QGraphicsView.OptimizationFlag.DontSavePainterState, True)
+        self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.BoundingRectViewportUpdate)
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setRubberBandSelectionMode(Qt.ItemSelectionMode.IntersectsItemShape)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.scene_ref = QGraphicsScene(self)
         self.setScene(self.scene_ref)
+        self.scene_ref.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.BspTreeIndex)
         self.scene_ref.setSceneRect(-3000.0, -1800.0, 6000.0, 3600.0)
         self.scene_ref.selectionChanged.connect(self._on_selection_changed)
 
@@ -3026,9 +3035,9 @@ class CanvasEditor(QGraphicsView):
             self._register_edge_item(edge)
             seen.add((source_id, target_id))
 
-    def load_topology(self, topology: RailwayTopology) -> None:
+    def load_topology(self, topology: RailwayTopology, *, emit_change: bool = True) -> None:
         """Load topology object directly."""
-        self._rebuild_from_topology(topology)
+        self._rebuild_from_topology(topology, emit_change=emit_change)
 
     def clear_layout(self) -> None:
         """Clear current scene and reset to an empty topology."""
@@ -3036,7 +3045,9 @@ class CanvasEditor(QGraphicsView):
             self._push_undo_state()
         self._rebuild_from_topology(RailwayTopology())
 
-    def _rebuild_from_topology(self, topology: RailwayTopology) -> None:
+    def _rebuild_from_topology(
+        self, topology: RailwayTopology, *, emit_change: bool = True
+    ) -> None:
         self.clear_route_visualization()
         self._clear_train_visuals()
         self.cancel_annotation_tool()
@@ -3118,7 +3129,8 @@ class CanvasEditor(QGraphicsView):
         self._apply_layout_edit_flags()
 
         self.refresh_visual_state()
-        self.topology_changed.emit()
+        if emit_change:
+            self.topology_changed.emit()
 
     @staticmethod
     def _extract_suffix(element_id: str) -> int:
