@@ -5,7 +5,8 @@ from pathlib import Path
 
 from PyQt6.QtCore import QObject
 
-from core.domain.model.elements import PointPosition, TrackSection
+from core.domain.lifecycle import RouteLifecycleState
+from core.domain.model.elements import PointPosition, SignalAspect, TrackSection
 from integration.smartio_adapter.runtime_bridge import SmartIORuntimeBridge
 from runtime import (
     GenericApplicationProfile,
@@ -235,6 +236,51 @@ def test_smartio_state_update_applies_to_runtime_session() -> None:
 
     view_state = runtime_workspace.runtime_view_state()
     assert view_state.trains_by_id["WEB-1"].current_section == route.path[0]
+
+
+def test_smartio_train_on_first_track_section_replaces_entry_signal_to_stop() -> None:
+    application_service, runtime_workspace = build_services()
+    topology = load_topology(application_service)
+
+    set_result = runtime_workspace.set_or_reuse_route(
+        topology=topology,
+        entry_signal_id="X0106",
+        exit_signal_id="ZF0502",
+        overlap_length=1,
+        approach_time_lock_seconds=1.0,
+        overlap_release_seconds=1.0,
+    )
+    route = set_result.route
+    first_track_section = next(
+        node_id
+        for node_id in route.path
+        if isinstance(topology.get_element(node_id), TrackSection)
+    )
+
+    assert route.path[0] != first_track_section
+    assert topology.signals["X0106"].aspect != SignalAspect.RED
+
+    result = runtime_workspace.submit_command(
+        topology=topology,
+        kind="apply_state_update",
+        payload={
+            "trains": [
+                {
+                    "id": "WEB-X0106-1",
+                    "current_section": first_track_section,
+                    "route_id": route.id,
+                    "speed": 1.0,
+                }
+            ],
+            "sections": [{"id": first_track_section, "occupied": True}],
+        },
+        source_id="smartio-web",
+        command_id="x0106-entered-route",
+    )
+
+    assert result.status == "applied"
+    assert topology.signals["X0106"].aspect == SignalAspect.RED
+    assert route.lifecycle_state == RouteLifecycleState.TRAIN_IN_ROUTE
 
 
 def test_smartio_train_updates_are_incremental_and_do_not_remove_other_trains() -> None:
@@ -508,7 +554,7 @@ def test_local_smartio_in_simulation_mode_accepts_state_update() -> None:
     assert result_payload["status"] == "applied"
 
 
-def test_duplicate_command_id_returns_stale_without_reapplying() -> None:
+def test_duplicate_command_id_replays_result_without_reapplying() -> None:
     application_service, runtime_workspace = build_services()
     topology = load_topology(application_service)
     entry_signal_id, exit_signal_id, _route = first_route_pair(application_service, topology)
@@ -526,6 +572,7 @@ def test_duplicate_command_id_returns_stale_without_reapplying() -> None:
         source_id="smartio-web-1",
         command_id="cmd-1",
     )
+    stream_seq_after_first = runtime_workspace.runtime_health().stream_seq
     second_result = runtime_workspace.submit_command(
         topology=topology,
         kind="set_route",
@@ -541,7 +588,9 @@ def test_duplicate_command_id_returns_stale_without_reapplying() -> None:
     )
 
     assert first_result.status == "applied"
-    assert second_result.status == "stale"
+    assert second_result.status == "applied"
+    assert second_result.stream_seq == first_result.stream_seq
+    assert runtime_workspace.runtime_health().stream_seq == stream_seq_after_first
     assert len(runtime_workspace.runtime_view_state().routes) == 1
 
 

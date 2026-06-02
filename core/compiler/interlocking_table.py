@@ -12,7 +12,7 @@ import networkx as nx
 
 from core.domain.model.elements import PointPosition, SignalAspect, SignalDirection, TrackSection
 from core.domain.model.route import Route
-from core.domain.model.topology import ROUTE_TYPE_REVERSE, RailwayTopology
+from core.domain.model.topology import ROUTE_TYPE_CALLING_ON, ROUTE_TYPE_REVERSE, RailwayTopology
 from kernel.route_dispatcher.route_engine import RouteEngine
 
 
@@ -81,6 +81,16 @@ class InterlockingTableGenerator:
                 existing_reverse or reverse,
             )
 
+        def is_reverse_signal_pair(entry_signal_id: str, exit_signal_id: str) -> bool:
+            entry_signal = self.topology.signals.get(entry_signal_id)
+            exit_signal = self.topology.signals.get(exit_signal_id)
+            return bool(
+                entry_signal is not None
+                and exit_signal is not None
+                and getattr(entry_signal, "is_reverse_signal", False)
+                and getattr(exit_signal, "is_reverse_signal", False)
+            )
+
         for entry_signal_id in sorted(entry_set):
             entry_signal = self.topology.signals.get(entry_signal_id)
             if entry_signal is None or entry_signal.is_blocking:
@@ -102,7 +112,8 @@ class InterlockingTableGenerator:
                     exit_signal_id,
                     max_depth=max_depth,
                     is_calling_on=False,
-                    is_reverse=(entry_signal_id, exit_signal_id) in reverse_pairs,
+                    is_reverse=(entry_signal_id, exit_signal_id) in reverse_pairs
+                    or is_reverse_signal_pair(entry_signal_id, exit_signal_id),
                 )
                 if route is None:
                     continue
@@ -122,7 +133,8 @@ class InterlockingTableGenerator:
                     entry_signal_id,
                     nearest_exit_signal_id,
                     calling_on=False,
-                    reverse=(entry_signal_id, nearest_exit_signal_id) in reverse_pairs,
+                    reverse=(entry_signal_id, nearest_exit_signal_id) in reverse_pairs
+                    or is_reverse_signal_pair(entry_signal_id, nearest_exit_signal_id),
                 )
 
         configured_pairs = calling_on_pairs | reverse_pairs
@@ -426,17 +438,18 @@ class InterlockingTableGenerator:
                 preferred_first_node=exit_protected,
             )
             try:
-                signal_aspect = self.topology.route_signal_aspect(
-                    entry_signal_id,
-                    exit_signal_id,
+                effective_route_type = (
+                    ROUTE_TYPE_CALLING_ON
+                    if is_calling_on
+                    else ROUTE_TYPE_REVERSE
+                    if is_reverse
+                    else ""
                 )
-                if is_reverse and not self.topology.is_reverse_route_pair(
+                signal_aspect = self.topology.route_signal_aspect_for_type(
                     entry_signal_id,
                     exit_signal_id,
-                ):
-                    signal_aspect = RailwayTopology.default_route_signal_aspect(
-                        ROUTE_TYPE_REVERSE
-                    )
+                    effective_route_type,
+                )
                 required_points = self.route_engine.compute_required_point_positions(
                     [*path, *overlap_path]
                 )

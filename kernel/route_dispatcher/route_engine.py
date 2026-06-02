@@ -14,7 +14,7 @@ from core.domain.model.elements import (
     TrackSection,
 )
 from core.domain.model.route import Route
-from core.domain.model.topology import RailwayTopology
+from core.domain.model.topology import ROUTE_TYPE_CALLING_ON, ROUTE_TYPE_REVERSE, RailwayTopology
 from core.domain.policy import (
     ConflictPolicy,
     FlankPolicy,
@@ -66,6 +66,16 @@ class RouteEngine:
         route_is_reverse = bool(is_reverse) or self.topology.is_reverse_route_pair(
             entry_signal_id,
             exit_signal_id,
+        ) or (
+            bool(getattr(entry_signal, "is_reverse_signal", False))
+            and bool(getattr(exit_signal, "is_reverse_signal", False))
+        )
+        effective_route_type = (
+            ROUTE_TYPE_CALLING_ON
+            if route_is_calling_on
+            else ROUTE_TYPE_REVERSE
+            if route_is_reverse
+            else ""
         )
         if entry_signal.is_blocking:
             raise ValueError(f"Blocking signal {entry_signal_id} cannot be used as route entry")
@@ -178,9 +188,10 @@ class RouteEngine:
                             ),
                             is_calling_on=route_is_calling_on,
                             is_reverse=route_is_reverse,
-                            signal_aspect=self.topology.route_signal_aspect(
+                            signal_aspect=self.topology.route_signal_aspect_for_type(
                                 entry_signal_id,
                                 exit_signal_id,
+                                effective_route_type,
                             ),
                         )
                     except ValueError as exc:

@@ -68,6 +68,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Open SmartIO Local",
         "vi": "Mở SmartIO Local",
     },
+    "toolbar.export_xlsx": {
+        "en": "Export XLSX",
+        "vi": "Xuất XLSX",
+    },
+    "toolbar.more": {
+        "en": "More",
+        "vi": "Thêm",
+    },
     "button.find_route": {
         "en": "Find Route",
         "vi": "Tìm hành trình",
@@ -512,6 +520,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "JSON Files (*.json)",
         "vi": "Tập tin JSON (*.json)",
     },
+    "dialog.file_filter.xlsx": {
+        "en": "Excel Workbook (*.xlsx)",
+        "vi": "Sổ làm việc Excel (*.xlsx)",
+    },
     "dialog.save_failed.title": {
         "en": "Save failed",
         "vi": "Lưu thất bại",
@@ -519,6 +531,18 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "dialog.load_failed.title": {
         "en": "Load failed",
         "vi": "Mở thất bại",
+    },
+    "dialog.export_interlocking_xlsx.title": {
+        "en": "Export interlocking table",
+        "vi": "Xuất bảng liên khóa",
+    },
+    "dialog.export_interlocking_xlsx.empty": {
+        "en": "No interlocking rows are available to export.",
+        "vi": "Không có dòng bảng liên khóa để xuất.",
+    },
+    "dialog.export_interlocking_xlsx.failed_title": {
+        "en": "Export failed",
+        "vi": "Xuất thất bại",
     },
     "dialog.load_occupancy.title": {
         "en": "Load occupancy state",
@@ -679,6 +703,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     "status.loaded_layout": {
         "en": "Loaded layout from {path}",
         "vi": "Đã mở sơ đồ từ {path}",
+    },
+    "status.exported_interlocking_xlsx": {
+        "en": "Exported interlocking table to {path}",
+        "vi": "Đã xuất bảng liên khóa tới {path}",
     },
     "status.preview_route": {
         "en": "Preview route: {entry} -> {exit}",

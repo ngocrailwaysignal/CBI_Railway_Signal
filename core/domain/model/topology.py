@@ -288,8 +288,20 @@ class RailwayTopology:
 
     def route_signal_aspect(self, entry_signal_id: str, exit_signal_id: str) -> SignalAspect:
         """Return the manual route signal aspect, or the default for the route type."""
+        return self.route_signal_aspect_for_type(
+            entry_signal_id,
+            exit_signal_id,
+            self.route_type(entry_signal_id, exit_signal_id),
+        )
+
+    def route_signal_aspect_for_type(
+        self,
+        entry_signal_id: str,
+        exit_signal_id: str,
+        route_type: str | None,
+    ) -> SignalAspect:
+        """Return the route signal aspect using the effective route type."""
         route_key = self._route_key(entry_signal_id, exit_signal_id)
-        route_type = self.route_type(entry_signal_id, exit_signal_id)
         stored = self.route_signal_aspects.get(route_key)
         if stored in self.allowed_route_signal_aspects(route_type):
             return stored
@@ -302,8 +314,22 @@ class RailwayTopology:
         aspect: object,
     ) -> None:
         """Set one route's manual signal aspect if valid for the route type."""
+        self.set_route_signal_aspect_for_type(
+            entry_signal_id,
+            exit_signal_id,
+            aspect,
+            self.route_type(entry_signal_id, exit_signal_id),
+        )
+
+    def set_route_signal_aspect_for_type(
+        self,
+        entry_signal_id: str,
+        exit_signal_id: str,
+        aspect: object,
+        route_type: str | None,
+    ) -> None:
+        """Set one route's manual signal aspect using the effective route type."""
         route_key = self._route_key(entry_signal_id, exit_signal_id)
-        route_type = self.route_type(entry_signal_id, exit_signal_id)
         normalized = normalize_signal_aspect(
             aspect,
             default=self.default_route_signal_aspect(route_type),

@@ -76,6 +76,7 @@
             </div>
           </div>
           <p class="hint" id="editorStatus" data-i18n="editor.loading">Loading dispatcher schematic...</p>
+          <p class="hint compact-status" id="editorSelectionStatus" data-i18n="editor.shortcut_hint">Shortcuts: Ctrl+Z undo, Ctrl+D duplicate, arrows nudge.</p>
         </section>
       </aside>
 
@@ -88,6 +89,16 @@
           <p class="hint" data-i18n="editor.board_hint">Shift/Ctrl click to multi-select, drag selected elements to move, and use handles to rotate or reshape.</p>
         </div>
         <div id="boardViewport" class="board-frame editor-frame">
+          <div class="editor-action-toolbar" aria-label="Editor quick actions" data-i18n-aria-label="editor.quick_actions">
+            <button id="editorUndoBtn" type="button" class="icon-button" title="Undo" data-i18n="editor.undo" data-i18n-title="editor.undo">Undo</button>
+            <button id="editorRedoBtn" type="button" class="icon-button" title="Redo" data-i18n="editor.redo" data-i18n-title="editor.redo">Redo</button>
+            <button id="editorCopyBtn" type="button" class="icon-button" title="Copy" data-i18n="editor.copy" data-i18n-title="editor.copy">Copy</button>
+            <button id="editorPasteBtn" type="button" class="icon-button" title="Paste" data-i18n="editor.paste" data-i18n-title="editor.paste">Paste</button>
+            <button id="editorDuplicateBtn" type="button" class="icon-button" title="Duplicate" data-i18n="editor.duplicate" data-i18n-title="editor.duplicate">Duplicate</button>
+            <button id="editorDeleteBtn" type="button" class="icon-button danger-inline" title="Delete" data-i18n="editor.delete" data-i18n-title="editor.delete">Delete</button>
+            <button id="editorSelectAllBtn" type="button" class="icon-button" title="Select all" data-i18n="editor.select_all" data-i18n-title="editor.select_all">All</button>
+            <button id="editorNextUnboundBtn" type="button" class="icon-button" title="Next unbound" data-i18n="editor.next_unbound" data-i18n-title="editor.next_unbound">Unbound</button>
+          </div>
           <div class="camera-toolbar" aria-label="Schematic camera controls" data-i18n-aria-label="viewer.fit_title">
             <button id="fitBoardBtn" type="button" class="icon-button" title="Fit schematic" data-i18n="viewer.fit" data-i18n-title="viewer.fit_title">Fit</button>
             <button id="zoomOutBtn" type="button" class="icon-button" title="Zoom out" data-i18n-title="viewer.zoom_out">-</button>

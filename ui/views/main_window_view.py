@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
@@ -33,6 +34,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QTabWidget,
     QToolBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -41,6 +43,7 @@ from config import DEFAULT_APP_CONFIG
 from core.compiler.interlocking_table import InterlockingTableGenerator, InterlockingTableRow
 from core.domain.model.elements import PointPosition, SignalAspect, TrackSection
 from core.domain.model.route import Route
+from core.domain.model.topology import ROUTE_TYPE_CALLING_ON, ROUTE_TYPE_REVERSE
 from kernel.route_dispatcher.route_engine import RouteEngine
 from runtime import GenericApplicationProfile, GenericApplicationService, RuntimeWorkspaceService
 from runtime.application import AppMode
@@ -57,6 +60,7 @@ from ui.controllers import (
     SmartIOSessionAdapter,
     WorkspaceStateCoordinator,
 )
+from ui.exporters import write_xlsx_table
 from ui.i18n import SUPPORTED_LANGUAGES, UITranslator, normalize_language
 from ui.presenters import RoutePresenter
 from ui.views.canvas_editor_view import CanvasEditor
@@ -358,7 +362,10 @@ class MainWindow(QMainWindow):
         self.set_route_action.setText(self._t("toolbar.set_route"))
         self.cancel_route_action.setText(self._t("toolbar.cancel_route"))
         self.emergency_release_action.setText(self._t("toolbar.emergency_release"))
+        self.export_interlocking_xlsx_action.setText(self._t("toolbar.export_xlsx"))
         self.open_smartio_local_action.setText(self._t("toolbar.open_smartio_local"))
+        self.more_menu.setTitle(self._t("toolbar.more"))
+        self.more_tool_button.setText(self._t("toolbar.more"))
         self.language_label.setText(self._t("language.label"))
         self._populate_language_selector()
 
@@ -454,6 +461,19 @@ class MainWindow(QMainWindow):
                 border-bottom: 1px solid #ccd4dc;
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #f7f9fb, stop:1 #edf3f8);
             }
+            QToolButton {
+                background: #f8fbfd;
+                border: 1px solid #c7d2dc;
+                border-radius: 6px;
+                padding: 5px 10px;
+                color: #1d4156;
+                font-weight: 600;
+            }
+            QToolButton:hover { background: #eef5fa; }
+            QToolButton:disabled {
+                color: #91a0ac;
+                background: #eef2f5;
+            }
             QGroupBox {
                 background: #ffffff;
                 border: 1px solid #cfd9e2;
@@ -535,9 +555,13 @@ class MainWindow(QMainWindow):
         self.load_layout_action = self.toolbar.addAction(self._t("toolbar.load_layout"))
         self.load_layout_action.triggered.connect(self._load_layout)
 
+        self.toolbar.addSeparator()
+
         self.connect_mode_action = self.toolbar.addAction(self._t("toolbar.connect_mode"))
         self.connect_mode_action.setCheckable(True)
         self.connect_mode_action.toggled.connect(self._toggle_connect_mode)
+
+        self.toolbar.addSeparator()
 
         self.set_route_action = self.toolbar.addAction(self._t("toolbar.set_route"))
         self.set_route_action.triggered.connect(self._set_selected_route)
@@ -545,16 +569,32 @@ class MainWindow(QMainWindow):
         self.cancel_route_action = self.toolbar.addAction(self._t("toolbar.cancel_route"))
         self.cancel_route_action.triggered.connect(lambda: self._cancel_active_routes())
 
-        self.emergency_release_action = self.toolbar.addAction(self._t("toolbar.emergency_release"))
-        self.emergency_release_action.triggered.connect(lambda: self._emergency_release_routes())
-
         self.simulation_action = self.toolbar.addAction(self._t("toolbar.start_simulation"))
         self.simulation_action.triggered.connect(self._start_simulation)
 
-        self.open_smartio_local_action = self.toolbar.addAction(
+        self.toolbar.addSeparator()
+
+        self.export_interlocking_xlsx_action = self.toolbar.addAction(
+            self._t("toolbar.export_xlsx")
+        )
+        self.export_interlocking_xlsx_action.triggered.connect(
+            self._export_interlocking_table_xlsx
+        )
+
+        self.more_menu = QMenu(self._t("toolbar.more"), self.toolbar)
+        self.emergency_release_action = self.more_menu.addAction(
+            self._t("toolbar.emergency_release")
+        )
+        self.emergency_release_action.triggered.connect(lambda: self._emergency_release_routes())
+        self.open_smartio_local_action = self.more_menu.addAction(
             self._t("toolbar.open_smartio_local")
         )
         self.open_smartio_local_action.triggered.connect(self._open_smartio_local)
+        self.more_tool_button = QToolButton(self.toolbar)
+        self.more_tool_button.setText(self._t("toolbar.more"))
+        self.more_tool_button.setMenu(self.more_menu)
+        self.more_tool_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.toolbar.addWidget(self.more_tool_button)
 
         self.toolbar.addSeparator()
         self.language_label = QLabel(self._t("language.label"), self.toolbar)
@@ -1689,6 +1729,113 @@ class MainWindow(QMainWindow):
                 str(exc),
             )
 
+    def _export_interlocking_table_xlsx(self) -> None:
+        self._refresh_interlocking_table()
+        if self.table_widget.rowCount() == 0:
+            QMessageBox.warning(
+                self,
+                self._t("dialog.export_interlocking_xlsx.title"),
+                self._t("dialog.export_interlocking_xlsx.empty"),
+            )
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            self._t("dialog.export_interlocking_xlsx.title"),
+            self._default_interlocking_xlsx_path(),
+            self._t("dialog.file_filter.xlsx"),
+        )
+        if not path:
+            return
+        output_path = Path(path)
+        if output_path.suffix.lower() != ".xlsx":
+            output_path = output_path.with_suffix(".xlsx")
+
+        try:
+            write_xlsx_table(
+                output_path,
+                self._t("interlocking_table.group"),
+                self._interlocking_table_export_headers(),
+                self._interlocking_table_export_rows(),
+                column_widths=self._interlocking_table_export_widths(),
+                merged_headers=self._interlocking_table_export_merged_headers(),
+            )
+            self.status.showMessage(
+                self._t("status.exported_interlocking_xlsx", path=output_path),
+                5000,
+            )
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                self._t("dialog.export_interlocking_xlsx.failed_title"),
+                str(exc),
+            )
+
+    def _default_interlocking_xlsx_path(self) -> str:
+        if self.current_layout.source_path is not None:
+            stem = self.current_layout.source_path.stem
+        else:
+            stem = self.current_layout.station_id or "interlocking_table"
+        return str(Path("data") / f"{stem}_interlocking_table.xlsx")
+
+    def _interlocking_table_export_headers(self) -> list[str]:
+        headers: list[str] = []
+        for column in range(self.table_widget.columnCount()):
+            item = self.table_widget.horizontalHeaderItem(column)
+            headers.append(item.text() if item is not None else "")
+        return headers
+
+    def _interlocking_table_export_rows(self) -> list[list[str]]:
+        table_rows: list[list[str]] = []
+        for row in range(self.table_widget.rowCount()):
+            values: list[str] = []
+            for column in range(self.table_widget.columnCount()):
+                item = self.table_widget.item(row, column)
+                values.append(item.text() if item is not None else "")
+            table_rows.append(values)
+        return table_rows
+
+    def _interlocking_table_export_merged_headers(self) -> list[tuple[str, int, int]]:
+        point_label = (
+            "POINTS"
+            if self._translator.language == "en"
+            else self._t("interlocking_table.header.point").upper()
+        )
+        return [
+            (
+                point_label,
+                PointGroupedHeader.NORMAL_COLUMN,
+                PointGroupedHeader.REVERSE_COLUMN,
+            ),
+            (
+                self._t("interlocking_table.header.flank_point"),
+                PointGroupedHeader.FLANK_NORMAL_COLUMN,
+                PointGroupedHeader.FLANK_REVERSE_COLUMN,
+            ),
+        ]
+
+    @staticmethod
+    def _interlocking_table_export_widths() -> list[float]:
+        return [
+            7,
+            18,
+            12,
+            16,
+            12,
+            12,
+            14,
+            16,
+            18,
+            22,
+            18,
+            18,
+            18,
+            12,
+            12,
+            20,
+            18,
+        ]
+
     def _load_layout_into_canvas(self, layout: StationLayout) -> None:
         self.current_layout = layout
         self.canvas.load_topology(layout.topology, emit_change=False)
@@ -1765,6 +1912,7 @@ class MainWindow(QMainWindow):
             self.interlocking_rows = []
             self.valid_route_pairs = set()
             self.table_widget.setRowCount(0)
+            self.export_interlocking_xlsx_action.setEnabled(False)
             return
 
         overlap_length = int(self.overlap_spin.value())
@@ -1781,6 +1929,7 @@ class MainWindow(QMainWindow):
                 self._interlocking_rows_cache.pop(next(iter(self._interlocking_rows_cache)))
         self.interlocking_rows = rows
         self.valid_route_pairs = {(row.entry_signal, row.exit_signal) for row in rows}
+        self.export_interlocking_xlsx_action.setEnabled(bool(rows))
 
         self.table_widget.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
@@ -2157,18 +2306,29 @@ class MainWindow(QMainWindow):
         return "\u221a" if value else ""
 
     def _cycle_route_signal_aspect(self, row: InterlockingTableRow) -> None:
-        route_type = self.canvas.topology.route_type(row.entry_signal, row.exit_signal)
+        route_type = (
+            ROUTE_TYPE_CALLING_ON
+            if row.is_calling_on
+            else ROUTE_TYPE_REVERSE
+            if row.is_reverse
+            else self.canvas.topology.route_type(row.entry_signal, row.exit_signal)
+        )
         allowed = self.canvas.topology.allowed_route_signal_aspects(route_type)
-        current = self.canvas.topology.route_signal_aspect(row.entry_signal, row.exit_signal)
+        current = self.canvas.topology.route_signal_aspect_for_type(
+            row.entry_signal,
+            row.exit_signal,
+            route_type,
+        )
         try:
             current_index = allowed.index(current)
         except ValueError:
             current_index = -1
         next_aspect = allowed[(current_index + 1) % len(allowed)]
-        self.canvas.topology.set_route_signal_aspect(
+        self.canvas.topology.set_route_signal_aspect_for_type(
             row.entry_signal,
             row.exit_signal,
             next_aspect,
+            route_type,
         )
 
     def _destination_track_from_path(self, path: list[str], fallback: str = "-") -> str:
@@ -2564,6 +2724,7 @@ class MainWindow(QMainWindow):
         simulation_workspace = self._operating_mode is OperatingMode.SIMULATION
         self.open_smartio_local_button.setEnabled(simulation_workspace)
         self.open_smartio_local_action.setEnabled(simulation_workspace)
+        self.export_interlocking_xlsx_action.setEnabled(bool(self.interlocking_rows))
         self.set_route_button.setEnabled(workspace_state.set_route_enabled and not runtime_degraded)
         self.set_route_action.setEnabled(workspace_state.set_route_enabled and not runtime_degraded)
         self.cancel_route_button.setEnabled(
@@ -2616,6 +2777,12 @@ class MainWindow(QMainWindow):
         self.emergency_release_action.setVisible(not design_mode)
         self.simulation_action.setVisible(not runtime_mode and not design_mode)
         self.open_smartio_local_action.setVisible(simulation_mode)
+        self.export_interlocking_xlsx_action.setVisible(True)
+        self.more_tool_button.setVisible(
+            self.emergency_release_action.isVisible()
+            or self.open_smartio_local_action.isVisible()
+        )
+        self.more_tool_button.setEnabled(self.more_tool_button.isVisible())
 
         # Button/profile in right panel.
         self.open_smartio_local_button.setVisible(simulation_mode)

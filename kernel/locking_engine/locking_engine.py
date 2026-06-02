@@ -284,7 +284,7 @@ class LockingEngine:
                 self.approach_locking.mark_approach_locked(route_id)
                 if route.lifecycle_state == RouteLifecycleState.CLEARED_REVERSIBLE:
                     self._transition_route_state(route, RouteLifecycleState.APPROACH_LOCKED)
-            if node_id == route.path[0]:
+            if self._is_route_body_entry(route, node_id):
                 entry_signal = self.topology.signals[route.entry_signal_id]
                 entry_signal.aspect = SignalAspect.RED
                 self.approach_locking.mark_approach_locked(route_id)
@@ -338,6 +338,11 @@ class LockingEngine:
     def _initialize_sequence_locking_state(self, route: Route) -> None:
         # Sequence locking applies to route body only; overlap remains out of scope.
         self._sequence_locking.initialize_route(route.id, list(route.path))
+
+    @staticmethod
+    def _is_route_body_entry(route: Route, node_id: str) -> bool:
+        """Return whether a train report means the train has passed the entry signal."""
+        return bool(node_id and node_id in route.path)
 
     def _clear_sequence_locking_state(self, route_id: str) -> None:
         self._sequence_locking.clear_route(route_id)

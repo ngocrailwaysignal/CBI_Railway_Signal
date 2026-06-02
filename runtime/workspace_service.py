@@ -231,8 +231,8 @@ class RuntimeWorkspaceService:
             return RuntimeCommandResult(
                 command_id=cached_result.command_id,
                 source_id=cached_result.source_id,
-                status="stale",
-                message=f"Duplicate command ignored; previous status={cached_result.status}",
+                status=cached_result.status,
+                message=cached_result.message,
                 payload=dict(cached_result.payload),
                 stream_seq=cached_result.stream_seq,
                 ts=time.time(),

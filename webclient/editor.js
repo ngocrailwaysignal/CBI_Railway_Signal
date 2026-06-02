@@ -14,6 +14,7 @@ import { applyStaticTranslations, initLanguageSelector, t } from "/i18n.js";
 const board = document.getElementById("editorBoard");
 const boardViewport = document.getElementById("boardViewport");
 const statusText = document.getElementById("editorStatus");
+const selectionStatusText = document.getElementById("editorSelectionStatus");
 const layoutPathText = document.getElementById("layoutPathText");
 const saveButton = document.getElementById("saveLayoutBtn");
 const clearButton = document.getElementById("clearCanvasBtn");
@@ -27,8 +28,19 @@ const inspector = document.getElementById("inspectorPanel");
 const fitBoardBtn = document.getElementById("fitBoardBtn");
 const zoomInBtn = document.getElementById("zoomInBtn");
 const zoomOutBtn = document.getElementById("zoomOutBtn");
+const undoBtn = document.getElementById("editorUndoBtn");
+const redoBtn = document.getElementById("editorRedoBtn");
+const copyBtn = document.getElementById("editorCopyBtn");
+const pasteBtn = document.getElementById("editorPasteBtn");
+const duplicateBtn = document.getElementById("editorDuplicateBtn");
+const deleteBtn = document.getElementById("editorDeleteBtn");
+const selectAllBtn = document.getElementById("editorSelectAllBtn");
+const nextUnboundBtn = document.getElementById("editorNextUnboundBtn");
 
 const TOOLBOX_SELECTOR = "[data-tool-kind]";
+const HISTORY_LIMIT = 100;
+const PASTE_OFFSET_STEPS = 1;
+const SHORTCUT_HINT_KEY = "editor.shortcut_hint";
 
 const state = {
   layoutPath: "",
@@ -37,11 +49,15 @@ const state = {
   selectedIds: new Set(),
   showDebug: false,
   drag: null,
+  marquee: null,
+  clipboard: [],
+  history: { undo: [], redo: [] },
   dirty: false,
 };
 const boardCamera = createBoardCamera(board, boardViewport, { minScale: 0.45, maxScale: 4 });
 let lastCanvasSignature = "";
 let lastStatus = { key: "editor.loading", params: {}, kind: "info" };
+let spacePanActive = false;
 
 function setStatus(message, kind = "info") {
   statusText.textContent = message;
@@ -53,9 +69,33 @@ function setTranslatedStatus(key, params = {}, kind = "info") {
   setStatus(t(key, params), kind);
 }
 
+function updateSelectionStatus() {
+  if (!selectionStatusText) {
+    return;
+  }
+  const count = state.selectedIds.size;
+  const selectionText = count
+    ? t("editor.selection_count", { count })
+    : t("editor.no_selection");
+  selectionStatusText.textContent = `${selectionText} · ${t(SHORTCUT_HINT_KEY)}`;
+}
+
+function updateQuickActionButtons() {
+  undoBtn && (undoBtn.disabled = !state.history.undo.length);
+  redoBtn && (redoBtn.disabled = !state.history.redo.length);
+  copyBtn && (copyBtn.disabled = !state.selectedIds.size);
+  duplicateBtn && (duplicateBtn.disabled = !state.selectedIds.size);
+  deleteBtn && (deleteBtn.disabled = !state.selectedIds.size);
+  pasteBtn && (pasteBtn.disabled = !state.clipboard.length);
+  selectAllBtn && (selectAllBtn.disabled = !state.view.elements.length);
+  nextUnboundBtn && (nextUnboundBtn.disabled = !findNextUnboundElement());
+  updateSelectionStatus();
+}
+
 function markDirty(isDirty = true) {
   state.dirty = isDirty;
   saveButton.disabled = !isDirty;
+  updateQuickActionButtons();
 }
 
 function currentGridSize() {
@@ -72,6 +112,64 @@ function findElement(elementId) {
 
 function selectedElements() {
   return state.view.elements.filter((element) => state.selectedIds.has(element.id));
+}
+
+function snapshotEditorState() {
+  return {
+    view: deepClone(state.view),
+    selectedIds: Array.from(state.selectedIds),
+  };
+}
+
+function snapshotSignature(snapshot) {
+  return JSON.stringify({
+    view: snapshot.view,
+    selectedIds: snapshot.selectedIds,
+  });
+}
+
+function pushUndoSnapshot(snapshot) {
+  state.history.undo.push(snapshot);
+  if (state.history.undo.length > HISTORY_LIMIT) {
+    state.history.undo.shift();
+  }
+  state.history.redo = [];
+  updateQuickActionButtons();
+}
+
+function restoreEditorSnapshot(snapshot) {
+  state.view = normalizeDispatcherView(snapshot.view || {});
+  const ids = new Set(state.view.elements.map((element) => element.id));
+  state.selectedIds = new Set((snapshot.selectedIds || []).filter((elementId) => ids.has(elementId)));
+  markDirty(true);
+  repaint();
+}
+
+function mutateView(mutator, { statusKey = "", statusParams = {} } = {}) {
+  const before = snapshotEditorState();
+  const beforeSignature = snapshotSignature(before);
+  mutator();
+  state.view = normalizeDispatcherView(state.view);
+  const ids = new Set(state.view.elements.map((element) => element.id));
+  state.selectedIds = new Set(Array.from(state.selectedIds).filter((elementId) => ids.has(elementId)));
+  const after = snapshotEditorState();
+  if (snapshotSignature(after) === beforeSignature) {
+    repaint();
+    return false;
+  }
+  pushUndoSnapshot(before);
+  markDirty(true);
+  if (statusKey) {
+    setTranslatedStatus(statusKey, statusParams);
+  }
+  repaint();
+  return true;
+}
+
+function clearHistory() {
+  state.history.undo = [];
+  state.history.redo = [];
+  updateQuickActionButtons();
 }
 
 function buildBindingUsageIndex() {
@@ -116,6 +214,7 @@ function repaintBoard() {
   boardCamera.setCanvas(state.view.canvas);
   boardCamera.apply();
   decorateSelectionHandles();
+  decorateMarquee();
 }
 
 function repaint({ fit = false } = {}) {
@@ -127,6 +226,7 @@ function repaint({ fit = false } = {}) {
   lastCanvasSignature = canvasSignature;
   updateInspector();
   updateCanvasControls();
+  updateQuickActionButtons();
 }
 
 function updateInspector() {
@@ -137,7 +237,7 @@ function updateInspector() {
     return;
   }
   if (selected.length > 1) {
-    inspector.appendChild(buildInspectorEmpty(t("editor.elements_selected", { count: selected.length })));
+    inspector.appendChild(buildMultiSelectEditor(selected));
     return;
   }
 
@@ -172,6 +272,66 @@ function buildInspectorSummary(element) {
   summary.appendChild(meta);
 
   return summary;
+}
+
+function buildMultiSelectEditor(selected) {
+  const panel = document.createElement("div");
+  panel.className = "inspector-stack";
+
+  const summary = document.createElement("div");
+  summary.className = "inspector-summary";
+  const title = document.createElement("strong");
+  title.textContent = t("editor.elements_selected_title", { count: selected.length });
+  summary.appendChild(title);
+  const meta = document.createElement("span");
+  meta.textContent = t("editor.elements_selected", { count: selected.length });
+  summary.appendChild(meta);
+  panel.appendChild(summary);
+
+  const moveRow = document.createElement("div");
+  moveRow.className = "inspector-inline-grid";
+  moveRow.appendChild(buildInlineNumberField("dX", 0, (value) => batchMoveSelected(value, 0), { step: 1 }));
+  moveRow.appendChild(buildInlineNumberField("dY", 0, (value) => batchMoveSelected(0, value), { step: 1 }));
+  moveRow.appendChild(buildInlineNumberField("Rot", 0, (value) => batchRotateSelected(value), { step: 15 }));
+  panel.appendChild(buildFieldGroup(t("editor.batch_transform"), moveRow));
+
+  const alignRow = document.createElement("div");
+  alignRow.className = "button-row compact-button-row";
+  [
+    ["left", "editor.align_left"],
+    ["center-x", "editor.align_center_x"],
+    ["right", "editor.align_right"],
+    ["top", "editor.align_top"],
+    ["center-y", "editor.align_center_y"],
+    ["bottom", "editor.align_bottom"],
+  ].forEach(([mode, labelKey]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost compact-action";
+    button.textContent = t(labelKey);
+    button.addEventListener("click", () => alignSelectedElements(mode));
+    alignRow.appendChild(button);
+  });
+  panel.appendChild(buildFieldGroup(t("editor.align_selection"), alignRow));
+
+  const actionRow = document.createElement("div");
+  actionRow.className = "button-row";
+  const duplicateButton = document.createElement("button");
+  duplicateButton.type = "button";
+  duplicateButton.className = "ghost";
+  duplicateButton.textContent = t("editor.duplicate");
+  duplicateButton.addEventListener("click", duplicateSelectedElements);
+  actionRow.appendChild(duplicateButton);
+
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.className = "danger-button";
+  deleteButton.textContent = t("editor.delete_selected");
+  deleteButton.addEventListener("click", deleteSelectedElements);
+  actionRow.appendChild(deleteButton);
+  panel.appendChild(actionRow);
+
+  return panel;
 }
 
 function buildPositionEditor(element) {
@@ -356,6 +516,17 @@ function buildField(labelText, control) {
   return wrapper;
 }
 
+function buildFieldGroup(labelText, control) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "inspector-field";
+  const title = document.createElement("span");
+  title.className = "inspector-label";
+  title.textContent = labelText;
+  wrapper.appendChild(title);
+  wrapper.appendChild(control);
+  return wrapper;
+}
+
 function buildReadonlyValue(text) {
   const div = document.createElement("div");
   div.className = "readonly-value";
@@ -387,6 +558,7 @@ function buildTextarea(value, onChange) {
   const textarea = document.createElement("textarea");
   textarea.rows = 3;
   textarea.value = value;
+  textarea.dataset.editorTextArea = "true";
   textarea.addEventListener("change", () => onChange(textarea.value));
   return textarea;
 }
@@ -409,6 +581,20 @@ function buildBindingSearch(options, selectedValue, cbiType, elementId, usage) {
   input.type = "search";
   input.placeholder = t("editor.filter_ids", { type: cbiType });
   input.value = selectedValue || "";
+  const assignBestMatch = () => {
+    const query = input.value.trim().toLowerCase();
+    if (!query) {
+      return false;
+    }
+    const exact = options.find((optionValue) => optionValue.toLowerCase() === query);
+    const prefix = options.find((optionValue) => optionValue.toLowerCase().startsWith(query));
+    const candidate = exact || prefix;
+    if (!candidate) {
+      return false;
+    }
+    assignBinding(elementId, cbiType, candidate, usage);
+    return true;
+  };
   input.addEventListener("input", () => {
     const chips = input.parentElement?.querySelector?.(".binding-chip-list");
     if (!chips) {
@@ -420,12 +606,16 @@ function buildBindingSearch(options, selectedValue, cbiType, elementId, usage) {
       chip.hidden = Boolean(query) && !text.includes(query);
     });
   });
-  input.addEventListener("change", () => {
-    const exact = options.find((optionValue) => optionValue.toLowerCase() === input.value.trim().toLowerCase());
-    if (!exact) {
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") {
       return;
     }
-    assignBinding(elementId, cbiType, exact, usage);
+    if (assignBestMatch()) {
+      event.preventDefault();
+    }
+  });
+  input.addEventListener("change", () => {
+    assignBestMatch();
   });
   return input;
 }
@@ -577,14 +767,13 @@ function createElementAt(kind, position) {
 }
 
 function updateElement(elementId, updater) {
-  const element = findElement(elementId);
-  if (!element) {
-    return;
-  }
-  updater(element);
-  state.view = normalizeDispatcherView(state.view);
-  markDirty(true);
-  repaint();
+  mutateView(() => {
+    const element = findElement(elementId);
+    if (!element) {
+      return;
+    }
+    updater(element);
+  });
 }
 
 function commitDragMutation() {
@@ -594,36 +783,238 @@ function commitDragMutation() {
 }
 
 function addElement(kind, position) {
-  const element = createElementAt(kind, position);
-  state.view.elements.push(element);
-  state.selectedIds = new Set([element.id]);
-  state.view = normalizeDispatcherView(state.view);
-  markDirty(true);
-  repaint();
+  mutateView(() => {
+    const element = createElementAt(kind, position);
+    state.view.elements.push(element);
+    state.selectedIds = new Set([element.id]);
+  }, { statusKey: "editor.added_element", statusParams: { kind: formatKindLabel(kind) } });
 }
 
 function clearCanvas() {
-  const nextView = createEmptyDispatcherView();
-  nextView.canvas = {
-    ...nextView.canvas,
-    ...deepClone(state.view.canvas),
-  };
-  state.view = normalizeDispatcherView(nextView);
-  state.selectedIds.clear();
-  markDirty(true);
-  setTranslatedStatus("editor.canvas_cleared");
-  repaint();
+  mutateView(() => {
+    const nextView = createEmptyDispatcherView();
+    nextView.canvas = {
+      ...nextView.canvas,
+      ...deepClone(state.view.canvas),
+    };
+    state.view = nextView;
+    state.selectedIds.clear();
+  }, { statusKey: "editor.canvas_cleared" });
 }
 
 function deleteSelectedElements() {
   if (!state.selectedIds.size) {
     return;
   }
-  state.view.elements = state.view.elements.filter((element) => !state.selectedIds.has(element.id));
-  state.selectedIds.clear();
-  state.view = normalizeDispatcherView(state.view);
-  markDirty(true);
+  const count = state.selectedIds.size;
+  mutateView(() => {
+    state.view.elements = state.view.elements.filter((element) => !state.selectedIds.has(element.id));
+    state.selectedIds.clear();
+  }, { statusKey: "editor.deleted_elements", statusParams: { count } });
+}
+
+function makeUniqueElementId(baseId) {
+  const existing = new Set(state.view.elements.map((element) => element.id));
+  const cleaned = String(baseId || "element").replace(/-\d+$/, "");
+  let index = 1;
+  let candidate = `${cleaned}-${index}`;
+  while (existing.has(candidate)) {
+    index += 1;
+    candidate = `${cleaned}-${index}`;
+  }
+  return candidate;
+}
+
+function copySelectedElements() {
+  const selected = selectedElements();
+  if (!selected.length) {
+    return;
+  }
+  state.clipboard = selected.map((element) => deepClone(element));
+  setTranslatedStatus("editor.copied_elements", { count: state.clipboard.length });
+  updateQuickActionButtons();
+}
+
+function pasteElements(sourceElements = state.clipboard, { statusKey = "editor.pasted_elements" } = {}) {
+  if (!sourceElements.length) {
+    return;
+  }
+  const offset = currentGridSize() * PASTE_OFFSET_STEPS;
+  const pastedCount = sourceElements.length;
+  const changed = mutateView(() => {
+    const nextSelection = new Set();
+    sourceElements.forEach((source) => {
+      const clone = deepClone(source);
+      clone.id = makeUniqueElementId(clone.id);
+      clone.position = {
+        x: snapCoordinate(Number(clone.position?.x || 0) + offset),
+        y: snapCoordinate(Number(clone.position?.y || 0) + offset),
+      };
+      clone.binding = null;
+      clone.z_index = state.view.elements.length;
+      state.view.elements.push(clone);
+      nextSelection.add(clone.id);
+    });
+    state.selectedIds = nextSelection;
+  });
+  if (changed) {
+    setTranslatedStatus(statusKey, { count: pastedCount });
+  }
+}
+
+function duplicateSelectedElements() {
+  const selected = selectedElements();
+  if (!selected.length) {
+    return;
+  }
+  pasteElements(selected, { statusKey: "editor.duplicated_elements" });
+}
+
+function cutSelectedElements() {
+  if (!state.selectedIds.size) {
+    return;
+  }
+  copySelectedElements();
+  deleteSelectedElements();
+}
+
+function selectAllElements() {
+  state.selectedIds = new Set(state.view.elements.map((element) => element.id));
   repaint();
+  setTranslatedStatus("editor.selected_all", { count: state.selectedIds.size });
+}
+
+function nudgeSelectedElements(deltaX, deltaY) {
+  if (!state.selectedIds.size) {
+    return;
+  }
+  mutateView(() => {
+    selectedElements().forEach((element) => {
+      element.position.x = snapCoordinate(Number(element.position.x || 0) + deltaX);
+      element.position.y = snapCoordinate(Number(element.position.y || 0) + deltaY);
+    });
+  });
+}
+
+function batchMoveSelected(deltaX, deltaY) {
+  nudgeSelectedElements(deltaX, deltaY);
+}
+
+function batchRotateSelected(deltaDegrees) {
+  if (!state.selectedIds.size) {
+    return;
+  }
+  mutateView(() => {
+    selectedElements().forEach((element) => {
+      element.rotation = Number(element.rotation || 0) + deltaDegrees;
+    });
+  });
+}
+
+function selectionBounds() {
+  const bounds = selectedElements().map(getElementGlobalBounds);
+  if (!bounds.length) {
+    return null;
+  }
+  return {
+    minX: Math.min(...bounds.map((bound) => bound.minX)),
+    minY: Math.min(...bounds.map((bound) => bound.minY)),
+    maxX: Math.max(...bounds.map((bound) => bound.maxX)),
+    maxY: Math.max(...bounds.map((bound) => bound.maxY)),
+  };
+}
+
+function alignSelectedElements(mode) {
+  const target = selectionBounds();
+  if (!target || state.selectedIds.size < 2) {
+    return;
+  }
+  const targetCenterX = (target.minX + target.maxX) / 2;
+  const targetCenterY = (target.minY + target.maxY) / 2;
+  mutateView(() => {
+    selectedElements().forEach((element) => {
+      const bounds = getElementGlobalBounds(element);
+      if (mode === "left") {
+        element.position.x += target.minX - bounds.minX;
+      } else if (mode === "right") {
+        element.position.x += target.maxX - bounds.maxX;
+      } else if (mode === "top") {
+        element.position.y += target.minY - bounds.minY;
+      } else if (mode === "bottom") {
+        element.position.y += target.maxY - bounds.maxY;
+      } else if (mode === "center-x") {
+        element.position.x += targetCenterX - (bounds.minX + bounds.maxX) / 2;
+      } else if (mode === "center-y") {
+        element.position.y += targetCenterY - (bounds.minY + bounds.maxY) / 2;
+      }
+      element.position.x = snapCoordinate(element.position.x);
+      element.position.y = snapCoordinate(element.position.y);
+    });
+  }, { statusKey: "editor.aligned_elements" });
+}
+
+function undoEditorAction() {
+  const snapshot = state.history.undo.pop();
+  if (!snapshot) {
+    return;
+  }
+  state.history.redo.push(snapshotEditorState());
+  restoreEditorSnapshot(snapshot);
+  setTranslatedStatus("editor.undo_completed");
+}
+
+function redoEditorAction() {
+  const snapshot = state.history.redo.pop();
+  if (!snapshot) {
+    return;
+  }
+  state.history.undo.push(snapshotEditorState());
+  restoreEditorSnapshot(snapshot);
+  setTranslatedStatus("editor.redo_completed");
+}
+
+function isBindableElement(element) {
+  return ["track_section", "signal", "point", "block_marker"].includes(element?.kind);
+}
+
+function findNextUnboundElement() {
+  if (!state.view.elements.length) {
+    return null;
+  }
+  const ordered = state.view.elements.filter((element) => isBindableElement(element) && !element.binding);
+  if (!ordered.length) {
+    return null;
+  }
+  const selectedIndexes = Array.from(state.selectedIds)
+    .map((elementId) => state.view.elements.findIndex((element) => element.id === elementId))
+    .filter((index) => index >= 0);
+  const startIndex = selectedIndexes.length ? Math.max(...selectedIndexes) : -1;
+  return ordered.find((element) => state.view.elements.indexOf(element) > startIndex) || ordered[0];
+}
+
+function selectNextUnboundElement() {
+  const element = findNextUnboundElement();
+  if (!element) {
+    setTranslatedStatus("editor.no_unbound_elements");
+    return;
+  }
+  state.selectedIds = new Set([element.id]);
+  repaint();
+  setTranslatedStatus("editor.selected_unbound", { id: element.id });
+}
+
+function focusSelectedLabelText() {
+  const selected = selectedElements();
+  if (selected.length !== 1 || selected[0].kind !== "label") {
+    return false;
+  }
+  const textarea = inspector.querySelector("textarea[data-editor-text-area='true']");
+  if (!textarea) {
+    return false;
+  }
+  textarea.focus();
+  textarea.select();
+  return true;
 }
 
 function setSelection(elementId, { additive = false, toggle = false } = {}) {
@@ -639,6 +1030,7 @@ function setSelection(elementId, { additive = false, toggle = false } = {}) {
     state.selectedIds = next;
   }
   repaint();
+  updateQuickActionButtons();
 }
 
 function decorateSelectionHandles() {
@@ -696,8 +1088,74 @@ function decorateSelectionHandles() {
   });
 }
 
+function rotateLocalPoint(element, point) {
+  const radians = (Number(element.rotation || 0) * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return {
+    x: element.position.x + point.x * cos - point.y * sin,
+    y: element.position.y + point.x * sin + point.y * cos,
+  };
+}
+
+function getElementGlobalBounds(element) {
+  const bounds = getElementLocalBounds(element);
+  const corners = [
+    { x: bounds.minX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.maxY },
+    { x: bounds.minX, y: bounds.maxY },
+  ].map((point) => rotateLocalPoint(element, point));
+  const xs = corners.map((point) => point.x);
+  const ys = corners.map((point) => point.y);
+  return {
+    minX: Math.min(...xs),
+    minY: Math.min(...ys),
+    maxX: Math.max(...xs),
+    maxY: Math.max(...ys),
+  };
+}
+
+function normalizeRect(startPoint, endPoint) {
+  return {
+    minX: Math.min(startPoint.x, endPoint.x),
+    minY: Math.min(startPoint.y, endPoint.y),
+    maxX: Math.max(startPoint.x, endPoint.x),
+    maxY: Math.max(startPoint.y, endPoint.y),
+  };
+}
+
+function rectsIntersect(left, right) {
+  return left.minX <= right.maxX
+    && left.maxX >= right.minX
+    && left.minY <= right.maxY
+    && left.maxY >= right.minY;
+}
+
+function decorateMarquee() {
+  if (!state.marquee) {
+    return;
+  }
+  const rect = normalizeRect(state.marquee.startPoint, state.marquee.currentPoint);
+  board.appendChild(createSvgElement("rect", {
+    x: rect.minX,
+    y: rect.minY,
+    width: rect.maxX - rect.minX,
+    height: rect.maxY - rect.minY,
+    class: "editor-marquee-box",
+  }));
+}
+
 function clientToSvgPoint(clientX, clientY) {
   return clientPointToSvgPoint(board, clientX, clientY);
+}
+
+function isEditableTarget(target) {
+  const tagName = String(target?.tagName || "").toLowerCase();
+  return target?.isContentEditable
+    || tagName === "input"
+    || tagName === "select"
+    || tagName === "textarea";
 }
 
 function globalToLocal(element, globalPoint) {
@@ -718,7 +1176,7 @@ function beginMoveDrag(pointerId, startPoint) {
     x: element.position.x,
     y: element.position.y,
   }));
-  state.drag = { type: "move", pointerId, startPoint, originals };
+  state.drag = { type: "move", pointerId, startPoint, originals, before: snapshotEditorState(), changed: false };
 }
 
 function beginHandleDrag(pointerId, elementId, handle, startPoint) {
@@ -732,10 +1190,39 @@ function beginHandleDrag(pointerId, elementId, handle, startPoint) {
     elementId,
     startPoint,
     startElement: deepClone(element),
+    before: snapshotEditorState(),
+    changed: false,
   };
 }
 
+function beginMarquee(pointerId, startPoint, additive = false) {
+  state.marquee = {
+    pointerId,
+    startPoint,
+    currentPoint: startPoint,
+    additive,
+    baseSelection: new Set(state.selectedIds),
+  };
+  repaintBoard();
+}
+
 function handlePointerMove(event) {
+  if (state.marquee && state.marquee.pointerId === event.pointerId) {
+    state.marquee.currentPoint = clientToSvgPoint(event.clientX, event.clientY);
+    const rect = normalizeRect(state.marquee.startPoint, state.marquee.currentPoint);
+    const next = state.marquee.additive ? new Set(state.marquee.baseSelection) : new Set();
+    state.view.elements.forEach((element) => {
+      if (rectsIntersect(rect, getElementGlobalBounds(element))) {
+        next.add(element.id);
+      }
+    });
+    state.selectedIds = next;
+    repaintBoard();
+    updateInspector();
+    updateQuickActionButtons();
+    event.preventDefault();
+    return;
+  }
   if (!state.drag && boardCamera.pan(event)) {
     event.preventDefault();
     return;
@@ -755,6 +1242,7 @@ function handlePointerMove(event) {
       element.position.x = snapCoordinate(original.x + deltaX);
       element.position.y = snapCoordinate(original.y + deltaY);
     });
+    state.drag.changed = true;
     markDirty(true);
     repaintBoard();
     return;
@@ -767,6 +1255,7 @@ function handlePointerMove(event) {
   if (state.drag.type === "rotate") {
     const angle = Math.atan2(currentPoint.y - element.position.y, currentPoint.x - element.position.x) * (180 / Math.PI);
     element.rotation = state.view.canvas.snap_enabled ? Math.round(angle / 15) * 15 : angle;
+    state.drag.changed = true;
     markDirty(true);
     repaintBoard();
     return;
@@ -779,6 +1268,7 @@ function handlePointerMove(event) {
       x: snapCoordinate(local.x),
       y: snapCoordinate(local.y),
     };
+    state.drag.changed = true;
     markDirty(true);
     repaintBoard();
     return;
@@ -787,12 +1277,19 @@ function handlePointerMove(event) {
     const local = globalToLocal(element, currentPoint);
     element.geometry.width = Math.max(8, snapCoordinate(local.x));
     element.geometry.height = Math.max(8, snapCoordinate(local.y));
+    state.drag.changed = true;
     markDirty(true);
     repaintBoard();
   }
 }
 
 function handlePointerUp(event) {
+  if (state.marquee && state.marquee.pointerId === event.pointerId) {
+    state.marquee = null;
+    repaint();
+    event.preventDefault();
+    return;
+  }
   if (!state.drag && boardCamera.endPan(event)) {
     event.preventDefault();
     return;
@@ -800,8 +1297,14 @@ function handlePointerUp(event) {
   if (!state.drag || state.drag.pointerId !== event.pointerId) {
     return;
   }
+  const drag = state.drag;
   state.drag = null;
-  commitDragMutation();
+  if (drag.changed) {
+    pushUndoSnapshot(drag.before);
+    commitDragMutation();
+  } else {
+    repaint();
+  }
 }
 
 async function loadDispatcherLayout() {
@@ -817,6 +1320,7 @@ async function loadDispatcherLayout() {
     state.view = normalizeDispatcherView(payload.dispatcher_view || {});
     state.selectedIds.clear();
     layoutPathText.textContent = state.layoutPath || "-";
+    clearHistory();
     markDirty(false);
     setTranslatedStatus("editor.loaded");
     repaint({ fit: true });
@@ -894,6 +1398,9 @@ boardViewport.addEventListener("drop", (event) => {
 });
 
 board.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) {
+    return;
+  }
   const handleTarget = event.target.closest?.("[data-handle]");
   if (handleTarget) {
     const elementId = handleTarget.dataset.elementId;
@@ -909,11 +1416,19 @@ board.addEventListener("pointerdown", (event) => {
 
   const group = event.target.closest?.("[data-element-id]");
   if (!group) {
-    setSelection("", {});
-    if (boardCamera.beginPan(event)) {
+    const shouldPan = event.altKey || spacePanActive;
+    if (shouldPan && boardCamera.beginPan(event)) {
       board.setPointerCapture(event.pointerId);
       event.preventDefault();
+      return;
     }
+    const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+    if (!additive) {
+      setSelection("", {});
+    }
+    beginMarquee(event.pointerId, clientToSvgPoint(event.clientX, event.clientY), additive);
+    board.setPointerCapture(event.pointerId);
+    event.preventDefault();
     return;
   }
   const elementId = group.dataset.elementId;
@@ -942,12 +1457,104 @@ zoomOutBtn?.addEventListener("click", () => {
   const rect = boardViewport.getBoundingClientRect();
   boardCamera.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 1 / 1.2);
 });
+undoBtn?.addEventListener("click", undoEditorAction);
+redoBtn?.addEventListener("click", redoEditorAction);
+copyBtn?.addEventListener("click", copySelectedElements);
+pasteBtn?.addEventListener("click", () => pasteElements());
+duplicateBtn?.addEventListener("click", duplicateSelectedElements);
+deleteBtn?.addEventListener("click", deleteSelectedElements);
+selectAllBtn?.addEventListener("click", selectAllElements);
+nextUnboundBtn?.addEventListener("click", selectNextUnboundElement);
 window.addEventListener("resize", () => boardCamera.apply());
 
 document.addEventListener("keydown", (event) => {
+  if (event.code === "Space" && !isEditableTarget(event.target)) {
+    spacePanActive = true;
+  }
+  if (isEditableTarget(event.target)) {
+    return;
+  }
+
+  const modifier = event.ctrlKey || event.metaKey;
+  const key = event.key.toLowerCase();
+  if (modifier && key === "z") {
+    if (event.shiftKey) {
+      redoEditorAction();
+    } else {
+      undoEditorAction();
+    }
+    event.preventDefault();
+    return;
+  }
+  if (modifier && key === "y") {
+    redoEditorAction();
+    event.preventDefault();
+    return;
+  }
+  if (modifier && key === "c") {
+    copySelectedElements();
+    event.preventDefault();
+    return;
+  }
+  if (modifier && key === "x") {
+    cutSelectedElements();
+    event.preventDefault();
+    return;
+  }
+  if (modifier && key === "v") {
+    pasteElements();
+    event.preventDefault();
+    return;
+  }
+  if (modifier && key === "d") {
+    duplicateSelectedElements();
+    event.preventDefault();
+    return;
+  }
+  if (modifier && key === "a") {
+    selectAllElements();
+    event.preventDefault();
+    return;
+  }
+  if (event.key === "Escape") {
+    if (state.drag) {
+      restoreEditorSnapshot(state.drag.before || snapshotEditorState());
+      state.drag = null;
+    } else if (state.marquee) {
+      state.marquee = null;
+      repaint();
+    } else if (state.selectedIds.size) {
+      setSelection("", {});
+    }
+    event.preventDefault();
+    return;
+  }
+  if (event.key === "Enter" && focusSelectedLabelText()) {
+    event.preventDefault();
+    return;
+  }
+  const nudgeDistance = event.shiftKey ? currentGridSize() : 1;
+  const nudgeMap = {
+    ArrowLeft: [-nudgeDistance, 0],
+    ArrowRight: [nudgeDistance, 0],
+    ArrowUp: [0, -nudgeDistance],
+    ArrowDown: [0, nudgeDistance],
+  };
+  if (event.key in nudgeMap && state.selectedIds.size) {
+    const [deltaX, deltaY] = nudgeMap[event.key];
+    nudgeSelectedElements(deltaX, deltaY);
+    event.preventDefault();
+    return;
+  }
   if ((event.key === "Delete" || event.key === "Backspace") && state.selectedIds.size) {
     deleteSelectedElements();
     event.preventDefault();
+  }
+});
+
+document.addEventListener("keyup", (event) => {
+  if (event.code === "Space") {
+    spacePanActive = false;
   }
 });
 

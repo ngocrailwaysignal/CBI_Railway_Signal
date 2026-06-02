@@ -272,6 +272,43 @@ def test_manual_reverse_mark_is_display_only_on_normal_valid_route() -> None:
         RuntimeSession(topology).set_route("ENTRY", "EXIT")
 
 
+def test_reverse_signal_pair_sets_blue_route_aspect_without_manual_route_type() -> None:
+    topology = build_two_signal_topology()
+    topology.signals["ENTRY"].is_reverse_signal = True
+    topology.signals["EXIT"].is_reverse_signal = True
+    topology.set_route_signal_aspect("ENTRY", "EXIT", SignalAspect.YELLOW)
+
+    rows = InterlockingTableGenerator(topology).generate(["ENTRY"], ["EXIT"])
+    route = RuntimeSession(topology).set_route("ENTRY", "EXIT")
+
+    assert rows[0].is_reverse is True
+    assert rows[0].signal_aspect == SignalAspect.YELLOW_BLUE
+    assert route.is_reverse is True
+    assert route.signal_aspect == SignalAspect.YELLOW_BLUE
+    assert topology.signals["ENTRY"].aspect == SignalAspect.YELLOW_BLUE
+
+
+def test_reverse_signal_pair_can_store_green_blue_without_manual_route_type() -> None:
+    topology = build_two_signal_topology()
+    topology.signals["ENTRY"].is_reverse_signal = True
+    topology.signals["EXIT"].is_reverse_signal = True
+    topology.set_route_signal_aspect_for_type(
+        "ENTRY",
+        "EXIT",
+        SignalAspect.GREEN_BLUE,
+        ROUTE_TYPE_REVERSE,
+    )
+
+    rows = InterlockingTableGenerator(topology).generate(["ENTRY"], ["EXIT"])
+    route = RuntimeSession(topology).set_route("ENTRY", "EXIT")
+
+    assert rows[0].is_reverse is True
+    assert rows[0].signal_aspect == SignalAspect.GREEN_BLUE
+    assert route.is_reverse is True
+    assert route.signal_aspect == SignalAspect.GREEN_BLUE
+    assert topology.signals["ENTRY"].aspect == SignalAspect.GREEN_BLUE
+
+
 def test_reverse_mark_does_not_enable_opposite_direction_route() -> None:
     topology = build_two_signal_topology(exit_direction=SignalDirection.LEFT)
     topology.set_route_type("ENTRY", "EXIT", ROUTE_TYPE_REVERSE)
