@@ -363,6 +363,13 @@
       "occupied": false,
       "locked_by": null,
       "length": 100.0
+    },
+    {
+      "id": "S702",
+      "kind": "track",
+      "occupied": false,
+      "locked_by": null,
+      "length": 100.0
     }
   ],
   "points": [
@@ -424,6 +431,16 @@
       "facing_connections": {
         "NORMAL": "T052DG",
         "REVERSE": "S9"
+      }
+    },
+    {
+      "id": "P505",
+      "position": "NORMAL",
+      "symbol_orientation": "LEFT",
+      "locked_by": null,
+      "facing_connections": {
+        "NORMAL": "S702",
+        "REVERSE": "T0504"
       }
     }
   ],
@@ -1039,6 +1056,14 @@
     [
       "P0502",
       "S9"
+    ],
+    [
+      "P505",
+      "S702"
+    ],
+    [
+      "P505",
+      "T0504"
     ]
   ],
   "signal_links": [
@@ -1206,7 +1231,8 @@
   },
   "route_signal_aspects": {
     "S0102->Z0101": "YELLOW",
-    "S0102->Z0103": "GREEN",
+    "S0102->Z0103": "YELLOW",
+    "S0504->SC0505": "YELLOW",
     "X0104->XQ0201": "GREEN",
     "X0104->ZF0502": "YELLOW",
     "X0106->ZF0502": "YELLOW"
@@ -1575,6 +1601,14 @@
     "LBL6": [
       1675.0,
       -550.0
+    ],
+    "P505": [
+      850.0,
+      -375.0
+    ],
+    "S702": [
+      725.0,
+      -375.0
     ]
   },
   "dispatcher_view": {}

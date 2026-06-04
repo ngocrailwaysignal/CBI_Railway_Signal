@@ -1604,8 +1604,6 @@ class CanvasEditor(QGraphicsView):
         aliases = {
             "Section": "TrackSection",
             "TrackSection": "TrackSection",
-            "Approach": "ApproachSection",
-            "ApproachSection": "ApproachSection",
             "Point": "Point",
             "PointUp": "Point",
             "Signal": "Signal",
@@ -1618,7 +1616,6 @@ class CanvasEditor(QGraphicsView):
         element_type = aliases.get(element_type, element_type)
         if element_type not in {
             "TrackSection",
-            "ApproachSection",
             "Point",
             "Signal",
             "SignalLeft",
@@ -1642,7 +1639,6 @@ class CanvasEditor(QGraphicsView):
             self._counter[counter_key] += 1
             prefix = {
                 "TrackSection": "S",
-                "ApproachSection": "AS",
                 "Point": "P",
                 "Signal": "SIG",
             }[counter_key]
@@ -1660,9 +1656,6 @@ class CanvasEditor(QGraphicsView):
         if element_type == "TrackSection":
             element = TrackSection(id=element_id)
             self.topology.add_section(element, position=(scene_pos.x(), scene_pos.y()))
-        elif element_type == "ApproachSection":
-            element = ApproachSection(id=element_id)
-            self.topology.add_approach_section(element, position=(scene_pos.x(), scene_pos.y()))
         elif element_type == "Point":
             element = Point(id=element_id, symbol_orientation=PointSymbolOrientation.RIGHT)
             self.topology.add_point(element, position=(scene_pos.x(), scene_pos.y()))
@@ -2331,7 +2324,6 @@ class CanvasEditor(QGraphicsView):
                 height.setToolTip(layout_lock_hint)
         else:
             protects = QLineEdit(str(node.payload.get("protects", "")), dialog)
-            approach_section = QLineEdit(str(node.payload.get("approach_section", "")), dialog)
             direction = QComboBox(dialog)
             direction.addItem(self._t("signal_direction.left"), SignalDirection.LEFT.value)
             direction.addItem(self._t("signal_direction.right"), SignalDirection.RIGHT.value)
@@ -2359,13 +2351,11 @@ class CanvasEditor(QGraphicsView):
             reverse_signal = QCheckBox(dialog)
             reverse_signal.setChecked(bool(node.payload.get("is_reverse_signal", False)))
             controls["protects"] = protects
-            controls["approach_section"] = approach_section
             controls["direction"] = direction
             controls["aspect"] = aspect
             controls["is_blocking"] = blocking
             controls["is_reverse_signal"] = reverse_signal
             form.addRow(self._t("field.protects"), protects)
-            form.addRow(self._t("field.approach_section"), approach_section)
             form.addRow(self._t("field.direction"), direction)
             form.addRow(self._t("field.aspect"), aspect)
             form.addRow(self._t("field.blocking_signal"), blocking)
@@ -2382,13 +2372,11 @@ class CanvasEditor(QGraphicsView):
             sync_signal_route_controls()
             if self._layout_edit_locked:
                 protects.setEnabled(False)
-                approach_section.setEnabled(False)
                 direction.setEnabled(False)
                 aspect.setEnabled(False)
                 blocking.setEnabled(False)
                 reverse_signal.setEnabled(False)
                 protects.setToolTip(layout_lock_hint)
-                approach_section.setToolTip(layout_lock_hint)
                 direction.setToolTip(layout_lock_hint)
                 aspect.setToolTip(layout_lock_hint)
                 blocking.setToolTip(layout_lock_hint)
@@ -2533,7 +2521,7 @@ class CanvasEditor(QGraphicsView):
                 approach_section = str(updates["approach_section"]).strip()
                 if approach_section:
                     approach_element = self.topology.get_element(approach_section)
-                    if not isinstance(approach_element, ApproachSection):
+                    if not isinstance(approach_element, TrackSection):
                         raise ValueError(self._t("canvas.error.approach_section_invalid"))
                     if not self.topology.is_signal_back_side_node(element_id, approach_section):
                         raise ValueError(self._t("canvas.error.approach_section_rear_side"))

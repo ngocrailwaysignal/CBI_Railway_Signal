@@ -7,7 +7,6 @@ import hashlib
 import networkx as nx
 
 from core.domain.model.elements import (
-    ApproachSection,
     Point,
     PointPosition,
     SignalDirection,
@@ -184,7 +183,9 @@ class RouteEngine:
                             flank_point_positions=flank_result.required_point_positions,
                             monitored_flank_sections=flank_result.monitored_flank_sections,
                             approach_locking_section=self._resolve_approach_locking_section(
-                                entry_signal_id
+                                entry_signal_id,
+                                route_path=path,
+                                route_full_path=[*path, *overlap_path],
                             ),
                             is_calling_on=route_is_calling_on,
                             is_reverse=route_is_reverse,
@@ -302,9 +303,19 @@ class RouteEngine:
             route_start_node=route_start_node,
         )
 
-    def resolve_approach_locking_section(self, entry_signal_id: str) -> str | None:
+    def resolve_approach_locking_section(
+        self,
+        entry_signal_id: str,
+        *,
+        route_path: list[str] | None = None,
+        route_full_path: list[str] | None = None,
+    ) -> str | None:
         """Public helper to resolve approach section for one entry signal."""
-        return self._resolve_approach_locking_section(entry_signal_id)
+        return self._resolve_approach_locking_section(
+            entry_signal_id,
+            route_path=route_path,
+            route_full_path=route_full_path,
+        )
 
     def route_exit_target_nodes(
         self,
@@ -447,23 +458,52 @@ class RouteEngine:
         route_body = set(route_path[:-1])
         return bool(route_body.intersection(conflict_nodes))
 
-    def _resolve_approach_locking_section(self, entry_signal_id: str) -> str | None:
+    def _resolve_approach_locking_section(
+        self,
+        entry_signal_id: str,
+        *,
+        route_path: list[str] | None = None,
+        route_full_path: list[str] | None = None,
+    ) -> str | None:
         signal = self.topology.signals.get(entry_signal_id)
         if signal is None:
             return None
 
+        entry_protected = self.topology.signal_protected_node(entry_signal_id)
+        if entry_protected is None:
+            return None
+
+        excluded_nodes = set(route_path or [])
+        excluded_nodes.update(route_full_path or [])
+        candidates: set[str] = set()
         configured = signal.approach_section.strip()
         if configured:
-            element = self.topology.get_element(configured)
-            if isinstance(element, ApproachSection) and self.topology.is_signal_back_side_node(
-                entry_signal_id, configured
-            ):
-                return configured
+            candidates.add(configured)
+        candidates.update(self.topology.signal_approach_nodes(entry_signal_id))
 
-        for node_id in self.topology.signal_approach_nodes(entry_signal_id):
+        ranked_candidates: list[tuple[int, str]] = []
+        graph = self.routing_graph_for_direction(signal.direction)
+        for node_id in sorted(candidates):
+            if node_id in excluded_nodes:
+                continue
             element = self.topology.get_element(node_id)
-            if isinstance(element, ApproachSection):
-                return node_id
+            if not isinstance(element, TrackSection):
+                continue
+            if not self.topology.is_signal_back_side_node(entry_signal_id, node_id):
+                continue
+            try:
+                distance = nx.shortest_path_length(
+                    graph,
+                    source=node_id,
+                    target=entry_protected,
+                )
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                continue
+            ranked_candidates.append((int(distance), node_id))
+
+        if ranked_candidates:
+            ranked_candidates.sort(key=lambda item: (item[0], item[1]))
+            return ranked_candidates[0][1]
         return None
 
     @staticmethod

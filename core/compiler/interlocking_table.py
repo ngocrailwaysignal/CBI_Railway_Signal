@@ -36,6 +36,7 @@ class InterlockingTableRow:
     is_calling_on: bool = False
     is_reverse: bool = False
     signal_aspect: SignalAspect = SignalAspect.GREEN
+    approach_locking_section: str | None = None
 
 
 class InterlockingTableGenerator:
@@ -249,6 +250,7 @@ class InterlockingTableGenerator:
                     is_calling_on=route.is_calling_on,
                     is_reverse=route.is_reverse,
                     signal_aspect=route.signal_aspect,
+                    approach_locking_section=route.approach_locking_section,
                 )
             )
 
@@ -471,7 +473,9 @@ class InterlockingTableGenerator:
                 flank_point_positions=flank_result.required_point_positions,
                 monitored_flank_sections=flank_result.monitored_flank_sections,
                 approach_locking_section=self.route_engine.resolve_approach_locking_section(
-                    entry_signal_id
+                    entry_signal_id,
+                    route_path=path,
+                    route_full_path=[*path, *overlap_path],
                 ),
                 is_calling_on=is_calling_on,
                 is_reverse=is_reverse,

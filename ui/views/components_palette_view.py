@@ -78,7 +78,6 @@ class PaletteListWidget(QListWidget):
     COMPONENT_MIME = "application/x-rail-component"
     COMPONENTS: tuple[tuple[str, str], ...] = (
         ("palette.component.section", "TrackSection"),
-        ("palette.component.approach", "ApproachSection"),
         ("palette.component.point", "Point"),
         ("palette.component.signal", "Signal"),
     )
@@ -305,7 +304,6 @@ class PropertiesPanel(QWidget):
 
         elif self._is_signal_type(self._selected_type):
             protects_input = QLineEdit(str(properties.get("protects", "")))
-            approach_section_input = QLineEdit(str(properties.get("approach_section", "")))
 
             aspect_input = QComboBox()
             for signal_aspect in (
@@ -342,13 +340,11 @@ class PropertiesPanel(QWidget):
             reverse_signal_input.setChecked(bool(properties.get("is_reverse_signal", False)))
 
             self._inputs["protects"] = protects_input
-            self._inputs["approach_section"] = approach_section_input
             self._inputs["aspect"] = aspect_input
             self._inputs["direction"] = direction_input
             self._inputs["is_blocking"] = blocking_input
             self._inputs["is_reverse_signal"] = reverse_signal_input
             self.form_layout.addRow(self._t("field.protects"), protects_input)
-            self.form_layout.addRow(self._t("field.approach_section"), approach_section_input)
             self.form_layout.addRow(self._t("field.direction"), direction_input)
             self.form_layout.addRow(self._t("field.aspect"), aspect_input)
             self.form_layout.addRow(self._t("field.blocking_signal"), blocking_input)
@@ -451,7 +447,6 @@ class PropertiesPanel(QWidget):
             updated["reverse_target"] = str(self._inputs["reverse_target"].text()).strip()
         elif self._is_signal_type(self._selected_type):
             updated["protects"] = str(self._inputs["protects"].text()).strip()
-            updated["approach_section"] = str(self._inputs["approach_section"].text()).strip()
             updated["direction"] = str(
                 self._inputs["direction"].currentData() or SignalDirection.RIGHT.value
             )

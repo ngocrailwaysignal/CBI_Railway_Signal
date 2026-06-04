@@ -896,7 +896,7 @@ class RailwayTopology:
                 signal.protects = legacy_signal_to_protected[signal.id]
             if signal.approach_section:
                 approach_element = topology.get_element(signal.approach_section)
-                if not isinstance(approach_element, ApproachSection):
+                if not isinstance(approach_element, TrackSection):
                     signal.approach_section = ""
 
         raw_clearance_groups = data.get("clearance_conflict_groups", [])

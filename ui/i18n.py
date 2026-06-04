@@ -1061,8 +1061,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "vi": "Protects phải trỏ đến khu đoạn hoặc nút ghi đã tồn tại",
     },
     "canvas.error.approach_section_invalid": {
-        "en": "Approach section must reference an existing ApproachSection node",
-        "vi": "Khu đoạn tiếp cận phải trỏ đến nút ApproachSection đã tồn tại",
+        "en": "Approach section must reference an existing track section",
+        "vi": "Khu đoạn tiếp cận phải trỏ đến khu đoạn đường ray đã tồn tại",
     },
     "canvas.error.approach_section_rear_side": {
         "en": "Approach section must be on the rear side of the signal direction",

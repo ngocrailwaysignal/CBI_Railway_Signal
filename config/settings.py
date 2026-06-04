@@ -9,9 +9,9 @@ from dataclasses import dataclass, field
 class TimingConfig:
     """Runtime timing defaults."""
 
-    time_lock_seconds: float = 2.0
+    time_lock_seconds: float = 60.0
     default_overlap_length: int = 1
-    overlap_release_seconds: float = 2.0
+    overlap_release_seconds: float = 60.0
     runtime_snapshot_checkpoint_interval: int = 1
 
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from threading import RLock
 
+import networkx as nx
+
 from core.domain.lifecycle import (
     ApproachLockingStateMachine,
     ApproachLockState,
@@ -533,7 +535,7 @@ class LockingEngine:
             route.approach_locking_section = approach_candidates[0]
             for approach_id in approach_candidates:
                 approach = self.topology.get_element(approach_id)
-                if isinstance(approach, ApproachSection) and approach.occupied:
+                if isinstance(approach, TrackSection) and approach.occupied:
                     return True
 
         if not route.path:
@@ -560,7 +562,7 @@ class LockingEngine:
             if not node or node in seen:
                 return
             element = self.topology.get_element(node)
-            if isinstance(element, ApproachSection):
+            if isinstance(element, TrackSection):
                 candidates.append(node)
                 seen.add(node)
 
@@ -577,9 +579,27 @@ class LockingEngine:
                 node_id
                 for node_id in candidates
                 if self.topology.is_signal_back_side_node(route.entry_signal_id, node_id)
+                and node_id not in route.full_path
             ]
 
-        return candidates
+        entry_protected = self.topology.signal_protected_node(route.entry_signal_id)
+        if not entry_protected:
+            return candidates
+
+        graph = self.topology.routing_graph()
+        ranked_candidates: list[tuple[int, str]] = []
+        for node_id in candidates:
+            try:
+                distance = nx.shortest_path_length(
+                    graph,
+                    source=node_id,
+                    target=entry_protected,
+                )
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                continue
+            ranked_candidates.append((int(distance), node_id))
+        ranked_candidates.sort(key=lambda item: (item[0], item[1]))
+        return [node_id for _distance, node_id in ranked_candidates]
 
     def _any_occupied_approach_section(self) -> bool:
         for node_id in self.topology.graph.nodes:

@@ -48,6 +48,7 @@ class RouteCompiler:
                 calling_on_route=row.is_calling_on,
                 reverse_route=row.is_reverse,
                 signal_aspect=row.signal_aspect.value,
+                approach_locking_section=row.approach_locking_section,
             )
             for row in rows
         ]

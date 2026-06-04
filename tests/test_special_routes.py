@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
 from core.compiler.interlocking_table import InterlockingTableGenerator
-from core.domain.lifecycle import RouteLifecycleState
+from core.domain.lifecycle import ApproachLockState, RouteLifecycleState
 from core.domain.model.elements import Signal, SignalAspect, SignalDirection, TrackSection
 from core.domain.model.topology import (
     ROUTE_TYPE_CALLING_ON,
@@ -19,6 +20,7 @@ from runtime.application import AppMode
 from runtime.application.serialization import build_webclient_runtime_state
 from runtime.application.use_cases.set_route import SetOrReuseRouteUseCase
 from runtime.read_model import build_runtime_view_state
+from ui.views.components_palette_view import PaletteListWidget
 
 
 class FakeClock:
@@ -47,6 +49,13 @@ def build_two_signal_topology(
     topology.connect("EXIT", "S3")
     topology.sync_signal_virtual_routes()
     return topology
+
+
+def load_cat_linh_line2a_topology() -> RailwayTopology:
+    layout_dir = Path(__file__).resolve().parents[1] / "data" / "station_layout"
+    matches = sorted(layout_dir.glob("Line2A_C*t linh_ H*ng.json"))
+    assert matches, "Line2A Cat Linh layout fixture is missing"
+    return RailwayTopology.load_from_json(matches[0])
 
 
 def test_blocking_signal_and_manual_route_type_round_trip(tmp_path) -> None:
@@ -94,6 +103,45 @@ def test_missing_reverse_signal_field_loads_as_false(tmp_path) -> None:
 
     assert loaded.signals["ENTRY"].is_reverse_signal is False
     assert loaded.signals["EXIT"].is_reverse_signal is False
+
+
+def test_line2a_route_auto_resolves_rear_track_as_approach_locking_section() -> None:
+    topology = load_cat_linh_line2a_topology()
+
+    route = RuntimeSession(topology).route_engine.find_route("S0102", "Z0101")
+
+    assert route.approach_locking_section == "T0108"
+
+
+def test_line2a_interlocking_row_includes_auto_approach_locking_track() -> None:
+    topology = load_cat_linh_line2a_topology()
+
+    rows = InterlockingTableGenerator(topology).generate(["S0102"], ["Z0101"])
+
+    assert len(rows) == 1
+    assert rows[0].route_name == "S0102->Z0101"
+    assert rows[0].approach_locking_section == "T0108"
+
+
+def test_line2a_runtime_approach_track_occupancy_inhibits_route_cancellation() -> None:
+    topology = load_cat_linh_line2a_topology()
+    session = RuntimeSession(topology)
+    route = session.set_route("S0102", "Z0101")
+
+    session.set_section_occupied("T0108", True, route_id_hint=route.id)
+
+    assert route.approach_locking_section == "T0108"
+    assert session.locking_engine.approach_lock_state(route.id) == ApproachLockState.APPROACH_LOCKED
+    with pytest.raises(RuntimeError, match="Approach section occupied"):
+        session.cancel_route(route.id)
+
+
+def test_approach_section_component_is_not_available_in_palette() -> None:
+    component_types = {
+        component_type for _label_key, component_type in PaletteListWidget.COMPONENTS
+    }
+
+    assert "ApproachSection" not in component_types
 
 
 def test_route_type_is_mutually_exclusive_and_can_reset_to_normal() -> None:

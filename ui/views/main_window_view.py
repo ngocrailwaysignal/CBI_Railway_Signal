@@ -1933,12 +1933,7 @@ class MainWindow(QMainWindow):
 
         self.table_widget.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
-            entry_signal = self.canvas.topology.signals.get(row.entry_signal)
-            approach_section = (
-                entry_signal.approach_section.strip()
-                if entry_signal is not None and entry_signal.approach_section.strip()
-                else "-"
-            )
+            approach_section = row.approach_locking_section or "-"
             main_point_positions = self._main_route_point_positions(row)
             values = [
                 str(row_index + 1),
@@ -2194,7 +2189,6 @@ class MainWindow(QMainWindow):
             if search_order is not None
             else self._build_search_trace(row.path[0], row.path[-1])[0]
         )
-        entry_signal = self.canvas.topology.signals.get(row.entry_signal)
         self.search_log.setPlainText(
             self.route_presenter.build_interlocking_row_search_log(
                 route_id=row.route_name,
@@ -2203,12 +2197,12 @@ class MainWindow(QMainWindow):
                 exit_signal=row.exit_signal,
                 entry_protects=row.entry_element or "-",
                 exit_protects=row.exit_element or "-",
-                direction=entry_signal.direction.value if entry_signal is not None else "-",
-                approach_locking_section=(
-                    entry_signal.approach_section.strip()
-                    if entry_signal is not None and entry_signal.approach_section.strip()
+                direction=(
+                    self.canvas.topology.signals[row.entry_signal].direction.value
+                    if row.entry_signal in self.canvas.topology.signals
                     else "-"
                 ),
+                approach_locking_section=row.approach_locking_section or "-",
                 search_order=effective_search_order,
                 locked_path=row.path,
                 overlap_path=row.overlap,

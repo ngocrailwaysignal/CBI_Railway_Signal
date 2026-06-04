@@ -25,6 +25,7 @@ class InterlockingRouteSpec:
     calling_on_route: bool = False
     reverse_route: bool = False
     signal_aspect: str = "GREEN"
+    approach_locking_section: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -43,6 +44,7 @@ class InterlockingRouteSpec:
             "calling_on_route": bool(self.calling_on_route),
             "reverse_route": bool(self.reverse_route),
             "signal_aspect": self.signal_aspect,
+            "approach_locking_section": self.approach_locking_section,
         }
 
     @classmethod
@@ -67,6 +69,7 @@ class InterlockingRouteSpec:
             calling_on_route=bool(data.get("calling_on_route", False)),
             reverse_route=bool(data.get("reverse_route", False)),
             signal_aspect=str(data.get("signal_aspect", "GREEN")).strip() or "GREEN",
+            approach_locking_section=_optional_token(data.get("approach_locking_section")),
         )
 
 
