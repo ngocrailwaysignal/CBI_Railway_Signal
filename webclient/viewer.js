@@ -185,6 +185,36 @@ function beginBoardPan(event) {
   }
 }
 
+
+function localizedRouteError(message) {
+  const text = String(message || "").trim();
+  if (!text) {
+    return "";
+  }
+  const cannotLockPrefix = "Cannot lock route: ";
+  if (text.startsWith(cannotLockPrefix)) {
+    return t("route.error.cannot_lock_route", {
+      reason: localizedRouteError(text.slice(cannotLockPrefix.length)),
+    });
+  }
+  const patterns = [
+    [/^Route (.+) is already active$/, "route.error.already_active", ["route_id"]],
+    [/^Route refers to unknown point (.+)$/, "route.error.unknown_point", ["point_id"]],
+    [/^Point (.+?) (?:is )?(?:already )?locked by (.+)$/, "route.error.point_locked", ["point_id", "locked_by"]],
+    [/^(?:Flank section|Section) (.+?) (?:is )?(?:already )?locked by (.+)$/, "route.error.section_locked", ["section_id", "locked_by"]],
+    [/^Route (.+) is occupied by train on sections: (.+)$/, "route.error.occupied_by_train", ["route_id", "sections"]],
+    [/^Section (.+) belongs to multiple active routes: (.+)$/, "route.error.section_multiple_active_routes", ["section_id", "routes"]],
+  ];
+  for (const [pattern, key, fields] of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      const params = Object.fromEntries(fields.map((field, index) => [field, match[index + 1]]));
+      return t(key, params);
+    }
+  }
+  return text;
+}
+
 function translatedCommandStatus(key, params = {}, kind = "") {
   setCommandStatus(t(key, params), kind);
 }
@@ -318,7 +348,7 @@ async function submitSetRoute() {
     translatedCommandStatus("viewer.command_queued");
     const commandResult = await waitForCommandResult(String(queued.command_id || ""));
     if (commandResult?.status === "rejected") {
-      setCommandStatus(commandResult.message || t("viewer.set_route_rejected"), "error");
+      setCommandStatus(localizedRouteError(commandResult.message) || t("viewer.set_route_rejected"), "error");
     } else if (commandResult?.status === "applied") {
       translatedCommandStatus(
         "viewer.route_applied",
@@ -330,7 +360,7 @@ async function submitSetRoute() {
     }
     await loadRuntimeState();
   } catch (error) {
-    setCommandStatus(error instanceof Error ? error.message : String(error), "error");
+    setCommandStatus(localizedRouteError(error instanceof Error ? error.message : String(error)), "error");
   }
 }
 
@@ -341,7 +371,7 @@ async function submitCancelRoutes() {
     translatedCommandStatus("viewer.command_queued");
     const commandResult = await waitForCommandResult(String(queued.command_id || ""));
     if (commandResult?.status === "rejected") {
-      setCommandStatus(commandResult.message || t("viewer.cancel_rejected"), "error");
+      setCommandStatus(localizedRouteError(commandResult.message) || t("viewer.cancel_rejected"), "error");
     } else if (commandResult?.status === "applied") {
       const cancelled = commandResult.payload?.cancelled_routes ?? 0;
       translatedCommandStatus("viewer.cancel_applied", { count: cancelled }, "ok");
@@ -350,7 +380,7 @@ async function submitCancelRoutes() {
     }
     await loadRuntimeState();
   } catch (error) {
-    setCommandStatus(error instanceof Error ? error.message : String(error), "error");
+    setCommandStatus(localizedRouteError(error instanceof Error ? error.message : String(error)), "error");
   }
 }
 
