@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from core.domain.model.elements import ApproachSection, TrackSection
 from core.domain.model.topology import RailwayTopology
+from kernel.structured_error import structured_error
 
 
 @dataclass(slots=True)
@@ -67,8 +68,11 @@ class SequenceLockingTracker:
         if len(track_sections) == 1:
             if section_id not in seen_occupied:
                 raise RuntimeError(
-                    f"Sequence locking violation on {section_id}: "
-                    "section has no prior occupied evidence"
+                    structured_error(
+                        "locking.error.sequence_locking_violation",
+                        section_id=section_id,
+                        reason="section has no prior occupied evidence",
+                    )
                 )
             section.locked_by = None
             return True
@@ -78,14 +82,21 @@ class SequenceLockingTracker:
 
         if section_id not in seen_occupied:
             raise RuntimeError(
-                f"Sequence locking violation on {section_id}: section occupancy was never confirmed"
+                structured_error(
+                    "locking.error.sequence_locking_violation",
+                    section_id=section_id,
+                    reason="section occupancy was never confirmed",
+                )
             )
 
         next_section_id = track_sections[section_index + 1]
         if next_section_id not in seen_occupied:
             raise RuntimeError(
-                f"Sequence locking violation on {section_id}: "
-                f"next section {next_section_id} has not been confirmed occupied"
+                structured_error(
+                    "locking.error.sequence_locking_violation",
+                    section_id=section_id,
+                    reason=f"next section {next_section_id} has not been confirmed occupied",
+                )
             )
 
         if section_index > 0:
@@ -93,8 +104,11 @@ class SequenceLockingTracker:
             previous = self.topology.get_element(previous_section_id)
             if self.is_sequence_track_section(previous) and previous.locked_by == route_id:
                 raise RuntimeError(
-                    f"Sequence locking violation on {section_id}: "
-                    f"previous section {previous_section_id} is still locked"
+                    structured_error(
+                        "locking.error.sequence_locking_violation",
+                        section_id=section_id,
+                        reason=f"previous section {previous_section_id} is still locked",
+                    )
                 )
 
         section.locked_by = None

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from core.domain.model.elements import Point, PointPosition, SignalAspect, TrackSection
 from core.domain.model.topology import RailwayTopology
 from core.domain.model.train import Train
+from kernel.structured_error import StructuredError, structured_error
 
 if TYPE_CHECKING:
     from core.domain.model.route import Route
@@ -22,8 +23,8 @@ class SafetyMonitor:
         topology: RailwayTopology,
         trains: Iterable[Train],
         active_routes: dict[str, Route] | None = None,
-    ) -> list[str]:
-        issues: list[str] = []
+    ) -> list[StructuredError]:
+        issues: list[StructuredError] = []
         train_list = list(trains)
 
         section_counter: Counter[str] = Counter()
@@ -32,8 +33,11 @@ class SafetyMonitor:
             current = topology.get_element(train.current_section)
             if isinstance(current, TrackSection) and not current.occupied:
                 issues.append(
-                    f"Train {train.id} reports section {train.current_section} "
-                    "but section not occupied"
+                    structured_error(
+                        "safety.error.train_section_not_occupied",
+                        train_id=train.id,
+                        section_id=train.current_section,
+                    )
                 )
 
         for section_id, count in section_counter.items():
@@ -47,13 +51,30 @@ class SafetyMonitor:
                     active_routes or {},
                 ):
                     continue
-                issues.append(f"Collision risk: {count} trains on {section_id}")
+                issues.append(
+                    structured_error(
+                        "safety.error.collision_risk",
+                        count=count,
+                        section_id=section_id,
+                    )
+                )
 
         for signal in topology.signals.values():
             if signal.is_blocking and signal.aspect != SignalAspect.RED:
-                issues.append(f"Blocking signal {signal.id} must remain RED")
+                issues.append(
+                    structured_error(
+                        "safety.error.blocking_signal_not_red",
+                        signal_id=signal.id,
+                    )
+                )
             if signal.aspect != SignalAspect.RED and not signal.route_id:
-                issues.append(f"Signal {signal.id} is {signal.aspect.value} without a locked route")
+                issues.append(
+                    structured_error(
+                        "safety.error.signal_without_locked_route",
+                        signal_id=signal.id,
+                        aspect=signal.aspect.value,
+                    )
+                )
 
         for node_id in topology.graph.nodes:
             element = topology.graph.nodes[node_id]["element"]
@@ -66,7 +87,12 @@ class SafetyMonitor:
                     PointPosition.REVERSE,
                 )
             ):
-                issues.append(f"Point {element.id} has invalid position while locked")
+                issues.append(
+                    structured_error(
+                        "safety.error.locked_point_invalid_position",
+                        point_id=element.id,
+                    )
+                )
 
         return issues
 

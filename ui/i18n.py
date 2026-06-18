@@ -24,6 +24,38 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Vietnamese",
         "vi": "Tiếng Việt",
     },
+    "safety.error.train_section_not_occupied": {
+        "en": "Train {train_id} reports section {section_id}, but the section is not occupied",
+        "vi": "Tàu {train_id} đang báo ở phân đoạn {section_id}, nhưng phân đoạn này chưa được đánh dấu chiếm dụng",
+    },
+    "safety.error.collision_risk": {
+        "en": "Collision risk: {count} trains on {section_id}",
+        "vi": "Nguy cơ va chạm: có {count} tàu trên phân đoạn {section_id}",
+    },
+    "safety.error.blocking_signal_not_red": {
+        "en": "Blocking signal {signal_id} must remain RED",
+        "vi": "Tín hiệu chặn {signal_id} phải luôn ở trạng thái ĐỎ",
+    },
+    "safety.error.signal_without_locked_route": {
+        "en": "Signal {signal_id} is {aspect} without a locked route",
+        "vi": "Tín hiệu {signal_id} đang ở trạng thái {aspect} nhưng không có hành trình đã khóa",
+    },
+    "safety.error.locked_point_invalid_position": {
+        "en": "Point {point_id} has invalid position while locked",
+        "vi": "Ghi {point_id} có vị trí không hợp lệ khi đang bị khóa",
+    },
+    "locking.error.unsafe_move_locked_section": {
+        "en": "Unsafe move: section {section_id} is locked by {locked_by}",
+        "vi": "Di chuyển không an toàn: phân đoạn {section_id} đang bị khóa bởi {locked_by}",
+    },
+    "locking.error.unsafe_move_occupied_section": {
+        "en": "Unsafe move: section {section_id} is already occupied",
+        "vi": "Di chuyển không an toàn: phân đoạn {section_id} đang bị chiếm dụng",
+    },
+    "locking.error.sequence_locking_violation": {
+        "en": "Sequence locking violation on {section_id}: {reason}",
+        "vi": "Vi phạm khóa tuần tự tại {section_id}: {reason}",
+    },
     "toolbar.main": {
         "en": "Main",
         "vi": "Chính",
