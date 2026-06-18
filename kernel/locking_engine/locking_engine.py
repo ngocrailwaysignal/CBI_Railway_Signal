@@ -29,6 +29,7 @@ from kernel.locking_engine.release_update_scheduler import (
 )
 from kernel.locking_engine.sequence_locking import SequenceLockingTracker
 from kernel.locking_engine.timed_release import TimedReleaseScheduler
+from kernel.structured_error import structured_error
 
 
 class LockingEngine:
@@ -195,14 +196,23 @@ class LockingEngine:
             if isinstance(section, TrackSection):
                 if section.locked_by and section.locked_by != route_id:
                     raise RuntimeError(
-                        f"Unsafe move: section {section.id} locked by {section.locked_by}"
+                        structured_error(
+                            "locking.error.unsafe_move_locked_section",
+                            section_id=section.id,
+                            locked_by=section.locked_by,
+                        )
                     )
                 if (
                     section.occupied
                     and not allow_preoccupied
                     and not self._can_calling_on_enter_preoccupied(route_id, section_id)
                 ):
-                    raise RuntimeError(f"Unsafe move: section {section.id} already occupied")
+                    raise RuntimeError(
+                        structured_error(
+                            "locking.error.unsafe_move_occupied_section",
+                            section_id=section.id,
+                        )
+                    )
                 if not section.occupied:
                     section.occupied = True
             self.notify_train_entered(route_id, section_id)
