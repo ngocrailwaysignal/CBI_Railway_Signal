@@ -172,6 +172,34 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "en": "Operational mode with strict manual state safety.",
         "vi": "Chế độ vận hành với ràng buộc an toàn trạng thái thủ công.",
     },
+    "route.error.cannot_lock_route": {
+        "en": "Cannot lock route: {reason}",
+        "vi": "Không thể khóa hành trình: {reason}",
+    },
+    "route.error.already_active": {
+        "en": "Route {route_id} is already active",
+        "vi": "Hành trình {route_id} đã đang hoạt động",
+    },
+    "route.error.unknown_point": {
+        "en": "Route refers to unknown point {point_id}",
+        "vi": "Hành trình tham chiếu tới ghi không tồn tại: {point_id}",
+    },
+    "route.error.point_locked": {
+        "en": "Point {point_id} is locked by {locked_by}",
+        "vi": "Ghi {point_id} đang bị khóa bởi {locked_by}",
+    },
+    "route.error.section_locked": {
+        "en": "Section {section_id} is already locked by {locked_by}",
+        "vi": "Phân đoạn {section_id} đã bị khóa bởi {locked_by}",
+    },
+    "route.error.occupied_by_train": {
+        "en": "Route {route_id} is occupied by train on sections: {sections}",
+        "vi": "Hành trình {route_id} đang có tàu chiếm dụng tại các phân đoạn: {sections}",
+    },
+    "route.error.section_multiple_active_routes": {
+        "en": "Section {section_id} belongs to multiple active routes: {routes}",
+        "vi": "Phân đoạn {section_id} thuộc nhiều hành trình đang hoạt động: {routes}",
+    },
     "route_finder.group": {
         "en": "Route Finder",
         "vi": "Tìm hành trình",

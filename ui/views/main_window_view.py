@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from collections import deque
@@ -279,6 +280,54 @@ class MainWindow(QMainWindow):
 
     def _t(self, key: str, **kwargs: object) -> str:
         return self._translator.t(key, **kwargs)
+
+    def _localized_route_error(self, error: BaseException | str) -> str:
+        message = str(error).strip()
+        if not message:
+            return ""
+        cannot_lock_prefix = "Cannot lock route: "
+        if message.startswith(cannot_lock_prefix):
+            reason = self._localized_route_error(message.removeprefix(cannot_lock_prefix))
+            return self._t("route.error.cannot_lock_route", reason=reason)
+        patterns: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+            (
+                r"^Route (?P<route_id>.+) is already active$",
+                "route.error.already_active",
+                ("route_id",),
+            ),
+            (
+                r"^Route refers to unknown point (?P<point_id>.+)$",
+                "route.error.unknown_point",
+                ("point_id",),
+            ),
+            (
+                r"^Point (?P<point_id>.+?) (?:is )?(?:already )?locked by (?P<locked_by>.+)$",
+                "route.error.point_locked",
+                ("point_id", "locked_by"),
+            ),
+            (
+                r"^(?:Flank section|Section) (?P<section_id>.+?) "
+                r"(?:is )?(?:already )?locked by (?P<locked_by>.+)$",
+                "route.error.section_locked",
+                ("section_id", "locked_by"),
+            ),
+            (
+                r"^Route (?P<route_id>.+) is occupied by train on sections: (?P<sections>.+)$",
+                "route.error.occupied_by_train",
+                ("route_id", "sections"),
+            ),
+            (
+                r"^Section (?P<section_id>.+) belongs to multiple active routes: (?P<routes>.+)$",
+                "route.error.section_multiple_active_routes",
+                ("section_id", "routes"),
+            ),
+        )
+        for pattern, key, fields in patterns:
+            match = re.match(pattern, message)
+            if match:
+                params = {field: match.group(field) for field in fields}
+                return self._t(key, **params)
+        return message
 
     @staticmethod
     def _mode_translation_key(mode: OperatingMode) -> str:
@@ -1030,7 +1079,7 @@ class MainWindow(QMainWindow):
                         )
                     )
             except Exception as exc:
-                message = str(exc)
+                message = self._localized_route_error(exc)
                 self._record_webclient_runtime_command_result(
                     command, status="rejected", message=message
                 )
@@ -2033,7 +2082,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 self._t("dialog.route_unavailable.title"),
-                str(exc),
+                self._localized_route_error(exc),
             )
             self._clear_preview_state(clear_visualization=True, sync_ui=False)
             return
@@ -2109,7 +2158,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 self._t("dialog.set_route.failed_title"),
-                str(exc),
+                self._localized_route_error(exc),
             )
             self._clear_preview_state(clear_visualization=True, sync_ui=False)
             return
@@ -2494,7 +2543,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self,
                 self._t("dialog.simulation_failed.title"),
-                str(exc),
+                self._localized_route_error(exc),
             )
             self.canvas.refresh_visual_state()
             self._sync_ui_state()
@@ -2566,7 +2615,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self,
                 self._t("dialog.fail_safe_stop.title"),
-                str(exc),
+                self._localized_route_error(exc),
             )
             self._sync_ui_state()
             self.status.showMessage(self._t("status.simulation_halted_fail_safe"))
