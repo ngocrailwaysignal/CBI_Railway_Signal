@@ -2366,19 +2366,17 @@ class CanvasEditor(QGraphicsView):
                 if is_blocking:
                     red_index = aspect.findData(SignalAspect.RED.value)
                     aspect.setCurrentIndex(red_index if red_index >= 0 else 0)
-                aspect.setEnabled((not is_blocking) and (not self._layout_edit_locked))
+                aspect.setEnabled((not is_blocking) and (not self._runtime_edit_locked))
 
             blocking.toggled.connect(sync_signal_route_controls)
             sync_signal_route_controls()
             if self._layout_edit_locked:
                 protects.setEnabled(False)
                 direction.setEnabled(False)
-                aspect.setEnabled(False)
                 blocking.setEnabled(False)
                 reverse_signal.setEnabled(False)
                 protects.setToolTip(layout_lock_hint)
                 direction.setToolTip(layout_lock_hint)
-                aspect.setToolTip(layout_lock_hint)
                 blocking.setToolTip(layout_lock_hint)
                 reverse_signal.setToolTip(layout_lock_hint)
 
@@ -2760,15 +2758,15 @@ class CanvasEditor(QGraphicsView):
                     )
                 )
 
-        if isinstance(element, Signal) and self._layout_edit_locked:
-            if "aspect" in updates:
+        if isinstance(element, Signal):
+            if "aspect" in updates and self._runtime_edit_locked:
                 next_aspect = normalize_signal_aspect(str(updates["aspect"]))
                 if next_aspect != element.aspect:
                     raise RuntimeError(
-                        "Manual signal aspect editing is blocked outside "
-                        f"Design Layout workspace ({layout_reason})."
+                        "Manual signal aspect editing is blocked while "
+                        f"runtime/manual overrides are locked ({runtime_reason})."
                     )
-            if "route_id" in updates:
+            if "route_id" in updates and self._layout_edit_locked:
                 next_route_id = str(updates["route_id"]).strip() or None
                 if next_route_id != element.route_id:
                     raise RuntimeError(

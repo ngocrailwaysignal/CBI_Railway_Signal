@@ -10,7 +10,7 @@ import pytest
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QApplication, QGraphicsView
 
-from core.domain.model import DisplayLabel, DisplayLine, TrackSection
+from core.domain.model import DisplayLabel, DisplayLine, Signal, TrackSection
 from core.domain.model.elements import SignalAspect
 from core.domain.model.topology import RailwayTopology
 from runtime.application.serialization.layout_payload_serializer import build_layout_payload
@@ -538,6 +538,61 @@ def test_properties_panel_emits_label_color_updates(qapp: QApplication) -> None:
         assert captured[-1][1]["height"] == 70.0
     finally:
         panel.deleteLater()
+
+
+def test_canvas_simulation_allows_signal_aspect_manual_override(qapp: QApplication) -> None:
+    _ = qapp
+    editor = CanvasEditor()
+    try:
+        topology = RailwayTopology()
+        topology.add_signal(Signal("SIG1", aspect=SignalAspect.RED), position=(0.0, 0.0))
+        editor.load_topology(topology, emit_change=False)
+        editor.set_layout_edit_lock(True, "Simulation workspace")
+        editor.set_runtime_edit_lock(False)
+
+        editor.update_node_properties("SIG1", {"aspect": SignalAspect.GREEN.value})
+
+        assert editor.topology.signals["SIG1"].aspect == SignalAspect.GREEN
+    finally:
+        editor.deleteLater()
+
+
+def test_canvas_runtime_lock_blocks_signal_aspect_manual_override(qapp: QApplication) -> None:
+    _ = qapp
+    editor = CanvasEditor()
+    try:
+        topology = RailwayTopology()
+        topology.add_signal(Signal("SIG1", aspect=SignalAspect.RED), position=(0.0, 0.0))
+        editor.load_topology(topology, emit_change=False)
+        editor.set_layout_edit_lock(True, "Simulation workspace")
+        editor.set_runtime_edit_lock(True, "Runtime command stream active")
+
+        with pytest.raises(RuntimeError, match="runtime/manual overrides are locked"):
+            editor.update_node_properties("SIG1", {"aspect": SignalAspect.GREEN.value})
+
+        assert editor.topology.signals["SIG1"].aspect == SignalAspect.RED
+    finally:
+        editor.deleteLater()
+
+
+def test_canvas_blocking_signal_forces_red_aspect_in_simulation(qapp: QApplication) -> None:
+    _ = qapp
+    editor = CanvasEditor()
+    try:
+        topology = RailwayTopology()
+        topology.add_signal(
+            Signal("SIG1", aspect=SignalAspect.RED, is_blocking=True),
+            position=(0.0, 0.0),
+        )
+        editor.load_topology(topology, emit_change=False)
+        editor.set_layout_edit_lock(True, "Simulation workspace")
+        editor.set_runtime_edit_lock(False)
+
+        editor.update_node_properties("SIG1", {"aspect": SignalAspect.GREEN.value})
+
+        assert editor.topology.signals["SIG1"].aspect == SignalAspect.RED
+    finally:
+        editor.deleteLater()
 
 
 def test_signal_blocking_property_forces_stop_and_hides_route_type_controls(
